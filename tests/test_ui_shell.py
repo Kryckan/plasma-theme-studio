@@ -77,6 +77,7 @@ def test_edit_many_changes_nothing_when_one_value_is_refused(window):
 
 def test_the_side_bar_marks_parts_that_would_change_and_parts_left_alone(window):
     window.update_status()
+    window.settle()
     assert window.statuses
     by_key = {part.key: part.state for part in window.statuses}
     for spec in pages.PAGES:
@@ -93,6 +94,7 @@ def test_the_side_bar_marks_parts_that_would_change_and_parts_left_alone(window)
 
 def test_the_desktop_bar_is_always_there_and_says_what_an_apply_changes(window):
     window.update_status()
+    window.settle()
     assert window.desktop_bar.isVisible() and window.desktop_bar.status.text()
     for key in ("themes", "colors", "icons", "rofi"):
         window.show_page(key)
@@ -105,10 +107,10 @@ def test_the_files_dialog_lists_what_an_apply_writes(window):
     assert not window.files_dialog.isVisible()
     window.desktop_bar.files_button.click()
     assert window.files_dialog.isVisible()
-    assert window.files_dialog.files_list.count() > 0
+    assert window.files_dialog.rows()
     window.edit(FIELD_BY_ID[("colors", "accent")], "#ff0000")
     window.refresh()  # an open dialog follows the theme
-    window.files_dialog.files_list.setCurrentRow(0)
+    window.files_dialog.select_path(None)
     assert window.files_dialog.file_content.toPlainText()
     window.files_dialog.hide()
 

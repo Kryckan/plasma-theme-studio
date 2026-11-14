@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
-from .base import PickerPage
+from .base import THIS_THEME, TUNING_WIDTH, PickerPage
+from .preview_box import RatioPreview
 
 translate = QCoreApplication.translate
 
@@ -19,14 +21,6 @@ class PlasmaStylePage(PickerPage):
     id_field = ("panel", "style_id")
     mode_field = ("panel", "style")
     part_key = "plasma_style"
-    tuning = (
-        ("panel", "radius"),
-        ("panel", "border_width"),
-        ("panel", "opacity"),
-        ("popup", "radius"),
-        ("popup", "border_width"),
-        ("popup", "opacity"),
-    )
 
     @property
     def set_hint(self):
@@ -35,8 +29,39 @@ class PlasmaStylePage(PickerPage):
     def subtitle(self) -> str:
         return translate("ui", "How the panel, menus, popups and tooltips are drawn.")
 
-    def tuning_title(self) -> str:
-        return translate("ui", "Values of “This theme”")
+    def build(self) -> None:
+        super().build()
+        # two short groups of values and a panel with an open popup and a tooltip to see them in
+        self.style_box = QWidget()
+        outer = QVBoxLayout(self.style_box)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(16)
+        outer.addWidget(self.separator())
+        row = QHBoxLayout()
+        row.setSpacing(24)
+        left = QWidget()
+        left.setMaximumWidth(TUNING_WIDTH - 120)
+        column = QVBoxLayout(left)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(12)
+        column.addWidget(self.caption(translate("ui", "Panel")))
+        column.addLayout(self.form(("panel", "radius"), ("panel", "border_width"), ("panel", "opacity")))
+        column.addSpacing(8)
+        column.addWidget(self.caption(translate("ui", "Popups and tooltips")))
+        column.addLayout(self.form(("popup", "radius"), ("popup", "border_width"), ("popup", "opacity")))
+        column.addStretch(1)
+        self.style_preview = RatioPreview(self.theme, "menu")
+        self.style_preview.setAccessibleName(translate("ui", "Preview of the panel and its popups"))
+        row.addWidget(left, 5)
+        row.addWidget(self.style_preview, 6, Qt.AlignmentFlag.AlignTop)
+        outer.addLayout(row)
+        self.style_box.hide()
+        self.add_below(self.style_box)
 
-    def generated_mode(self) -> str:
-        return "panel"
+    def refresh(self) -> None:
+        super().refresh()
+        on, chosen = self.selection()
+        shown = on and chosen == THIS_THEME
+        self.style_box.setVisible(shown)
+        if shown:
+            self.style_preview.set_theme(self.theme)

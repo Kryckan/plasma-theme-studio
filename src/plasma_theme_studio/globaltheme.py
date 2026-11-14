@@ -70,7 +70,9 @@ def _folder_below(files: dict[Path, str], *prefix: str) -> str | None:
 
 def _plan(theme: Theme) -> dict[Path, str]:
     """The files of the theme's parts, by path below the data home."""
-    planned = list(generators.ColorSchemeGenerator().files(theme))
+    own = theme.copy()
+    own.set("colors", "scheme_id", None)  # a package carries its own scheme, not a link to an installed one
+    planned = list(generators.ColorSchemeGenerator().files(own))
     if theme.get("window", "decoration") == "generated":
         planned += generators.WindowFrameGenerator().files(theme)
     style = generators.PlasmaStyleGenerator()

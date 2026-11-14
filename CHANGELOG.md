@@ -6,6 +6,21 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 
 ### Added
 
+- Every page of System Settings' Colors & Themes part now has a page in the app with preview cards: Themes (also the installed Global Themes, loaded into the editor), Colors, Application Style, Plasma Style, Window Decorations, Icons, Pointers, Splash Screen, System Sounds and Login Screen (SDDM), and Fonts.
+- Colors: an accent color row (standard colors, your own, colors from the wallpaper, or let the accent follow the wallpaper), color scheme cards drawn as small windows with search and a Light/Dark filter, *Install from File…*, *Import Colors…* (pywal, matugen and `.colors` files), theme colors taken from a wallpaper or any picture, and a contrast check that lists text that is hard to read and fixes it with one click.
+- Window Decorations: *Window border size*, *Configure Titlebar Buttons…* (drag buttons between the title bar and a pool), and the frame and shadow values with a large preview.
+- Plasma Style cards show a clock on the style's panel, and the Panel page has a screen chooser with a preview of the whole screen edge.
+- Icons, Pointers, Splash Screen and System Sounds show sample icons, eight sample pointers, a large splash preview and a list of sounds with a *Play* button; Pointers has a *Size:* choice and *Configure Launch Feedback…*; Application Style has *Configure Icons and Toolbars…* and a sample of real widgets.
+- Fonts has a row for each of the six fonts with a sample and *Use one family for all*. GTK Apps and Rofi show a drawn preview.
+- Overview shows the desktop now next to the editor, one row for each part with what an apply does to it, and the last applies.
+- Pages with cards scroll as one page: the title, the part switch and the search stay in view, the cards are drawn when they come into view.
+- The cards *This theme* and *Breeze with your changes* show the part itself: window frames, the panel with its clock, real widgets in the generated application style, and the color scheme.
+- *Leave as it is* | *Set by this theme* remembers your earlier choice while the app is open.
+- The state of every part is read in the background, so typing and dragging stay smooth. *Apply to Desktop* is off, with an explanation, when nothing would change, and the bar names a part that cannot be applied and why.
+- A page *Login Screen (SDDM)* that explains why the login screen is not edited here and opens its System Settings page.
+- The side bar fits in a window of 1100 x 720 without a scroll bar. The Overview uses the same words for every part: *Will change*, *Already so*, *Left as it is*, *Cannot be applied*.
+- The Panel preview shows the whole screen edge with the panel where it really is.
+- *Show files…* is laid out like the rest of the window, with a plain sentence on top and three lists: will be written, already up to date, will be removed.
 - A new window: a side bar with the pages Overview, Themes, Colors, Shapes, Fonts, Plasma Style, Panel, Window Decorations, Icons, Pointers, Splash Screen, System Sounds, Application Style, GTK Apps and Rofi, a dot beside every part that an apply would change, and a bar at the bottom with what an apply does and the buttons *Show files…*, *Snapshots…*, *Undo last apply* and *Apply to Desktop*. The window remembers its size and the page it was on.
 - Pages for the icon, pointer and sound themes, the splash screen, the Plasma style, window decorations and the application style show what is installed as cards. Choosing one sets it in the theme; *Leave as it is* | *Set by this theme* turns a part off or on. Each choice is one step of undo.
 - Theme file (TOML, `schema_version = 1`) with colors, shapes, shadows and panel values.
@@ -39,6 +54,12 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 
 ### Fixed
 
+- A picture that is a pipe or a huge file no longer hangs or fills memory; every picture goes through one safe reader.
+- Installing a color scheme from a file reads it once, and asks before it hides a scheme that came with the system. The clash message names the file.
+- Choosing a Global Theme or a color scheme card applies the installed scheme by name; Apply no longer rewrites parts the desktop already has, so *New Theme from the Desktop* then Apply changes nothing.
+- *New Theme from the Desktop* can be undone and no longer asks about unsaved changes.
+- Clicking choices one after another gives one Undo step for each click.
+- Themes: *Switch to Dark Mode at Night* works and is applied; *Save Current Theme…* saves the theme in the editor; the buttons that open System Settings say so.
 - Fonts with an old-style (Qt 5) description or a weight below 100 are read and saved back unchanged.
 - A window decoration id is written exactly as the installed decoration spells it, and a name that starts with `-` is refused for every part.
 - *Status* and the Overview say when an apply would be refused (*Refused*) and give the reason, instead of *Will change*.

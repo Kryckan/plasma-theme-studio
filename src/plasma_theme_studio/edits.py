@@ -51,6 +51,7 @@ def theme_edits_from_color_scheme(scheme: library.InstalledScheme) -> tuple[Edit
     """The colors of an installed scheme as edits. The colors the scheme file lacks are not in them."""
     edits: Edits = {}
     source = library.theme_from_scheme(scheme)
+    edits[("colors", "scheme_id")] = scheme.id
     for key in scheme.colors:
         edits[("colors", key)] = source.get("colors", key)
     messages = []

@@ -165,7 +165,7 @@ def test_status_prints_a_table_of_the_parts_and_changes_nothing(home, fake_syste
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].split()[:2] == ["Part", "Desktop"]
     titles = [line[:20].strip() for line in lines[1:]]
-    for title in ("Colors", "Icons", "Fonts", "Splash screen", "System sounds", "Rofi"):
+    for title in ("Colors", "Icons", "Fonts", "Splash Screen", "System Sounds", "Rofi"):
         assert title in titles
     assert next(line for line in lines if line.startswith("Fonts")).rstrip().endswith("Left alone")
     assert sorted(str(p) for p in home.rglob("*")) == before

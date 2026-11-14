@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QImage, QImageReader
+from PySide6.QtGui import QImage
 
-from . import paths, safefile
+from . import images, paths, safefile
 from .messages import Msg, translate
 from .model.color import BLACK, WHITE, Color, contrast
 
@@ -182,8 +182,9 @@ def _mix_hue(a: float, b: float, amount: float) -> float:
 
 def _histogram(path: Path) -> list[tuple[int, int, int, int]] | None:
     """The image on a 5-bit color grid, from a small copy: [(r, g, b, count)]. None: not readable."""
-    reader = QImageReader(str(path))
-    reader.setAutoTransform(True)
+    reader = images.open_reader(path)
+    if reader is None:
+        return None
     size = reader.size()
     if size.isValid() and size.width() > 0 and size.height() > 0:
         scale = SAMPLE_SIDE / max(size.width(), size.height())

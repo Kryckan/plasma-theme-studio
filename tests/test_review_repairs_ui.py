@@ -32,6 +32,7 @@ def test_the_overview_opened_after_another_page_shows_the_parts(app, home, deskt
     window = MainWindow(desktop_runner)
     window.show()
     window.update_status()
+    window.settle()
     assert window.statuses and "overview" not in window.pages
     window.show_page("overview")
     assert window.page("overview").table.rowCount() == len(window.statuses)

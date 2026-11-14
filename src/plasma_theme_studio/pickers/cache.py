@@ -29,7 +29,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QImage
 
-from .. import APP_DIR, paths
+from .. import APP_DIR, images, paths
 from .base import Item
 
 
@@ -77,7 +77,7 @@ def get(kind_key: str, name: str, dpr: float = 1.0) -> QImage | None:
     path = _file(kind_key, name)
     if not path.is_file():
         return None
-    image = QImage(str(path))
+    image = images.read_image(path)
     if image.isNull():
         with contextlib.suppress(OSError):
             path.unlink()

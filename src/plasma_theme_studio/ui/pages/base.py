@@ -24,19 +24,37 @@ The page kinds:
 - `TargetPage`: a part that is only written from the theme (GTK, Rofi): a switch, a sample of
   the values and the note.
 
+- `LinkPage`: a part this app does not edit: why, and a button to its page in System Settings.
+
+Room that a picker or target page gives a subclass, without touching this module (each is filled
+in `build`, after `super().build()`):
+
+- the actions of the header: `self.header.add_action(button)`, top right beside the title;
+- the top row, between the part switch and the grid: `self.add_top_row(widget)`, for example
+  `self.add_top_row(self.mode_switch)`;
+- below the grid, after the tuning values: `self.add_below(widget)`, for example
+  `self.add_below(self.caption("Sample")); self.add_below(sample)`;
+- a side preview, beside the grid of a picker or on the right of a target page:
+  `self.set_side_preview(widget)` (about 320 px wide; hidden until something is put there).
+
+The whole page below the header scrolls as one: the grid shows all its cards at full height and
+only the cards that are scrolled into view ask for a thumbnail. The search field stays above the
+scroll (`CardGrid.bar`), so it is always at hand.
+
 A subclass sets `key` (the registry key) and `parts` (the keys of `apply.status.parts_status`
 that the nav dot of the page follows), and overrides `subtitle`, `build` and `refresh`.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QSize, Qt
+from PySide6.QtCore import QCoreApplication, QSize, Qt, QTimer
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -46,6 +64,7 @@ from PySide6.QtWidgets import (
 from ... import pickers
 from ...model.theme import FIELD_BY_ID, Field
 from ...palette import ROLES
+from .. import this_theme
 from ..editors import editor_for
 from ..labels import FIELD_LABELS
 from ..preview import PreviewWidget
@@ -58,6 +77,8 @@ TUNING_WIDTH = 640  # the values under a grid of cards
 CONTROLS_WIDTH = 432  # the column of controls of a value page
 THIS_THEME = "@this-theme"  # the id of the first card of a picker that can generate its part
 BREEZE_ADJUSTED = "@breeze"
+SIDE_WIDTH = 320  # the side preview of a picker or target page
+THIS_THEME_DELAY = 150  # milliseconds after the last edit before the card "This theme" is drawn again
 
 
 class Page(QWidget):
@@ -142,6 +163,22 @@ class Page(QWidget):
         if self.stale:
             self.stale = False
             self.refresh()
+
+    # ---- room for subclasses
+
+    def set_side_preview(self, widget: QWidget, width: int = SIDE_WIDTH) -> None:
+        """Put `widget` in the side column (hidden until this is called). Only pages that make one
+        (a picker, a target page) have a `side` column."""
+        self.side_box.setFixedWidth(width)
+        self.side.addWidget(widget)
+        self.side_box.show()
+
+    def _side_column(self) -> None:
+        self.side_box = QWidget()
+        self.side = QVBoxLayout(self.side_box)
+        self.side.setContentsMargins(0, 0, 0, 0)
+        self.side.setSpacing(SPACING)
+        self.side_box.hide()
 
     # ---- helpers
 
@@ -300,7 +337,6 @@ class PickerPage(Page):
     part_key = ""
     tuning: tuple[tuple[str, str], ...] = ()
     thumb_size = THUMB_SIZE
-    fit = True
     breeze_card = False  # an extra card "Breeze with your changes" (window decorations)
     set_hint = ""
 
@@ -308,14 +344,28 @@ class PickerPage(Page):
         self.kind = pickers.kind(self.kind_key)
         self.items: dict[str, pickers.Item] = {}
         self.colors_seen = None
+        self.remembered: str | None = None  # the card that was chosen before "Leave as it is"
         self.header.add_part_switch()
         self.header.set_hint(self.set_hint)
         self.header.part_mode_changed.connect(self._switched)
-        self.grid = CardGrid(self.thumb_size, with_search=True, fit=self.fit, name=self.title_text())
+        self.grid = CardGrid(self.thumb_size, with_search=True, fit=True, name=self.title_text())
         self.grid.selected.connect(self._picked)
         self.grid.thumbnail_requested.connect(self._request)
         self.window.loader.ready.connect(self._thumbnail_ready)
-        self.content.addWidget(self.grid, 0 if self.fit else 1)
+        # the search field stays above the scroll, so it is at hand however far down the grid is
+        self.layout().insertWidget(1, self.grid.bar)
+        self.top_row = QWidget()
+        self.top_row_layout = QHBoxLayout(self.top_row)
+        self.top_row_layout.setContentsMargins(0, 0, 0, 0)
+        self.top_row_layout.setSpacing(SPACING)
+        self.top_row.hide()
+        self.content.addWidget(self.top_row)
+        self._side_column()
+        row = QHBoxLayout()
+        row.setSpacing(LARGE_SPACING)
+        row.addWidget(self.grid, 1, Qt.AlignmentFlag.AlignTop)
+        row.addWidget(self.side_box, 0, Qt.AlignmentFlag.AlignTop)
+        self.content.addLayout(row)
         if self.tuning:
             self.tuning_box = QWidget()
             self.tuning_box.setMaximumWidth(TUNING_WIDTH)
@@ -326,7 +376,21 @@ class PickerPage(Page):
             box.addWidget(self.caption(self.tuning_title()))
             box.addLayout(self.form(*self.tuning))
             self.content.addWidget(self.tuning_box)
+        self.below = QVBoxLayout()
+        self.below.setSpacing(SPACING)
+        self.content.addLayout(self.below)
+        self.this_timer = QTimer(self, singleShot=True, interval=THIS_THEME_DELAY)
+        self.this_timer.timeout.connect(self.update_this_theme_cards)
         self.load_items()
+
+    def add_top_row(self, widget: QWidget, stretch: int = 0) -> None:
+        """Put `widget` in the row between the part switch and the grid."""
+        self.top_row_layout.addWidget(widget, stretch)
+        self.top_row.show()
+
+    def add_below(self, widget: QWidget) -> None:
+        """Put `widget` below the grid and its tuning values (above the notes)."""
+        self.below.addWidget(widget)
 
     def title_text(self) -> str:
         from . import title_of
@@ -364,9 +428,7 @@ class PickerPage(Page):
             if cards
             else translate("ui", "Nothing of this kind is installed.")
         )
-        for card in (THIS_THEME, BREEZE_ADJUSTED):
-            if self.grid.card(card) is not None:
-                self.grid.set_thumbnail(card, self.generated_thumbnail(card))
+        self.this_timer.start(0)  # the first picture of the generated cards, after the page is shown
 
     def selection(self):
         """(is the part set by the theme, id of the card that shows it)."""
@@ -395,9 +457,7 @@ class PickerPage(Page):
         self.grid.set_dimmed(not on)
         if self.tuning:
             self.tuning_box.setEnabled(on)
-        for card in (THIS_THEME, BREEZE_ADJUSTED):
-            if self.grid.card(card) is not None:
-                self.grid.set_thumbnail(card, self.generated_thumbnail(card))
+        self.this_timer.start(THIS_THEME_DELAY)  # drawn again when the edits have stopped
         colors = self.colors()
         if self.kind is not None and self.kind.scheme_dependent and colors != self.colors_seen:
             self.colors_seen = colors
@@ -427,13 +487,24 @@ class PickerPage(Page):
 
     # ---- thumbnails
 
-    def generated_thumbnail(self, card):
-        """The picture of "This theme" or "Breeze with your changes", drawn from the theme's own values."""
-        preview = PreviewWidget(self.theme)
-        return preview.render_image(self.thumb_size, self.devicePixelRatioF(), self.generated_mode())
+    def update_this_theme_cards(self) -> None:
+        """Draw the cards "This theme" and "Breeze with your changes" again from the theme."""
+        for card in (THIS_THEME, BREEZE_ADJUSTED):
+            if self.grid.card(card) is not None:
+                self.grid.set_thumbnail(card, self.generated_thumbnail(card))
 
-    def generated_mode(self) -> str:
-        return "window"
+    def generated_thumbnail(self, card):
+        """The picture of one of the generated cards."""
+        size, dpr = QSize(self.thumb_size), self.devicePixelRatioF()
+        if card == BREEZE_ADJUSTED:
+            return this_theme.breeze_thumbnail(self.theme, size, dpr)
+        return self.this_theme_thumbnail(size, dpr)
+
+    def this_theme_thumbnail(self, size: QSize, dpr: float) -> QImage:
+        """The picture of "This theme": the PART, drawn from the theme (a frame, a panel, widgets, a color
+        card; see `ui/this_theme.py`). A page overrides this for a picture of its own, e.g.
+        `return my_drawing(self.theme, size, dpr)`."""
+        return this_theme.thumbnail(self.kind_key, self.theme, size, dpr)
 
     def _request(self, item_id) -> None:
         item = self.items.get(item_id)
@@ -477,6 +548,8 @@ class PickerPage(Page):
     def _switched(self, on: bool) -> None:
         if on:
             on_now, chosen = self.selection()
+            if self.remembered is not None and self.grid.card(self.remembered) is not None:
+                chosen = self.remembered  # what was chosen before "Leave as it is"
             chosen = chosen or self.current_id()
             if chosen is None and self.generates():
                 chosen = THIS_THEME
@@ -484,10 +557,14 @@ class PickerPage(Page):
                 chosen = next(iter(self.items))
             if chosen is not None:
                 self._picked(chosen)
-        elif self.mode_field is not None:
-            self.window.edit(FIELD_BY_ID[self.mode_field], "unchanged")
         else:
-            self.window.edit(FIELD_BY_ID[self.id_field], None)
+            was_on, chosen = self.selection()
+            if was_on and chosen is not None:
+                self.remembered = chosen
+            if self.mode_field is not None:
+                self.window.edit(FIELD_BY_ID[self.mode_field], "unchanged")
+            else:
+                self.window.edit(FIELD_BY_ID[self.id_field], None)
         self.refresh()
 
     def edit_text(self) -> str:
@@ -510,10 +587,23 @@ class TargetPage(Page):
         self.header.add_part_switch()
         self.header.set_hint(self.set_hint)
         self.header.part_mode_changed.connect(self._switched)
+        # the values and notes in a column on the left, the side preview (if any) on the right
+        self._side_column()
+        left = QWidget()
+        column = QVBoxLayout(left)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(LARGE_SPACING)
+        row = QHBoxLayout()
+        row.setSpacing(LARGE_SPACING + 8)
+        row.addWidget(left, 1)
+        row.addWidget(self.side_box, 0, Qt.AlignmentFlag.AlignTop)
+        self.content.addLayout(row, 1)
+        self.content = self.notes_layout = column
         self.build_values()
 
     def build_values(self) -> None:
-        """Add the values of the part to `self.content`."""
+        """Add the values of the part to `self.content` (the left column). A preview goes to the right
+        with `self.set_side_preview(widget)`, e.g. `self.set_side_preview(self.sample)`."""
 
     def _switched(self, on: bool) -> None:
         self.window.edit(FIELD_BY_ID[self.style_field], "generated" if on else "unchanged")
@@ -522,6 +612,42 @@ class TargetPage(Page):
         on = self.theme.get(*self.style_field) == "generated"
         self.header.set_part_mode(on)
         super().refresh()
+
+
+class LinkPage(Page):
+    """A part this app does not edit: a few plain words on why, and a button that opens its page in
+    System Settings. A subclass sets `key` (a registry entry of kind "link") and gives `explanation`."""
+
+    def explanation(self) -> str:
+        return ""
+
+    def build(self) -> None:
+        from . import SPECS
+
+        self.module_id = SPECS[self.key].link
+        text = QLabel(self.explanation())
+        text.setWordWrap(True)
+        text.setTextFormat(Qt.TextFormat.PlainText)
+        text.setMaximumWidth(TUNING_WIDTH)
+        self.open_button = QPushButton(
+            translate("ui", "Open {page} in System Settings…").format(page=self.title_text())
+        )
+        self.open_button.clicked.connect(self.open_module)
+        self.content.addWidget(text)
+        self.content.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignLeft)
+
+    def title_text(self) -> str:
+        from . import title_of
+
+        return title_of(self.key)
+
+    def open_module(self) -> None:
+        from ... import desktopparts
+        from ..banner import WARNING
+
+        problem = desktopparts.open_system_settings(self.module_id, self.window.runner)
+        if problem is not None:
+            self.window.banner.show_message(WARNING, str(problem), 8)
 
 
 def field_of(section: str, key: str) -> Field:

@@ -28,6 +28,7 @@ from pathlib import Path
 from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 
+from .. import images
 from ..messages import translate
 from ..model.color import Color
 from ..model.color import on_accent as readable_on_accent
@@ -42,6 +43,22 @@ SAMPLES = (
     ("text-x-generic", "text-plain", "document"),
     ("user-trash", "trash-empty", "edittrash"),
     ("configure", "preferences-system", "systemsettings"),
+    ("system-run", "application-x-executable", "exec"),
+)
+
+# The twelve icons of the large preview on the Icons page (the page shows them at 48 and 32 pixels).
+STRIP = (
+    ("folder", "inode-directory"),
+    ("user-home", "folder-home", "go-home"),
+    ("folder-documents", "folder-document"),
+    ("folder-download", "folder-downloads"),
+    ("folder-pictures", "folder-image", "folder-images"),
+    ("text-x-generic", "text-plain", "document"),
+    ("image-x-generic", "image-png"),
+    ("audio-x-generic", "audio-mp3"),
+    ("user-trash", "trash-empty", "edittrash"),
+    ("configure", "preferences-system", "systemsettings"),
+    ("help-contents", "help-about", "system-help", "help-browser"),
     ("system-run", "application-x-executable", "exec"),
 )
 
@@ -344,7 +361,7 @@ def _icon_image(path: Path, side: int, colors: Mapping[str, str] | None) -> QIma
         renderer.render(painter, QRectF((side - width) / 2, (side - height) / 2, width, height))
         painter.end()
         return image
-    return base.fit_image(QImage(str(path)), QSize(side, side), 1.0)
+    return base.fit_image(images.read_image(path), QSize(side, side), 1.0)
 
 
 def _grid(size: QSize) -> tuple[int, int, float]:
@@ -380,3 +397,26 @@ def _picture(item: Item, size: QSize, dpr: float, colors: Mapping[str, str] | No
         drawn += 1
     painter.end()
     return out if drawn else QImage()
+
+
+def sample_rows(
+    item: Item, sides: tuple[int, ...], dpr: float, colors: Mapping[str, str] | None
+) -> list[list[QImage]]:
+    """The twelve icons of `STRIP` of the theme, one row for each of `sides` (logical pixels). An icon that
+    neither the theme, its parents nor hicolor have is left out, so a row has no holes. Safe on a worker
+    thread; an empty list when the theme cannot be read."""
+    if item.path is None or _theme(Path(item.path))[1] is None:
+        return []
+    finder = Finder()
+    rows: list[list[QImage]] = []
+    for side in sides:
+        pixels = max(8, round(side * dpr))
+        row = []
+        for names in STRIP:
+            path = finder.find(Path(item.path), names, pixels, max(1, math.ceil(dpr)))
+            image = _icon_image(path, pixels, colors) if path else QImage()
+            if not image.isNull():
+                image.setDevicePixelRatio(dpr)
+                row.append(image)
+        rows.append(row)
+    return rows if any(rows) else []

@@ -4,15 +4,19 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QTimer
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtCore import QCoreApplication, Qt, QTimer
+from PySide6.QtWidgets import QBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QWidget
 
+from ...generators import kvantum
 from ..style_preview import StylePreview
-from .base import PickerPage
+from ..widgets import LARGE_SPACING, SPACING, InlineNote
+from .base import TUNING_WIDTH, PickerPage
 
 translate = QCoreApplication.translate
 
 STYLE_DELAY = 250  # milliseconds after the last edit before the style is made again
+SIDE_BY_SIDE = 1130  # page width from which the values and the sample sit side by side
+MODULE = "kcm_style"  # System Settings' page with the icon and toolbar settings
 
 
 class AppStylePage(PickerPage):
@@ -35,20 +39,112 @@ class AppStylePage(PickerPage):
     def tuning_title(self) -> str:
         return translate("ui", "Values of “This theme”")
 
-    def generated_mode(self) -> str:
-        return "window"
-
     def build(self) -> None:
         super().build()
+        self.configure_button = QPushButton(
+            translate("ui", "Configure Icons and Toolbars in System Settings…")
+        )
+        self.configure_button.setToolTip(
+            translate("ui", "Opens the icon and toolbar settings of System Settings.")
+        )
+        self.configure_button.clicked.connect(self.configure)
+        self.header.add_action(self.configure_button)
+
+        # the values of "This theme" on the left, the real widgets in that style on the right
+        self.content.removeWidget(self.tuning_box)
+        self.tuning_box.setMaximumWidth(TUNING_WIDTH - 140)
+        self.tuning_box.layout().itemAt(
+            0
+        ).widget().hide()  # the rule above the values: they sit beside the sample now
         self.style_preview = StylePreview(self.theme)
-        self.style_preview.setMinimumHeight(220)
-        box = QVBoxLayout()
-        box.addWidget(self.caption(translate("ui", "Sample")))
-        box.addWidget(self.style_preview)
-        self.content.addLayout(box)
+        self.style_preview.setMinimumHeight(240)
+        self.sentence = QLabel()
+        self.sentence.setWordWrap(True)
+        self.sentence.setForegroundRole(self.sentence.palette().ColorRole.PlaceholderText)
+        self.stack_holder = QWidget()
+        self.stack = QStackedLayout(self.stack_holder)
+        self.stack.setContentsMargins(0, 0, 0, 0)
+        self.stack.addWidget(self.style_preview)
+        self.stack.addWidget(self.sentence)
+        sample = QVBoxLayout()
+        sample.setSpacing(SPACING)
+        sample.addWidget(self.caption(translate("ui", "Sample")))
+        sample.addWidget(self.stack_holder, 1)
+        row = self.beside = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        row.setSpacing(LARGE_SPACING + 8)
+        row.addWidget(self.tuning_box, 1, Qt.AlignmentFlag.AlignTop)
+        row.addLayout(sample, 1)
+        row.setAlignment(sample, Qt.AlignmentFlag.AlignTop)
+        holder = QWidget()
+        holder.setLayout(row)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.add_below(holder)
+
+        self.kvantum_note = InlineNote(
+            translate(
+                "ui",
+                "Kvantum is not installed. It is the program that draws the style “This theme” in "
+                "applications, so install the package “kvantum” with your software manager (on Debian "
+                "and Ubuntu it is called “qt6-style-kvantum”). The other styles work without it.",
+            ),
+            "warning",
+        )
+        self.kvantum_note.setVisible(self.kvantum_missing())
+        self.add_below(self.kvantum_note)
+
+        self.arrange()
         self.timer = QTimer(self, singleShot=True, interval=STYLE_DELAY)
-        self.timer.timeout.connect(lambda: self.style_preview.set_theme(self.theme))
+        self.timer.timeout.connect(self.draw_sample)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "beside"):  # not before the page is built
+            self.arrange()
+
+    def arrange(self) -> None:
+        """The values and the sample go side by side when there is room, else one under the other."""
+        side_by_side = self.width() >= SIDE_BY_SIDE
+        direction = QBoxLayout.Direction.LeftToRight if side_by_side else QBoxLayout.Direction.TopToBottom
+        if self.beside.direction() != direction:
+            self.beside.setDirection(direction)
+
+    def kvantum_missing(self) -> bool:
+        return not (kvantum.plugin_installed() or self.window.runner.which("kvantummanager"))
+
+    def configure(self) -> None:
+        """Open the icon and toolbar settings in System Settings."""
+        from ... import desktopparts
+        from ..banner import WARNING
+
+        problem = desktopparts.open_system_settings(MODULE, self.window.runner)
+        if problem is not None:
+            self.window.banner.show_message(WARNING, str(problem), 8)
+
+    def draw_sample(self) -> None:
+        """Show the real widgets in the style of "This theme", or say why there are none."""
+        mode = self.theme.part_state("apps", "style")
+        if mode == "generated":
+            self.style_preview.set_theme(self.theme)
+            self.stack.setCurrentWidget(self.style_preview)
+            return
+        if mode == "installed":
+            item = self.items.get(self._match(self.theme.get("apps", "style_id")))
+            name = item.name if item is not None else ""
+            text = translate("ui", "{style} draws the applications. Its own picture is on the card above.")
+            self.sentence.setText(text.format(style=name or translate("ui", "The chosen style")))
+        else:
+            self.sentence.setText(
+                translate(
+                    "ui",
+                    "The application style is left as it is. Choose “This theme” to see buttons, fields "
+                    "and menus drawn in the style that is made from it.",
+                )
+            )
+        self.stack.setCurrentWidget(self.sentence)
 
     def refresh(self) -> None:
         super().refresh()
+        self.kvantum_note.setVisible(self.kvantum_missing())
+        if self.theme.part_state("apps", "style") != "generated":
+            self.draw_sample()  # a sentence: no need to wait
         self.timer.start()  # making the style takes a moment: wait for the edits to stop

@@ -10,9 +10,20 @@ desktop (apply, switch, undo, snapshots). The pages (`ui/pages`) only show the t
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import (
+    QCoreApplication,
+    QObject,
+    QRunnable,
+    QSettings,
+    Qt,
+    QThreadPool,
+    QTimer,
+    QUrl,
+    Signal,
+)
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
@@ -59,6 +70,7 @@ translate = QCoreApplication.translate
 
 MIN_TEXT_CONTRAST = 4.5
 MERGE_SECONDS = 1.0
+CONTINUOUS_KINDS = ("color", "int", "float", "str")  # what a person drags or types
 STATUS_DELAY = 200  # milliseconds after the last edit before the parts are compared with the desktop
 SIDEBAR_WIDTH = 236
 NOTICE_LINES = 3  # problems listed in the strip above the page; the tooltip has them all
@@ -97,7 +109,9 @@ GATED = {
 
 
 class SetValueCommand(QUndoCommand):
-    """One edit of one field. Quick successive edits of a field become one step."""
+    """One edit of one field. Quick successive edits of a continuous control (a slider, a
+    spin box, a color being dragged, typing) become one step; a click on a card, a switch
+    or a choice is always a step of its own."""
 
     def __init__(self, window: MainWindow, field: Field, value):
         super().__init__(str(FIELD_LABELS[field.id]))
@@ -111,6 +125,8 @@ class SetValueCommand(QUndoCommand):
     def mergeWith(self, other) -> bool:
         if other.field is not self.field or other.time - self.time > MERGE_SECONDS:
             return False
+        if self.field.kind not in CONTINUOUS_KINDS or (self.field.kind == "str" and self.field.form):
+            return False
         self.new, self.time = other.new, other.time
         return True
 
@@ -119,6 +135,22 @@ class SetValueCommand(QUndoCommand):
 
     def undo(self) -> None:
         self.window.store(self.field, self.old)
+
+
+class ReplaceThemeCommand(QUndoCommand):
+    """The editor takes another theme; undo brings the earlier one back (with its file)."""
+
+    def __init__(self, window: MainWindow, text: str, theme: Theme, path: Path | None):
+        super().__init__(text)
+        self.window = window
+        self.old, self.old_path = window.theme, window.path
+        self.new, self.new_path = theme, path
+
+    def redo(self) -> None:
+        self.window.show_theme(self.new, self.new_path)
+
+    def undo(self) -> None:
+        self.window.show_theme(self.old, self.old_path)
 
 
 class SnapshotDialog(QDialog):
@@ -164,6 +196,31 @@ class SnapshotDialog(QDialog):
             self.accept()
 
 
+class _StatusAnswer(QObject):
+    """Carries the answer of a status job from the worker thread to the window (a queued signal)."""
+
+    done = Signal(int, object)
+
+
+class _StatusJob(QRunnable):
+    """`engine.parts_status` on a copy of the theme, off the GUI thread. The runner is used from the
+    worker, so it must be safe there: SystemRunner is plain subprocess calls, FakeRunner plain Python."""
+
+    def __init__(self, generation: int, theme: Theme, runner, answer: _StatusAnswer):
+        super().__init__()
+        self.generation, self.theme, self.runner, self.answer = generation, theme, runner, answer
+
+    def run(self) -> None:
+        try:
+            result = engine.parts_status(self.theme, self.runner)
+        except Exception:  # noqa: BLE001 - reading the desktop must never break the window
+            result = []
+        try:
+            self.answer.done.emit(self.generation, result)
+        except RuntimeError:  # the window is gone
+            pass
+
+
 class MainWindow(QMainWindow):
     def __init__(self, runner=None):
         super().__init__()
@@ -187,6 +244,14 @@ class MainWindow(QMainWindow):
         self.refresh_timer.timeout.connect(self.refresh)
         self.status_timer = QTimer(self, singleShot=True, interval=STATUS_DELAY)
         self.status_timer.timeout.connect(self.update_status)
+        self.status_pool = QThreadPool(self)
+        self.status_pool.setMaxThreadCount(1)
+        self.status_answer = _StatusAnswer(self)
+        self.status_answer.done.connect(self._status_ready, Qt.ConnectionType.QueuedConnection)
+        self.status_generation = 0  # the newest job; an older answer is dropped
+        self.status_pending = False
+        self.entry_handlers: dict[type, Callable] = {}  # a card class -> what applying one does
+        self.nothing_to_apply = False  # the last answer said an apply would change nothing
 
         self._build_central()
         self._build_actions()
@@ -497,6 +562,20 @@ class MainWindow(QMainWindow):
                 )
             )
 
+    def replace_theme(self, text: str, theme: Theme, path: Path | None = None) -> None:
+        """Make `theme` the one the editor holds, as one step of the undo stack: Undo brings the
+        theme that was in the editor back."""
+        self.undo_stack.push(ReplaceThemeCommand(self, text, theme, path))
+
+    def show_theme(self, theme: Theme, path: Path | None) -> None:
+        """Put `theme` into the editor and every control, keeping the undo stack."""
+        self.theme, self.path = theme, path
+        for field_id, control in self.editors.items():
+            control.set_value(theme.get(*field_id))
+        self.sync_editors()
+        self.refresh()
+        self._update_title()
+
     def _load_into_window(self, theme: Theme, path: Path | None) -> None:
         self.theme, self.path = theme, path
         self.undo_stack.clear()
@@ -509,6 +588,10 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         """Bring the page shown, the messages and the files in line with the theme."""
         self.plan = engine.build_plan(self.theme)
+        # An edit may change something again, so Apply is on until the status says otherwise: a
+        # button that stays off for a moment after a real edit is the worse fault.
+        self.nothing_to_apply = False
+        self.status_generation += 1  # an answer for the theme before this edit is out of date
         for page in self.pages.values():
             page.stale = True
             if page.built:
@@ -540,13 +623,36 @@ class MainWindow(QMainWindow):
         self.status_timer.start()
 
     def update_status(self) -> None:
-        """Compare every part with the desktop: the dots of the side bar, the Overview and the
-        sentence of the Desktop bar. Reads the desktop, so it runs after the edits stop."""
+        """Start the comparison of every part with the desktop in a worker. Only the newest answer is
+        used (`_status_ready`); typing and dragging never wait for it."""
         self.status_timer.stop()
-        try:
-            self.statuses = engine.parts_status(self.theme, self.runner)
-        except Exception:  # noqa: BLE001 - reading the desktop must never break the window
-            self.statuses = []
+        self.status_generation += 1
+        self.status_pending = True
+        self.status_pool.start(
+            _StatusJob(self.status_generation, self.theme.copy(), self.runner, self.status_answer)
+        )
+
+    def settle(self) -> None:
+        """Wait until the status of the newest theme is known and shown (for tests, and for a caller that
+        needs the answer now)."""
+        while self.status_timer.isActive() or self.status_pending:
+            if self.status_timer.isActive():
+                self.update_status()
+            self.status_pool.waitForDone()
+            QCoreApplication.processEvents()
+            QCoreApplication.sendPostedEvents(None, 0)
+            if self.status_pending and not self.status_timer.isActive():
+                self.update_status()  # the answer was for a theme that has changed since: ask again
+
+    def _status_ready(self, generation: int, statuses) -> None:
+        if generation != self.status_generation:
+            return
+        self.status_pending = False
+        self.statuses = statuses
+        self._show_status()
+
+    def _show_status(self) -> None:
+        """The dots of the side bar, the Overview, the sentence of the Desktop bar and the apply button."""
         by_key = {part.key: part.state for part in self.statuses}
         for spec in pages.PAGES:
             page = self.pages.get(spec.key)
@@ -563,7 +669,9 @@ class MainWindow(QMainWindow):
         if not self.statuses:
             text = ""
         elif blocked:
-            text = translate("ui", "Applying is refused: {problem}").format(problem=blocked[0].theme)
+            text = translate("ui", "{part} cannot be applied: {problem}").format(
+                part=blocked[0].title, problem=blocked[0].theme
+            )
         elif changing == 0:
             text = translate("ui", "Nothing will change when you apply.")
         elif changing == 1:
@@ -571,6 +679,8 @@ class MainWindow(QMainWindow):
         else:
             text = translate("ui", "{count} parts will change when you apply.").format(count=changing)
         self.desktop_bar.set_status(text, changing > 0 or bool(blocked))
+        self.nothing_to_apply = bool(self.statuses) and changing == 0 and not blocked
+        self.update_apply_button()
         overview = self.pages.get("overview")
         if overview is not None:
             overview.fill(self.statuses)
@@ -601,6 +711,11 @@ class MainWindow(QMainWindow):
             tip = "" if entry else translate("ui", "Select a theme first.")
         else:
             name, enabled, tip = self.theme.name, not self.plan.blocking, ""
+            if enabled and self.nothing_to_apply:
+                name, enabled = "", False
+                tip = translate(
+                    "ui", "Nothing would change: the desktop already has everything this theme sets."
+                )
         if name and enabled:
             tip = translate("ui", "Apply “{name}” to the desktop").format(name=name)
         self.apply_button.setEnabled(enabled)
@@ -811,6 +926,8 @@ class MainWindow(QMainWindow):
             return
         QSettings().setValue("window/geometry", self.saveGeometry())
         self.loader.shutdown()
+        self.status_generation += 1  # nobody listens to a job that is still running
+        self.status_pool.waitForDone(3000)
         event.accept()
 
     # ---- desktop -----------------------------------------------------
@@ -829,6 +946,7 @@ class MainWindow(QMainWindow):
     def reload_library(self) -> None:
         """The desktop changed (an apply, an undo, a save): read it again where it is shown."""
         self.active_scheme()
+        self.status_generation += 1  # an answer read before the desktop changed is out of date
         for page in self.pages.values():
             page.desktop_stale = True
         themes = self.pages.get("themes")
@@ -855,6 +973,10 @@ class MainWindow(QMainWindow):
 
         The editor takes the theme over, so that what is changed and applied
         next changes this theme and does not bring back the one before it."""
+        handler = self.entry_handlers.get(type(entry))
+        if handler is not None:  # a kind of card that a page takes care of itself
+            handler(entry)
+            return
         if self._in_editor(entry):
             self._apply(self.theme, from_library=True)  # with its unsaved edits
             return

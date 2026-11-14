@@ -312,6 +312,24 @@ class CursorSizeTarget(PartTarget):
         return [translate("core", "the pointer size: {size} px (kcminputrc)").format(size=self.value(theme))]
 
 
+class NightModeTarget(PartTarget):
+    id = "night_mode"
+    title = translate("core", "Dark mode at night")
+    sections = ("desktop",)
+    key = "night_mode"
+
+    def value(self, theme: Theme):
+        return theme.get("desktop", "dark_at_night")
+
+    def reload_command(self, theme: Theme) -> str:
+        return ""
+
+    def describe(self, theme: Theme) -> list[Msg]:
+        if self.value(theme):
+            return [translate("core", "the switch to dark mode at night: on (kdeglobals)")]
+        return [translate("core", "the switch to dark mode at night: off (kdeglobals)")]
+
+
 class FontsTarget(PartTarget):
     id = "fonts"
     title = translate("core", "Fonts")

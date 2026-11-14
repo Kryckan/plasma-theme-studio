@@ -14,8 +14,9 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QImage, QImageReader
+from PySide6.QtGui import QImage
 
+from .. import images
 from ..messages import translate
 from .base import Item, Kind, fit_image, installed, placeholder, read_ini, read_metadata, unique_sorted
 
@@ -58,8 +59,9 @@ def first_picture(folder: Path, names: tuple[str, ...]) -> Path | None:
 def read_scaled(path: Path, size: QSize, dpr: float) -> QImage:
     """The picture at `path` shrunk while it is read (large screenshots are cheap
     this way) and fitted into `size` at `dpr`; null when it cannot be read."""
-    reader = QImageReader(str(path))
-    reader.setAutoTransform(True)
+    reader = images.open_reader(path)
+    if reader is None:
+        return QImage()
     source = reader.size()
     target = QSize(max(1, round(size.width() * dpr)), max(1, round(size.height() * dpr)))
     if source.isValid() and (source.width() > target.width() or source.height() > target.height()):

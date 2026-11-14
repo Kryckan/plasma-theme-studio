@@ -119,5 +119,6 @@ def test_the_font_buttons_and_color_pages_edit_the_theme(window):
 
 def test_the_overview_lists_every_part_with_its_state(window, app):
     window.update_status()
+    window.settle()
     page = window.page("overview")
     assert page.table.rowCount() == len(window.statuses) > 0

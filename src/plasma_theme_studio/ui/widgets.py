@@ -599,7 +599,7 @@ class CardGrid(QWidget):
         if fit:
             self.scroll = None
             layout.addWidget(self.body)
-            self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         else:
             self.scroll = QScrollArea()
             self.scroll.setWidgetResizable(True)
@@ -1161,6 +1161,7 @@ class NavList(QListWidget):
         self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setSpacing(1)
+        self.compact = False
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(translate("widgets", "Pages"))
         self.currentItemChanged.connect(self._changed)
@@ -1181,10 +1182,28 @@ class NavList(QListWidget):
             icon = QIcon(blank)
         item = QListWidgetItem(icon, title)
         item.setData(self.KEY, key)
-        item.setSizeHint(QSize(0, 36))
         self.addItem(item)
         self._describe(item, state)
         return item
+
+    def row_heights(self, compact: bool) -> tuple[int, int]:
+        """(height of a page row, height of a group caption). The compact sizes are used when the
+        whole list would not fit the height of the window, so that every entry is reachable without
+        a scroll bar when that is possible."""
+        return (28, 24) if compact else (36, 34)
+
+    def _needed_height(self, compact: bool) -> int:
+        page, group = self.row_heights(compact)
+        rows = [group if self.item(r).data(self.GROUP) else page for r in range(self.count())]
+        return sum(rows) + (0 if compact else self.count() * 2)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        compact = self._needed_height(False) > self.viewport().height()
+        if compact != self.compact:
+            self.compact = compact
+            self.setSpacing(0 if compact else 1)
+            self.scheduleDelayedItemsLayout()
 
     def _item(self, key: str) -> QListWidgetItem | None:
         for row in range(self.count()):
@@ -1230,7 +1249,8 @@ class NavList(QListWidget):
 
 class _NavDelegate(QStyledItemDelegate):
     def sizeHint(self, option, index):
-        return QSize(0, 34 if index.data(NavList.GROUP) else 36)
+        page, group = option.widget.row_heights(option.widget.compact)
+        return QSize(0, group if index.data(NavList.GROUP) else page)
 
     def paint(self, p, option, index):
         rtl = option.direction == _RIGHT_TO_LEFT
@@ -1244,7 +1264,9 @@ class _NavDelegate(QStyledItemDelegate):
             p.setPen(with_alpha(option.palette.windowText().color(), 0.6))
             align = Qt.AlignmentFlag.AlignRight if rtl else Qt.AlignmentFlag.AlignLeft
             p.drawText(
-                option.rect.adjusted(12, 10, -12, 0), align | Qt.AlignmentFlag.AlignVCenter, index.data()
+                option.rect.adjusted(12, 4 if option.widget.compact else 10, -12, 0),
+                align | Qt.AlignmentFlag.AlignVCenter,
+                index.data(),
             )
             p.restore()
             return

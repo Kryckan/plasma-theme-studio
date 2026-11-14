@@ -185,6 +185,8 @@ def _execute(
         for file in files:
             write_atomic(file.path, file.content)
         for target in targets:
+            if scheme_id is None and _settled(target, theme, runner):
+                continue  # the desktop already has it: nothing is written to it again
             reached.append(target.generator.id)
             target.generator.reload(theme, runner)
         # The desktop has switched to the new files; the old ones can go.
@@ -213,6 +215,17 @@ def _execute(
         raise ApplyError(message, restored=not failures) from error
     snapshots.prune()
     return snapshot
+
+
+def _settled(target: TargetPlan, theme: Theme, runner) -> bool:
+    """Whether the desktop already uses what the target would set: its files are written as they
+    are and it is the one in use. An apply leaves such a part alone."""
+    if any(status.state != UNCHANGED for status in target.files) or target.stale:
+        return False
+    try:
+        return bool(target.generator.is_active(theme, runner))
+    except Exception:  # noqa: BLE001 - when it cannot be told, the part is applied as before
+        return False
 
 
 def is_current(plan: Plan, runner) -> bool:

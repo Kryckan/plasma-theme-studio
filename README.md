@@ -8,7 +8,7 @@ One app for editing an entire KDE Plasma theme in one place.
 
 Set colors, corner radii, borders, shadows, opacity and the panel's position in one theme. Plasma Theme Studio writes the files each part of the desktop needs and reloads the desktop live.
 
-> **Status: early development (v0.1).** Colors, the window frame (corner radius, border, shadow), the panel's look (corner radius, border, opacity) and the panel's position can be edited, previewed, applied and undone. The Themes tab shows your saved themes and every installed color scheme, switches the desktop between them and opens any of them for editing. Shapes of app widgets (buttons, fields, menus) are previewed but not applied to the desktop yet. What works and what does not is in [docs/STATUS.md](docs/STATUS.md); the plan is in [docs/PRD.md](docs/PRD.md).
+> **Status: early development (v0.1).** The window has a page for every part of System Settings' Colors & Themes (Global Themes, Colors, Application Style, Plasma Style, Window Decorations, Icons, Pointers, Splash Screen, System Sounds, Fonts), the panel, GTK applications and Rofi, each with preview cards and a live preview. Colors, the window frame, the panel and the other parts can be edited, previewed, applied and undone; theme colors can be taken from the wallpaper or imported from pywal, matugen and `.colors` files. The login screen is only linked to System Settings. What works and what does not is in [docs/STATUS.md](docs/STATUS.md); the plan is in [docs/PRD.md](docs/PRD.md).
 
 ![The editor with a dark theme open](docs/screenshots/main-window.png)
 
@@ -95,6 +95,8 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 | Popups, tooltips, widgets | Plasma style (SVG) | Works in tests |
 | GTK 3 / GTK 4 apps | CSS overrides | Works in tests |
 | Rofi | Rofi theme | Works in tests |
+| Plasma style, application style, window decoration, icons, pointers, fonts, splash screen, sounds, title bar buttons | The installed ones, set through the desktop's own settings files | Works in tests |
+| Login screen (SDDM) | Not edited (needs administrator rights); the app opens System Settings | Link only |
 
 The window frame, panel style and panel position have so far been tried with Plasma 6.8 in an isolated test session only.
 

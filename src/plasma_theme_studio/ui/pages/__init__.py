@@ -5,6 +5,10 @@
 `PAGES` is the registry: one `PageSpec` per page, with the module and class that build it. A page is
 imported and made by `create(key, window)` the first time it is shown, so the window opens without
 loading what it does not show. `GROUPS` is the captions of the side bar and the keys under each.
+
+An entry is of kind "page" (edits a part of the theme) or "link": a part this app does not edit, with
+an explanation and a button that opens the matching System Settings module (`PageSpec.link`, a key of
+`desktopparts.MODULES`; the page class is a `base.LinkPage`).
 """
 
 from __future__ import annotations
@@ -23,6 +27,8 @@ class PageSpec:
     fallback: str
     module: str
     cls: str
+    kind: str = "page"  # "page", or "link" for an entry that opens a System Settings module
+    link: str = ""  # the module id of a "link" entry
 
 
 PAGES: tuple[PageSpec, ...] = (
@@ -104,6 +110,16 @@ PAGES: tuple[PageSpec, ...] = (
         "SoundsPage",
     ),
     PageSpec(
+        "login_screen",
+        translate("ui", "Login Screen (SDDM)"),
+        "preferences-system-login",
+        "system-lock-screen",
+        "login_screen",
+        "LoginScreenPage",
+        kind="link",
+        link="kcm_sddm",
+    ),
+    PageSpec(
         "app_style",
         translate("ui", "Application Style"),
         "preferences-desktop-theme-applications",
@@ -129,7 +145,7 @@ GROUPS: tuple[tuple[object, tuple[str, ...]], ...] = (
     (translate("ui", "Basics"), ("colors", "shapes", "fonts")),
     (
         translate("ui", "Desktop"),
-        ("plasma_style", "panel", "decorations", "icons", "pointers", "splash", "sounds"),
+        ("plasma_style", "panel", "decorations", "icons", "pointers", "splash", "sounds", "login_screen"),
     ),
     (translate("ui", "Apps"), ("app_style", "gtk", "rofi")),
 )
@@ -163,6 +179,7 @@ PARTS: dict[str, tuple[str, ...]] = {
     "plasma_style": ("plasma_style",),
     "panel": ("panel",),
     "pointers": ("pointers",),
+    "themes": ("night_mode",),
 }
 
 

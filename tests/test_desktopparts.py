@@ -65,6 +65,7 @@ SAMPLES = {
     "sounds": ({"theme": "oxygen", "enabled": False}, {"theme": "ocean", "enabled": True}),
     "splash": ("None", "org.kde.breeze.desktop"),
     "accent": ("#336699", "#aa0000"),
+    "night_mode": (True, False),
 }
 
 
@@ -117,6 +118,7 @@ def test_apply_reads_back(key, runner):
         "plasma_style",
         "splash",
         "accent",
+        "night_mode",
     ):
         assert now == value
     elif key == "decoration":

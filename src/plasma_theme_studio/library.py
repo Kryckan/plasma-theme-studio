@@ -59,11 +59,14 @@ def _parse_color(value: str) -> str | None:
 
 
 def read_scheme(path: Path, in_home: bool) -> InstalledScheme | None:
+    data = safefile.read_regular(path)  # a pipe, a device or a huge file is no color scheme
+    return parse_scheme(data, path, in_home) if data is not None else None
+
+
+def parse_scheme(data: bytes, path: Path, in_home: bool) -> InstalledScheme | None:
+    """The color scheme in `data` (the bytes of the file `path`); None when it is not one."""
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str
-    data = safefile.read_regular(path)  # a pipe, a device or a huge file is no color scheme
-    if data is None:
-        return None
     text = data.decode("utf-8", errors="replace")
     try:
         parser.read_string(text)

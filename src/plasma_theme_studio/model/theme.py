@@ -73,6 +73,9 @@ FIELDS: tuple[Field, ...] = (
     # False: the theme's accent is the accent (an apply removes the accent override of System
     # Settings). True: Plasma takes the accent from the wallpaper and keeps following it.
     Field("colors", "accent_from_wallpaper", "bool", False),
+    # The installed color scheme the colors were taken from. While the colors still are exactly
+    # that scheme's, an apply activates the scheme itself instead of writing a copy of it.
+    Field("colors", "scheme_id", "str", None, optional=True, form="id"),
     Field("colors", "window", "color", "#eff0f1"),
     Field("colors", "view", "color", "#ffffff"),
     Field("colors", "button", "color", "#fcfcfc"),
@@ -120,6 +123,9 @@ FIELDS: tuple[Field, ...] = (
     Field("panel_layout", "floating", "bool", None, optional=True),
     Field("panel_layout", "visibility", "choice", None, choices=PANEL_VISIBILITIES, optional=True),
     Field("panel_layout", "opacity_mode", "choice", None, choices=PANEL_OPACITIES, optional=True),
+    # True: Plasma switches between the light and the dark Global Theme chosen in System Settings
+    # with the sun; False: it does not; unset: left as it is.
+    Field("desktop", "dark_at_night", "bool", None, optional=True),
     Field("desktop", "icons", "str", None, optional=True, form="id"),
     Field("desktop", "cursors", "str", None, optional=True, form="id"),
     Field("desktop", "cursor_size", "int", None, 8, 256, optional=True),

@@ -57,27 +57,34 @@ Supporting pieces:
 - Undo removes folders that the apply created and that are empty again; a restore of a file with CRLF line ends is byte-exact.
 - Rig-checked after the repair step: apply and undo with the Plasma style and Rofi from a home with no `plasmarc`, no `kdeglobals` and no Rofi folder; `install.sh` refusing a foreign scheme, installing, being listed by `plasma-apply-lookandfeel -l`, and `uninstall.sh` leaving nothing behind. Not verified: GTK 3 colors in a real session, and none of it on a real desktop. The style preview tests skip when Qt's plugin path is not set (`QT_PLUGIN_PATH=/usr/lib/qt6/plugins` with the pip PySide6).
 
-## Built, with tests, but not shown in the window yet
+## Left over from the earlier steps
 
-The window itself is rebuilt (see *The window* below). What is left over from the earlier steps:
-
-- `ui/widgets.py` pieces not used by a page yet: `ColorDots`.
-- `wallpaper.py` and the wallpaper and image import of `palette.py` (accent from the wallpaper, pywal, matugen, `.colors` files): no page offers them yet. The Colors page only edits the twelve colors.
-- The CLI `status` and `apply` cover every target; the window shows the same status through the side bar dots and the Overview.
-- Not verified: the sample icons and the sizes of SVG pointer themes are a best guess at what System Settings shows; whether Plasma updates the accent color by itself in "from wallpaper" mode.
+- The CLI `status` and `apply` cover every target; the window shows the same status through the side bar dots and the Overview. The CLI keeps its own words for the states ("Would change", "Left alone", "Refused"); only the window uses `STATE_WORDS`.
+- Not verified: the sample icons and the sizes of SVG pointer themes are a best guess at what System Settings shows; whether Plasma updates the accent color by itself in "from wallpaper" mode; the eight accent colors of the Colors page (`STANDARD_ACCENTS`) are not checked against the list System Settings offers.
 
 ## The window
 
 - `ui/main_window.py` is the shell: a 236 px side bar (theme block with the File menu, `NavList` in the groups Overview, Library, Basics, Desktop, Apps), a `Banner` and the page stack, the permanent `DesktopBar` (status sentence, *Show files…*, *Snapshots…*, *Undo last apply*, *Apply to Desktop*), the menu bar and the *Show files…* dialog (`ui/files_dialog.py`). `window.apply_button`, `undo_apply_button`, `banner`, `library`, `preview`, `style_preview` are kept for the tests.
-- Pages live in `ui/pages/`; `pages/__init__.py` is the lazy registry (`PAGES`, `GROUPS`, `SPECS`, `create`, `title_of`, `parts_of`). `pages/base.py` documents the API: `Page`, `ValuePage` (controls and preview), `PickerPage` (a `CardGrid` of installed things, a part switch, optional tuning values) and `TargetPage` (a part that is only written). A page is made when first shown; `window.build_pages()` makes all of them (tests).
+- Pages live in `ui/pages/`; `pages/__init__.py` is the lazy registry (`PAGES`, `GROUPS`, `SPECS`, `create`, `title_of`, `parts_of`). A `PageSpec` has a `kind`: "page" (a normal page) or "link" (a part this app does not edit: `link` is the System Settings module, the page is a `LinkPage` with an explanation and a button that calls `desktopparts.open_system_settings`; `login_screen.py`, module `kcm_sddm`, is the first and ends the Desktop group). `pages/base.py` documents the API with examples: `Page`, `ValuePage` (controls and preview), `PickerPage` (a `CardGrid` of installed things, a part switch, optional tuning values), `TargetPage` (a part that is only written) and `LinkPage`. A page is made when first shown; `window.build_pages()` makes all of them (tests).
+- Page layout. A picker page scrolls once: the header and the part switch stay, the search bar is outside the scroll (so it is always in view), and the grid (full height, `CardGrid(fit=True)`), the tuning block, extra controls and notes are in one scroll area. Thumbnails are asked for only when a card is first painted. Extra room, all in `base.py`: `add_top_row(widget)` (between part switch and grid), `add_below(widget)` (under the grid), `set_side_preview(widget, width)` (a column on the right; a `TargetPage` has the same slot), and the header actions of `PageHeader`. The cards "This theme" and "Breeze with your changes" call `this_theme_thumbnail(size, dpr) -> QImage`; the default is `ui/this_theme.py` (decorations: active in front of inactive window with the theme's frame; Plasma style: clock on the generated panel; application style: real widgets through the generated Kvantum theme, a drawn stand-in without it; color scheme: card from the twelve colors). A page overrides the method for its own picture. The cards are redrawn 150 ms after the last edit.
+- The part switch of a picker remembers the choice made before "Leave as it is" (`page.remembered`), so Leave and Set bring it back, for the session.
 - Navigating never edits and editing never navigates. Every edit goes through `window.edit(field, value)` or `window.edit_many(text, {field: value})` (one undo step, nothing changes when one value is refused).
-- The side bar dots and the dimming of a page come from `engine.parts_status`, read once after the first paint and again 200 ms after the last edit. The apply button acts on the selected card while the Themes page is shown and on the editor theme elsewhere; its tooltip names the theme.
+- The side bar dots and the dimming of a page come from `engine.parts_status`. It runs in a worker (`QThreadPool`, one thread) on a copy of the theme; every start bumps `window.status_generation` and an answer for an older generation is dropped. It is started after the first paint and 200 ms after the last edit; the Desktop bar keeps its last sentence while an answer is pending. Tests call `window.settle()` after anything that changes the theme to wait for the answer. The runner is used from the worker, so it must be thread-safe: `SystemRunner` is plain subprocess calls and `FakeRunner` plain Python; a runner must not touch widgets. "Apply to Desktop" is disabled, with a tooltip, when the status says nothing would change, and any edit enables it again until the next answer. A blocked part makes the bar name the part and why. The state words of the Overview are one vocabulary, `apply.status.STATE_WORDS` / `state_word()`: "Will change", "Already so", "Left as it is", "Cannot be applied"; part titles are those of the side bar. The apply button acts on the selected card while the Themes page is shown and on the editor theme elsewhere; its tooltip names the theme.
+- The side bar is compact (28 and 24 px rows) when the normal rows do not fit the height (1100x720), so every entry is reachable without a scroll bar.
+- In the Panel mode the preview shows the whole screen edge the panel is on (full length, as deep as panel, gap and popup), at the side of the picture that is that edge; the Menu mode holds popup, tooltip and panel without clipping.
 - QSettings keys: `window/geometry`, `window/page`. Closing with unsaved changes asks first.
 - Thumbnails of pickers come from `ThumbnailLoader` (disk cache); the cards of "This theme" and "Breeze with your changes" are drawn in-process by `PreviewWidget.render_image`.
 - First paint (window construction to the first painted frame, offscreen, 1400x900): 0.05 to 0.15 s.
-- Known gaps: the Panel page keeps one "Leave as it is" choice per value instead of one part switch; the Colors page has no Leave/Set switch (the theme cannot store it); in the Panel mode the preview shows a cropped strip of the desktop that looks odd; the Themes page lists saved themes and color schemes only (no installed Global Themes).
+- The pages (all in `ui/pages/`, each with tests in `tests/test_page_*.py`):
+  - Overview: name and author, "On the desktop now" and "In the editor" with drawn previews, one clickable row per part with a state chip, Recent (last three applies), a link to the file list.
+  - Themes: chips All / My themes / Global Themes / Color schemes with search; saved themes, installed Global Themes (package picture) and color schemes. A Global Theme is loaded into the editor (one undo step, parts the app cannot match are reported); "Apply to Desktop" on it asks first, loads, then applies the editor theme. It never runs `plasma-apply-lookandfeel`. Header: "New Theme from the Desktop", a "Get More" menu. The dark mode switch of System Settings' Global Theme page is not built.
+  - Colors: accent row (eight standard dots, the theme's own, a custom color, a "From the wallpaper:" row, "Let the accent follow the wallpaper"), a searchable All/Light/Dark card grid of color schemes (a bounded grid with its own scroll bar inside the page: two rows tall), "Install from File…", "Import Colors…" (pywal, matugen, `.colors`), the collapsible "Colors from the wallpaper" block (picture decoded in a worker, refused over 40 million pixels from the header), twelve color editors and the contrast box ("Fix contrast" is one undo step). Colors has no Leave/Set switch: the theme cannot store it.
+  - Shapes, Fonts (six rows with a sample, "Use one family for all"), Plasma Style (cards, a "Panel" and a "Popups and tooltips" block for This theme), Panel (one switch "Leave as it is | Set by this theme", screen chooser, seven values, live preview; each value still has its own "Leave as it is"), Window Decorations ("Window border size", "Configure Titlebar Buttons…" with drag and drop, frame and shadow values for This theme and Breeze), Icons (six sample icons per card and a strip of a dozen at 32 and 48 px), Pointers (eight samples per card, "Size:" and "Configure Launch Feedback…"), Splash Screen (a large preview), System Sounds (a list with Play: `pw-play`, `paplay` or `canberra-gtk-play`, picked when pressed), Login Screen (SDDM) (an explanation and a button), Application Style (cards, "Configure Icons and Toolbars…", values beside a sample of real widgets), GTK Apps and Rofi (drawn previews).
+- Words every page shares: "Leave as it is | Set by this theme" (part switch, also on Panel), "In use" / "Not in use yet", "This theme" and "Breeze with your changes", "…" only on a button that opens a dialog or another program, "Search…". A missing program is said in a note on the page (Kvantum) or in a warning banner when a button needs it (System Settings, a sound player).
+- Known gaps: the Colors page has two vertical scroll bars (the page and the scheme grid) at heights where the grid does not fit; the Panel values keep their own "Leave as it is" beside the page switch; cards of the picker grids have a fixed width, so a strip of free room can remain at the right edge; a Global Theme is not installed as a whole (panel layout and widgets are not set), only the parts the app can edit.
+- Measured offscreen at 1400x900 with the installed themes of this machine (Plasma 6.8.2, Qt 6.12): construction 57 ms, show 34 ms. Switching to a page for the first time: Overview to Rofi 0 to 38 ms, Application Style 144 ms (it builds a sample of real Kvantum widgets on the GUI thread), a second visit 2 to 6 ms. The longest GUI slice while a page filled was 27 ms (Application Style) and 12 ms elsewhere; icons, pointers and thumbnails are loaded by workers and the loader (one SVG per tick).
 
-## Things learned
+## Things learned about the window
 
 - A `QUndoStack` merges two edits of one field that come within a second. A test that edits a field twice and then undoes once gets the state before both.
 - `QMessageBox.warning` is a static call; tests replace it with `monkeypatch.setattr(QMessageBox, "warning", staticmethod(...))`. A real box in a test waits forever.
@@ -86,6 +93,11 @@ The window itself is rebuilt (see *The window* below). What is left over from th
 - Widgets disabled through a parent stay disabled for `isEnabled()`; check the parent box too.
 - Cards of the picker grids are checkable buttons; a click on the selected card does not unselect it.
 - `QSettings` key `window/page` that names no page opens the Overview.
+- `window.settle()` loops until no answer is pending; a test that bumps `status_generation` by hand is asked again by it. `edit()` refreshes after a 30 ms timer: a test that looks at the result calls `window.refresh()`.
+- Painting a `PreviewWidget` mode that shows a part of the scene must clip to that part, or the rest of the scene shows in a tall widget.
+- A `CardGrid(fit=True)` grows with its width; its vertical size policy must be Preferred. With Minimum a scroll area takes the height of the narrowest layout as the page's minimum and leaves a huge empty gap (fixed in `widgets.py`).
+- `DesktopRunner` keeps `kdeglobals` as a real file, so a test that wants a color scheme in use sets it with `kwriteconfig6`, not with `runner.settings`.
+- Swedish words in `i18n`: Apply is "Verkställ", accent is "accentfärg", wallpaper "skrivbordsunderlägg", fonts "teckensnitt", Plasma style "Plasmastil".
 
 ## Known limits of the new targets
 
@@ -102,7 +114,15 @@ The window itself is rebuilt (see *The window* below). What is left over from th
 - GTK 3 gets its colors from `colors.css`, which kde-gtk-config writes from the color scheme in a real session; the generated GTK 3 sheet only carries radius and border. The rig has no such module, so the colors were not seen working there. libadwaita (GTK 4) ignores the border width on buttons and entries.
 - Everything in this section has been verified in the headless rig and a sandboxed home, with Plasma 6.8.2. None of it has been applied to a real desktop session yet.
 
-## Next
+## Parity gaps and open items from the 2b2 repair
+
+- Some System Settings pages are only launched, not rebuilt: Icons and Toolbars, Launch Feedback, Login Screen. *Get New…* does not download anything; *Find More in System Settings…* opens the real page.
+- Undo of the colors step leaves what `plasma-apply-colorscheme` wrote in the GTK color files, `xsettingsd.conf` and a `kdeglobals` that the apply created. They are not part of the undo snapshot yet.
+- First visits to Icons (150+ themes), Application Style and the pointer status build many cards or read config on the GUI thread; they should build cards in steps and read in a worker.
+- Not done: *From color scheme* in the accent row, a list of the colors *Fix contrast* will change before it runs, the Application Style placeholder cards and check badge, the Panel page's repeated *Leave as it is*, the flexible Panel grid, the greyed-out titlebar-buttons dialog.
+- `ThemeGrid` still swaps `flow.__class__`; `CardGrid` should take a `flow_class` argument.
+- Apply stays enabled right after an edit even when the edit changes nothing on the desktop; the status worker turns it off again. A button that is off after a real edit is the worse fault.
+
 
 1. Try the new targets (window frame, panel, Kvantum, GTK, Rofi, popups) on a real session and fix what shows up. Then tag v0.1.0 and publish the AUR package.
 2. **Milestone 2:** (Kvantum generator and the preview with the real style are done.) Light and dark variants; pywal and matugen import. Klassy as an optional window frame backend.
@@ -124,6 +144,11 @@ Smaller open items:
 ## Things learned
 
 **Colors and the app itself**
+
+- A theme can name an installed color scheme (`colors.scheme_id`). While every color equals that scheme's, the apply activates it by name and writes no scheme file; one changed color makes the app write a scheme of its own. Exported packages always carry their own scheme.
+- `engine._execute` leaves a part alone when its files are unchanged and the desktop already has it (`_settled`), so *New Theme from the Desktop* followed by Apply is a no-op.
+- `AutomaticLookAndFeel` in `kdeglobals` `[KDE]` is System Settings' "switch between light and dark Global Theme" switch (the `night_mode` part).
+- Pictures are opened only through `images.open_reader`: regular files, at most 40 million pixels, 256 MB decode limit. A FIFO named as a picture would otherwise hang the reader.
 
 - `plasma-apply-colorscheme` does nothing when the named scheme is already active, even if its file changed. Workaround in `activate_scheme`: write a placeholder name to `kdeglobals` `General/ColorScheme` with `kwriteconfig6`, then apply.
 - Its exit code is not reliable. Success is verified by reading the setting back with `kreadconfig6`.

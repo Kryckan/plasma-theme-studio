@@ -15,6 +15,19 @@ from . import engine
 
 CHANGE, SAME, LEAVE, BLOCKED = "change", "same", "leave", "blocked"
 
+# The one vocabulary for the state of a part, in the Overview and wherever else a state is said.
+STATE_WORDS = {
+    CHANGE: translate("core", "Will change"),
+    SAME: translate("core", "Already so"),
+    LEAVE: translate("core", "Left as it is"),
+    BLOCKED: translate("core", "Cannot be applied"),
+}
+
+
+def state_word(state: str) -> str:
+    """The words for a state: "Will change", "Already so", "Left as it is" or "Cannot be applied"."""
+    return str(STATE_WORDS.get(state, STATE_WORDS[SAME]))
+
 
 @dataclass(frozen=True)
 class PartStatus:
@@ -29,17 +42,18 @@ class PartStatus:
 # key, title, the targets (by id) that make up the part
 PARTS: tuple[tuple[str, Msg, tuple[str, ...]], ...] = (
     ("colors", translate("core", "Colors"), ("colors", "accent")),
-    ("app_style", translate("core", "Application style"), ("apps", "app_style")),
-    ("plasma_style", translate("core", "Plasma style"), ("panel", "plasma_style")),
+    ("app_style", translate("core", "Application Style"), ("apps", "app_style")),
+    ("plasma_style", translate("core", "Plasma Style"), ("panel", "plasma_style")),
     ("panel", translate("core", "Panel"), ("panel_layout",)),
-    ("decoration", translate("core", "Window decorations"), ("window", "decoration")),
-    ("borders", translate("core", "Window borders and buttons"), ("border_size", "buttons")),
+    ("decoration", translate("core", "Window Decorations"), ("window", "decoration")),
+    ("borders", translate("core", "Window Borders and Buttons"), ("border_size", "buttons")),
     ("icons", translate("core", "Icons"), ("icons",)),
     ("pointers", translate("core", "Pointers"), ("cursors", "cursor_size")),
     ("fonts", translate("core", "Fonts"), ("fonts",)),
-    ("splash", translate("core", "Splash screen"), ("splash",)),
-    ("sounds", translate("core", "System sounds"), ("sounds",)),
-    ("gtk", translate("core", "GTK applications"), ("gtk",)),
+    ("splash", translate("core", "Splash Screen"), ("splash",)),
+    ("sounds", translate("core", "System Sounds"), ("sounds",)),
+    ("night_mode", translate("core", "Dark mode at night"), ("night_mode",)),
+    ("gtk", translate("core", "GTK Apps"), ("gtk",)),
     ("rofi", translate("core", "Rofi"), ("rofi",)),
 )
 
@@ -237,6 +251,13 @@ class _Status:
             return (general.label() if general else str(translate("core", "Default"))), _leave()
         return "; ".join(desktop), "; ".join(theme)
 
+    def night_mode(self) -> tuple[str, str]:
+        def word(on) -> str:
+            return str(translate("core", "On") if on else translate("core", "Off"))
+
+        wanted = self.theme.get("desktop", "dark_at_night")
+        return word(self.current("night_mode")), word(wanted) if wanted is not None else _leave()
+
     def simple(self, key: str, kind: str, section: str, field: str, extract=None) -> tuple[str, str]:
         current = self.current(key)
         if extract:
@@ -297,6 +318,8 @@ class _Status:
                 return self.fonts(wanted)
             case "splash":
                 return self.simple("splash", "splash", "desktop", "splash")
+            case "night_mode":
+                return self.night_mode()
             case "sounds":
                 return self.simple("sounds", "sounds", "desktop", "sounds", lambda value: value["theme"])
             case _:

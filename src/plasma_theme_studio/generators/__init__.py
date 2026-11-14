@@ -15,6 +15,7 @@ from .installed import (
     InstalledAppStyle,
     InstalledDecoration,
     InstalledPlasmaStyle,
+    NightModeTarget,
     SoundsTarget,
     SplashTarget,
     TitlebarButtonsTarget,
@@ -52,6 +53,7 @@ GENERATORS: tuple[Generator, ...] = (
     FontsTarget(),
     SplashTarget(),
     SoundsTarget(),
+    NightModeTarget(),
     RofiGenerator(),
 )
 

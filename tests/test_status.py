@@ -16,7 +16,7 @@ def test_every_part_has_a_record_and_a_theme_that_names_nothing_leaves_them(desk
     records = parts_status(Theme(), desktop_runner)
     assert [r.key for r in records] == [
         "colors", "app_style", "plasma_style", "panel", "decoration", "borders",
-        "icons", "pointers", "fonts", "splash", "sounds", "gtk", "rofi",
+        "icons", "pointers", "fonts", "splash", "sounds", "night_mode", "gtk", "rofi",
     ]  # fmt: skip
     assert all(isinstance(r, PartStatus) and r.title and r.desktop and r.theme for r in records)
     states = {r.key: r.state for r in records}
@@ -57,4 +57,4 @@ def test_it_never_raises(desktop_runner, monkeypatch):
     monkeypatch.setattr(desktopparts.Icons, "current", broken)
     records = by_key(parts_status(everything(), desktop_runner))
     assert records["icons"].state in ("change", "same", "leave")
-    assert len(records) == 13
+    assert len(records) == 14

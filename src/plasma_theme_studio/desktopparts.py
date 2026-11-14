@@ -827,6 +827,24 @@ class GlobalTheme(Part):
         return {"values": {}, "masked": [], "effective": self.current(runner)}
 
 
+class NightMode(Part):
+    """Whether Plasma switches between its light and dark Global Theme with the time of day (the
+    "Switch to Dark Mode at Night" check box of System Settings). Which two themes it switches
+    between is chosen there; only the switch is changed here."""
+
+    key = "night_mode"
+    title = translate("core", "Dark mode at night")
+    settings = {"on": ("kdeglobals", ["KDE"], "AutomaticLookAndFeel")}
+
+    def current(self, runner) -> bool:
+        return self._get(runner, "on", "false").lower() == "true"
+
+    def apply(self, value, runner) -> None:
+        if not isinstance(value, bool):
+            raise _error("{what} is not a valid name.", what=str(translate("core", "The dark mode switch")))
+        self._put(runner, "on", "true" if value else "false")
+
+
 PARTS: dict[str, Part] = {
     part.key: part
     for part in (
@@ -843,6 +861,7 @@ PARTS: dict[str, Part] = {
         Sounds(),
         Splash(),
         Accent(),
+        NightMode(),
     )
 }
 

@@ -109,6 +109,7 @@ def test_the_app_registers_every_target_in_the_order_they_are_applied():
         "fonts",
         "splash",
         "sounds",
+        "night_mode",
         "rofi",
     ]
     assert generators.section_generators("shadow") == [generators.generator_by_id("window")]
@@ -321,10 +322,7 @@ def window(app, desktop, monkeypatch):
 
 
 def listed_files(window):
-    return [
-        window.files_dialog.files_list.item(row).text()
-        for row in range(window.files_dialog.files_list.count())
-    ]
+    return window.files_dialog.rows()
 
 
 def test_the_window_shows_what_a_generated_frame_writes_and_changes(window):
@@ -752,7 +750,7 @@ def test_applying_the_same_colors_only_theme_twice_changes_nothing_the_second_ti
 
     assert system_state(desktop) == state
     assert themes_folders() == [wf.frame_folder(plain)]
-    assert desktop.kwin.reconfigured == reloads + 1  # a target is reloaded on every apply
+    assert desktop.kwin.reconfigured == reloads  # a part the desktop already has is left alone
 
 
 def test_a_failed_recolor_is_rolled_back(desktop):

@@ -26,8 +26,11 @@ def cache_home() -> Path:
 
 
 def system_data_dirs() -> list[Path]:
+    """The folders of the system's data; the person's own data folder is never one of them,
+    even when XDG_DATA_DIRS lists it."""
     value = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
-    return [Path(p) for p in value.split(":") if p]
+    own = data_home()
+    return [Path(p) for p in value.split(":") if p and Path(p) != own]
 
 
 def themes_dir() -> Path:

@@ -22,6 +22,7 @@ SCENE_W, SCENE_H = 760, 520
 # The space around a floating panel, and the thickest panel the scene has room for.
 PANEL_GAP = 8
 MAX_PANEL_THICKNESS = 84
+POPUP_ROOM = 160  # what the "Panel" view keeps free beside the panel for its popup and tooltip
 PANEL_KEYS = ("location", "height", "alignment", "length_mode", "floating")
 
 
@@ -59,17 +60,28 @@ class PreviewWidget(QWidget):
         if self.mode == "desktop":
             return scene
         panel, vertical, attached = self._panel_geometry()
+        if self.mode == "panel":
+            return self._edge_rect(panel, vertical, attached)
         if self.mode == "window":
             area = self._frame_rect(panel, vertical, attached)
-        elif self.mode == "panel":
-            area = panel.adjusted(0, 0, 0, 0)
-        else:
+        else:  # the popup and its tooltip, with the panel they belong to
             popup, bubble = self._popup_rects(panel, vertical, attached)
-            area = popup.united(bubble)
+            area = popup.united(bubble).united(panel)
         area = area.adjusted(-ZOOM_MARGIN, -ZOOM_MARGIN, ZOOM_MARGIN, ZOOM_MARGIN)
-        if self.mode == "panel":  # a thin strip: show some of the desktop around it
-            area = area.adjusted(-60, -60, 60, 60)
         return area.intersected(scene) if area.intersected(scene).isValid() else scene
+
+    def _edge_rect(self, panel: QRectF, vertical: bool, attached: bool) -> QRectF:
+        """The whole screen edge the panel is on, as deep as the panel, its gap and the popup that
+        opens from it: the panel is seen in its real place, alignment, length and floating state."""
+        gap = 0 if attached else PANEL_GAP
+        depth = (panel.width() if vertical else panel.height()) + gap + POPUP_ROOM
+        if vertical:
+            depth = min(depth, SCENE_W)
+            left = 0 if panel.left() < SCENE_W / 2 else SCENE_W - depth
+            return QRectF(left, 0, depth, SCENE_H)
+        depth = min(depth, SCENE_H)
+        top = 0 if panel.top() < SCENE_H / 2 else SCENE_H - depth
+        return QRectF(0, top, SCENE_W, depth)
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -98,10 +110,23 @@ class PreviewWidget(QWidget):
         wallpaper.setColorAt(0, accent.darker(170))
         wallpaper.setColorAt(1, accent.lighter(130))
         painter.fillRect(QRectF(0, 0, width, height), wallpaper)
-        painter.translate((width - view.width() * scale) / 2, (height - view.height() * scale) / 2)
+        ax, ay = self._anchor(view)
+        painter.translate((width - view.width() * scale) * ax, (height - view.height() * scale) * ay)
         painter.scale(scale, scale)
         painter.translate(-view.left(), -view.top())
+        if self.mode == "panel":  # only the screen edge is shown, the rest of the picture is wallpaper
+            painter.setClipRect(view)
         self._draw(painter)
+
+    def _anchor(self, view: QRectF) -> tuple[float, float]:
+        """Where the view sits in the widget, as fractions of the free room: the "Panel" view sits on
+        the side of the picture that is the edge of the screen the panel is on."""
+        if self.mode != "panel":
+            return 0.5, 0.5
+        at_start_x, at_start_y = view.left() <= 0, view.top() <= 0
+        if view.width() < SCENE_W:  # a panel on the left or right
+            return (0.0 if at_start_x else 1.0), 0.5
+        return 0.5, (0.0 if at_start_y else 1.0)
 
     # ---- drawing -----------------------------------------------------
 

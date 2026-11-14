@@ -10,9 +10,10 @@ kcminputrc [Mouse] cursorTheme holds; the name is the one in index.theme.
 The page offers the sizes that the theme's `left_ptr` file has (`extra["sizes"]`).
 A theme with only SVG cursors has no such list; it gets `SCALABLE_SIZES`, the
 usual steps of the size box, since an SVG scales to any size. The picture is
-eight sample cursors at the nominal size nearest to 24 pixels times the pixel
-ratio. Links inside the theme are followed (most cursor names are links), but
-never to a place outside the icon folders and the theme's own folder.
+eight sample cursors (arrow, hand, text, wait, busy, crosshair, resize, forbidden) at the nominal
+size nearest to 24 pixels times the pixel ratio. Links inside the theme are
+followed (most cursor names are links), but never to a place outside the icon folders and the
+theme's own folder.
 """
 
 from __future__ import annotations
@@ -33,19 +34,20 @@ from .icons import roots
 # The cursors of the picture, each with the names it goes by in different themes
 # (the names the Pointers page itself asks for: left_ptr, left_ptr_watch, pointer, help, ibeam ...).
 SAMPLES = (
-    ("left_ptr", "default", "arrow", "top_left_arrow"),
-    ("pointer", "pointing_hand", "hand2", "hand1"),
-    ("ibeam", "text", "xterm"),
-    ("cross", "crosshair"),
-    ("left_ptr_watch", "progress", "wait", "watch"),
-    ("help", "question_arrow", "whats_this", "left_ptr_help"),
-    ("size_all", "fleur", "all-scroll", "move"),
-    ("size_fdiag", "nwse-resize", "bd_double_arrow", "fd_double_arrow"),
+    ("left_ptr", "default", "arrow", "top_left_arrow"),  # arrow
+    ("pointer", "pointing_hand", "hand2", "hand1"),  # hand
+    ("text", "ibeam", "xterm"),  # text
+    ("wait", "watch"),  # wait
+    ("progress", "left_ptr_watch", "half-busy", "08e8e1c95fe2fc01f976f1e063a24ccd"),  # busy
+    ("crosshair", "cross", "tcross"),  # crosshair
+    ("size_fdiag", "nwse-resize", "bd_double_arrow", "fd_double_arrow", "se-resize"),  # resize
+    ("not-allowed", "forbidden", "crossed_circle", "circle", "03b6e0fcb3499374a867c041f52298f0"),  # forbidden
 )
 SIZE_NAMES = SAMPLES[0]  # the cursor whose sizes are the theme's sizes
 CURSOR_SIZE = 24  # logical pixels, as the default pointer size
 SCALABLE_SIZES = (24, 32, 36, 48, 64, 72, 96, 128)
 MAX_SVG = 8 * 1024 * 1024
+MAX_SHOWN = 128  # the largest pointer the page draws (logical pixels)
 
 
 class CursorThemes(Kind):
@@ -225,3 +227,19 @@ def _picture(item: Item, size: QSize, dpr: float) -> QImage:
         drawn += 1
     painter.end()
     return out if drawn else QImage()
+
+
+def pointer_images(item: Item, size: int, dpr: float) -> list[QImage]:
+    """The eight sample pointers of the theme at `size` logical pixels (at most `MAX_SHOWN`), each with
+    the device pixel ratio set; one the theme does not have is left out. Safe on a worker thread."""
+    if item.path is None:
+        return []
+    finder = Finder()
+    pixels = max(8, round(min(size, MAX_SHOWN) * dpr))
+    out = []
+    for names in SAMPLES:
+        image = sample_image(finder, Path(item.path), names, pixels)
+        if not image.isNull():
+            image.setDevicePixelRatio(dpr)
+            out.append(image)
+    return out
