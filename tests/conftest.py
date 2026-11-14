@@ -61,6 +61,21 @@ def pauses(monkeypatch):
     return asked
 
 
+@pytest.fixture(autouse=True)
+def settings(tmp_path):
+    """What the app remembers between starts (QSettings) is kept in the test's
+    own folder, under names of its own, and never reaches the real one."""
+    try:
+        from PySide6.QtCore import QCoreApplication, QSettings
+    except ImportError:
+        yield
+        return
+    QSettings.setPath(QSettings.Format.NativeFormat, QSettings.Scope.UserScope, str(tmp_path / "qsettings"))
+    QCoreApplication.setOrganizationName("plasma-theme-studio-tests")
+    QCoreApplication.setApplicationName("plasma-theme-studio-tests")
+    yield
+
+
 class FakeRunner:
     """Stands in for the KDE tools.
 

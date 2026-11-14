@@ -116,7 +116,8 @@ class SnapshotDialog(QDialog):
             translate(
                 "ui",
                 "A snapshot is taken before every apply. Restoring one puts the files and "
-                "settings back to how they were just before that apply.",
+                "settings back to how they were just before that apply. The applies made "
+                "after it are undone as well.",
             )
         )
         info.setWordWrap(True)
@@ -158,6 +159,10 @@ class MainWindow(QMainWindow):
         self.notes: dict[str, QLabel] = {}
         self.note_rows: dict[str, QWidget] = {}
         self.plan = engine.build_plan(self.theme)
+        # Switches made on the Themes tab that can still be undone: snapshot id ->
+        # (theme and file the editor held before, the file the next start would
+        # have opened, theme the editor holds since).
+        self.switches: dict[str, tuple[Theme, Path | None, str, Theme]] = {}
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self._update_title)
         self.refresh_timer = QTimer(self, singleShot=True, interval=30)
@@ -551,9 +556,14 @@ class MainWindow(QMainWindow):
                 translate("ui", "{file} could not be opened.").format(file=path.name), error.problems
             )
             return False
-        self._load_into_window(theme, path)
-        QSettings().setValue("last_file", str(path))
+        self._take_into_editor(theme, path)
         return True
+
+    def _take_into_editor(self, theme: Theme, path: Path | None) -> None:
+        """Make a theme the one the editor works on, and the one the next start opens."""
+        self._load_into_window(theme, path)
+        if path is not None:
+            QSettings().setValue("last_file", str(path))
 
     def save(self) -> bool:
         if self.path is None:
@@ -631,37 +641,71 @@ class MainWindow(QMainWindow):
             self.use_entry(entry)
 
     def use_entry(self, entry: Entry) -> None:
-        """Switch the desktop to a theme from the Themes tab."""
-        if entry.is_saved_theme:
-            # The file that is open in the editor is applied with its unsaved edits.
-            self._apply(self.theme if entry.path == self.path else entry.theme, from_library=True)
+        """Switch the desktop to a theme from the Themes tab.
+
+        The editor takes the theme over, so that what is changed and applied
+        next changes this theme and does not bring back the one before it."""
+        if self._in_editor(entry):
+            self._apply(self.theme, from_library=True)  # with its unsaved edits
             return
-        if entry.scheme_id == self.library.active:
+        if not self._discard_ok():
+            return
+        # Edits that were discarded just now must not come back with an undo of the switch.
+        before = None
+        if self.undo_stack.isClean():
+            before = (self.theme, self.path, QSettings().value("last_file", "") or "")
+        if entry.is_saved_theme:
+            outcome = self._apply(entry.theme, from_library=True)
+        else:
+            outcome = self._switch_scheme(entry)
+        if outcome is False:
+            return
+        theme = entry.theme.copy()
+        self._take_into_editor(theme, entry.path)
+        if before is not None and isinstance(outcome, snapshots.Snapshot):
+            self.switches[outcome.id] = (*before, theme)
+
+    def _in_editor(self, entry: Entry) -> bool:
+        """Whether an entry of the Themes tab is the theme the editor holds: its
+        file, or the color scheme that an apply wrote from it."""
+        if entry.is_saved_theme:
+            return entry.path == self.path
+        return entry.scheme.made_here and entry.scheme_id == self.theme.slug
+
+    def _switch_scheme(self, entry: Entry) -> snapshots.Snapshot | bool:
+        """Make an installed color scheme the one in use. Returns the snapshot,
+        True when the desktop had the scheme already, False when it failed."""
+        active = current_scheme(self.runner) if self.runner.which("kreadconfig6") else self.library.active
+        if entry.scheme_id == active:
+            self.reload_library()  # the mark may be from before the desktop was changed elsewhere
             self.banner.show_message(
                 INFORMATION, translate("ui", "The desktop already uses {name}.").format(name=entry.title)
             )
-            return
+            return True
         nothing_changed = translate("ui", "The desktop could not be switched. Nothing was changed.")
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            engine.switch_color_scheme(entry.scheme_id, entry.title, self.runner)
+            snapshot = engine.switch_color_scheme(entry.scheme_id, entry.title, self.runner)
         except engine.ApplyBlocked as error:
             self._show_problems(nothing_changed, error.problems)
-            return
+            return False
         except ApplyError as error:
             self._show_problems(nothing_changed, [error.message])
-            return
+            return False
         finally:
             QApplication.restoreOverrideCursor()
             self.refresh()
             self.reload_library()
         self.banner.show_message(
             POSITIVE,
-            translate("ui", "The desktop now uses {name}. Undo last apply takes you back.").format(
-                name=entry.title
-            ),
+            translate(
+                "ui",
+                "The desktop now uses {name}. Undo last apply takes you back. "
+                "Changes you make in the editor go into {theme}, a new theme that is not saved yet.",
+            ).format(name=entry.title, theme=entry.theme.name),
             20,
         )
+        return snapshot
 
     def edit_entry(self, entry: Entry) -> None:
         """Open a theme from the Themes tab in the editor."""
@@ -686,12 +730,14 @@ class MainWindow(QMainWindow):
     def apply_theme(self) -> None:
         self._apply(self.theme)
 
-    def _apply(self, theme: Theme, from_library: bool = False) -> None:
+    def _apply(self, theme: Theme, from_library: bool = False) -> snapshots.Snapshot | bool:
+        """Put a theme on the desktop. Returns the snapshot of the apply, True when
+        the desktop had the theme already, False when the desktop is not on it."""
         nothing_changed = translate("ui", "The theme cannot be applied. Nothing was changed.")
         plan = engine.build_plan(theme, self.runner)
         if plan.blocking:
             self._show_problems(nothing_changed, plan.blocking)
-            return
+            return False
         if engine.is_current(plan, self.runner):
             if from_library:
                 text = translate("ui", "The desktop already uses {name}.")
@@ -702,7 +748,7 @@ class MainWindow(QMainWindow):
                     "Change something and apply again.",
                 )
             self.banner.show_message(INFORMATION, text.format(name=theme.name) + self._not_applied_note(plan))
-            return
+            return True
         if plan.foreign_files:
             answer = QMessageBox.question(
                 self,
@@ -714,20 +760,20 @@ class MainWindow(QMainWindow):
                 ).format(files="\n".join(str(p) for p in plan.foreign_files)),
             )
             if answer != QMessageBox.StandardButton.Yes:
-                return
+                return False
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             result = engine.apply(theme, self.runner, replace_foreign=True)
         except engine.ApplyBlocked as error:
             self._show_problems(nothing_changed, error.problems)
-            return
+            return False
         except ApplyError as error:
             if error.restored:
                 heading = translate("ui", "The apply failed. Everything was put back as it was.")
             else:
                 heading = translate("ui", "The apply failed, and not everything could be put back.")
             self._show_problems(heading, [error.message])
-            return
+            return False
         finally:
             QApplication.restoreOverrideCursor()
             self.refresh()
@@ -737,6 +783,7 @@ class MainWindow(QMainWindow):
         )
         warnings = "".join(f" {warning}" for warning in result.plan.warnings)
         self.banner.show_message(POSITIVE, message + warnings + self._not_applied_note(result.plan), 20)
+        return result.snapshot
 
     def _not_applied_note(self, plan: engine.Plan) -> str:
         """Said when the theme has values that were not put on the desktop."""
@@ -747,41 +794,73 @@ class MainWindow(QMainWindow):
             "ui", "Not put on the desktop: {sections}. The pages with those names say why."
         ).format(sections=", ".join(str(SECTION_TITLES[section]) for section in sections))
 
-    def _restore(self, snapshot, consume: bool) -> None:
+    def _restore(self, snapshot) -> None:
+        """Go back to a snapshot, undoing every apply made since, the newest first."""
+        reached = None
+        # A snapshot that is gone already was removed as too old, not undone.
+        present = {item.id for item in snapshots.list_snapshots()}
+        self.switches = {key: value for key, value in self.switches.items() if key in present}
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            failures = engine.restore(snapshot, self.runner, consume=consume)
+            reached, failures = engine.restore_to(snapshot, self.runner)
         except OSError as error:
             failures = [str(error)]
         finally:
             QApplication.restoreOverrideCursor()
+        editor_went_back = self._undo_switches()
         self.refresh()
         self.reload_library()
         if failures:
-            if consume and snapshots.get(snapshot.id) is not None:
+            if reached is not None and reached.id != snapshot.id:
+                failures = [
+                    *failures,
+                    translate(
+                        "ui",
+                        "The undo stopped at the apply of {time}. "
+                        "The applies before it were left as they are.",
+                    ).format(time=f"{reached.created_at:%H:%M:%S}"),
+                ]
+            if reached is not None and snapshots.get(reached.id) is not None:
                 failures = [
                     *failures,
                     translate("ui", "The snapshot is kept, so Undo last apply can try once more."),
                 ]
             self._show_problems(translate("ui", "Some things could not be put back."), failures)
-        else:
-            self.banner.show_message(
-                POSITIVE,
-                translate("ui", "The desktop is back to how it was at {time}.").format(
-                    time=f"{snapshot.created_at:%H:%M:%S}"
-                ),
-                20,
-            )
+            return
+        message = translate("ui", "The desktop is back to how it was at {time}.").format(
+            time=f"{snapshot.created_at:%H:%M:%S}"
+        )
+        if editor_went_back:
+            message += " " + translate("ui", "The editor holds {name} again.").format(name=self.theme.name)
+        self.banner.show_message(POSITIVE, message, 20)
+
+    def _undo_switches(self) -> bool:
+        """After an undo: when a switch made on the Themes tab was undone, the
+        editor goes back to the theme it held before the switch. It stays as it
+        is when it holds something else by now, or changes that are not saved."""
+        present = {item.id for item in snapshots.list_snapshots()}
+        went_back = False
+        for key in sorted(set(self.switches) - present, reverse=True):
+            theme, path, last_file, since = self.switches.pop(key)
+            if self.theme is not since or not self.undo_stack.isClean():
+                continue
+            if path is not None and not path.is_file():
+                continue  # the file was removed in the meantime
+            self._take_into_editor(theme, path)
+            if path is None:
+                QSettings().setValue("last_file", last_file)
+            went_back = True
+        return went_back
 
     def undo_last_apply(self) -> None:
         latest = snapshots.latest()
         if latest is not None:
-            self._restore(latest, consume=True)
+            self._restore(latest)
 
     def show_snapshots(self) -> None:
         dialog = SnapshotDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen is not None:
-            self._restore(dialog.chosen, consume=False)
+            self._restore(dialog.chosen)
 
     def about(self) -> None:
         QMessageBox.about(

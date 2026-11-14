@@ -3,6 +3,8 @@
 import pytest
 
 from plasma_theme_studio import cli
+from plasma_theme_studio.apply import engine
+from plasma_theme_studio.apply import snapshot as snapshots
 from plasma_theme_studio.model.theme import Theme
 
 
@@ -55,6 +57,53 @@ def test_repeated_restore_steps_back_through_applies(home, fake_system):
     assert cli.main(["restore"]) == 0
     assert not scheme.exists()
     assert fake_system.settings["ColorScheme"] == "BreezeLight"
+
+
+def test_restore_with_an_id_undoes_the_applies_made_after_it(home, fake_system, capsys):
+    path = home / "theme.toml"
+    scheme = home / ".local/share/color-schemes/MyTheme.colors"
+    theme = Theme()
+    contents = []
+    for accent in ("#3daee9", "#ff0000", "#0000ff"):
+        theme.set("colors", "accent", accent)
+        theme.save(path)
+        assert cli.main(["apply", str(path)]) == 0
+        contents.append(scheme.read_text())
+    _newest, second, first = snapshots.list_snapshots()
+    capsys.readouterr()
+
+    assert cli.main(["restore", second.id]) == 0
+
+    assert scheme.read_text() == contents[0]  # as it was just before the second apply
+    assert [item.id for item in snapshots.list_snapshots()] == [first.id]
+    out = capsys.readouterr().out
+    assert "The desktop is back to how it was before My Theme was applied" in out
+    assert "Run the command again to go back one more apply" in out
+    assert cli.main(["restore", second.id]) == 1  # used up
+    assert cli.main(["restore"]) == 0
+    assert not scheme.exists()
+    assert fake_system.settings["ColorScheme"] == "BreezeLight"
+
+
+def test_restore_with_an_id_says_where_it_stopped(home, fake_system, capsys):
+    first = engine.apply(Theme(), fake_system).snapshot
+    engine.switch_color_scheme("BreezeDark", "Breeze Dark", fake_system)
+    engine.switch_color_scheme("BreezeLight", "Breeze Light", fake_system)
+    fake_system.known.discard("BreezeDark")  # Plasma cannot go back to it
+
+    assert cli.main(["restore", first.id]) == 1
+
+    captured = capsys.readouterr()
+    assert "is back to how it was" not in captured.out
+    assert "The undo stopped at the apply of Breeze Light (" in captured.err
+    assert "The applies before it were left as they are." in captured.err
+    assert "The snapshot is kept. Run the command again to try once more." in captured.err
+    assert len(snapshots.list_snapshots()) == 3
+
+    fake_system.known.add("BreezeDark")
+    assert cli.main(["restore", first.id]) == 0
+    assert "before My Theme was applied" in capsys.readouterr().out
+    assert snapshots.list_snapshots() == []
 
 
 def test_restore_without_snapshots_and_unknown_id(home, fake_system):

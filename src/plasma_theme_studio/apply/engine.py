@@ -223,6 +223,40 @@ def switch_color_scheme(scheme_id: str, scheme_name: str, runner) -> Snapshot:
     return snapshot
 
 
+def restore_to(snapshot: Snapshot, runner) -> tuple[Snapshot | None, list[Msg]]:
+    """Go back to the state a snapshot recorded.
+
+    A snapshot holds only what its own apply was about to change, so every
+    apply made after it is undone first, newest first. The snapshots on the
+    way are used up, as Undo does, and the next undo goes further back from
+    there. It stops at the first snapshot that cannot be put back completely,
+    and before one on the way that cannot be read: what was applied then
+    cannot be undone, and anything older would be put back on top of it.
+
+    Returns the snapshot it stopped at and what failed there; without failures
+    that is the snapshot asked for. The snapshot is None when it stopped for
+    another reason than a snapshot that could not be put back.
+    """
+    newer = [item for item in snapshots.list_snapshots() if item.id >= snapshot.id]
+    if not newer or newer[-1].id != snapshot.id:
+        return None, [translate("core", "There is no snapshot called {id}.").format(id=snapshot.id)]
+    unreadable = snapshots.unreadable()
+    for item, older in zip(newer, [*newer[1:], None], strict=True):
+        failures = restore(item, runner, consume=True)
+        if failures:
+            return item, failures
+        between = [name for name in unreadable if older is not None and older.id < name < item.id]
+        if between:
+            return None, [
+                translate(
+                    "core",
+                    "The snapshot {id} cannot be read, so what was applied then cannot be undone. "
+                    "The applies before it were left as they are.",
+                ).format(id=between[-1])
+            ]
+    return snapshot, []
+
+
 def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> list[Msg]:
     """Put files and desktop settings back to what the snapshot recorded.
 
@@ -247,8 +281,11 @@ def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> lis
             failures.append(error.message)
         except OSError as error:
             failures.append(str(error))
-    if consume and failures and not snapshots.tried(snapshot):
-        snapshots.mark_tried(snapshot)
-    elif consume:
-        snapshots.delete(snapshot)
+    try:
+        if consume and failures and not snapshots.tried(snapshot):
+            snapshots.mark_tried(snapshot)
+        elif consume:
+            snapshots.delete(snapshot)
+    except OSError as error:  # the snapshot's own folder cannot be written to
+        failures.append(str(error))
     return failures

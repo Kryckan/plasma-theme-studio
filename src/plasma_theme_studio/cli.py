@@ -115,28 +115,38 @@ def cmd_restore(args) -> int:
         print(translate("core", "There are no snapshots."), file=sys.stderr)
         return 1
     try:
-        # Without an ID this works like Undo: the snapshot is used up, so
-        # running the command again goes one apply further back.
-        failures = engine.restore(chosen, SystemRunner(), consume=args.id is None)
+        # Each snapshot that is put back is used up, as Undo does, so running
+        # the command again goes one apply further back. With an ID, the
+        # applies made after that snapshot are undone on the way to it.
+        reached, failures = engine.restore_to(chosen, SystemRunner())
     except OSError as error:
         print(translate("core", "Could not restore: {detail}").format(detail=str(error)), file=sys.stderr)
         return 1
-    print(
-        translate("core", "Restored the files from before {name} was applied ({time}).").format(
-            name=chosen.theme_name, time=f"{chosen.created_at:%Y-%m-%d %H:%M:%S}"
-        )
-    )
     if failures:
         print(translate("core", "Some settings could not be switched back:"), file=sys.stderr)
         _print_problems(failures)
-        if args.id is None and snapshots.get(chosen.id) is not None:
+        if reached is not None and reached.id != chosen.id:
+            print(
+                translate(
+                    "core",
+                    "The undo stopped at the apply of {name} ({time}). "
+                    "The applies before it were left as they are.",
+                ).format(name=reached.theme_name, time=f"{reached.created_at:%Y-%m-%d %H:%M:%S}"),
+                file=sys.stderr,
+            )
+        if reached is not None and snapshots.get(reached.id) is not None:
             print(
                 translate("core", "The snapshot is kept. Run the command again to try once more."),
                 file=sys.stderr,
             )
         return 1
+    print(
+        translate("core", "The desktop is back to how it was before {name} was applied ({time}).").format(
+            name=chosen.theme_name, time=f"{chosen.created_at:%Y-%m-%d %H:%M:%S}"
+        )
+    )
     remaining = len(snapshots.list_snapshots())
-    if args.id is None and remaining:
+    if remaining:
         print(
             translate(
                 "core", "Run the command again to go back one more apply ({count} snapshots left)."
@@ -175,7 +185,7 @@ usage: plasma-theme-studio [FILE]             open the editor
        plasma-theme-studio validate FILE      check a theme file
        plasma-theme-studio apply FILE         apply a theme file to the desktop
        plasma-theme-studio restore            undo the latest apply (repeat to go further back)
-       plasma-theme-studio restore ID         go back to a chosen snapshot
+       plasma-theme-studio restore ID         go back to a chosen snapshot, undoing the applies after it
        plasma-theme-studio restore --list     list the snapshots
 """
 

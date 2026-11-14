@@ -93,6 +93,14 @@ def list_snapshots() -> list[Snapshot]:
     return [s for s in found if s is not None]
 
 
+def unreadable() -> list[str]:
+    """The names of snapshot folders whose record of what they hold cannot be read."""
+    root = paths.snapshots_dir()
+    if not root.is_dir():
+        return []
+    return sorted(d.name for d in root.iterdir() if d.is_dir() and _read(d) is None)
+
+
 def latest() -> Snapshot | None:
     snapshots = list_snapshots()
     return snapshots[0] if snapshots else None

@@ -170,7 +170,7 @@ def test_selecting_a_theme_with_one_click_is_enough_to_switch(nordic, window, ap
     QTest.mouseClick(window.apply_button, Qt.MouseButton.LeftButton)
     assert runner.settings["ColorScheme"] == "Nordic"
     assert "Nordic" in window.banner.text()
-    assert window.theme.name == "Breeze Light Copy"  # the editor was left alone
+    assert window.theme.name == "Nordic Copy"  # the editor follows the desktop
     assert window.tabs.currentWidget() is window.library
 
 
@@ -208,10 +208,11 @@ def test_double_click_or_enter_switches_the_desktop(nordic, window, app, runner)
     runner.known.add("Nordic")
     click_theme(window, app, "Nordic", double=True)
     assert runner.settings["ColorScheme"] == "Nordic"
-    assert window.theme.name == "Breeze Light Copy" and window.tabs.currentWidget() is window.library
+    assert window.theme.name == "Nordic Copy" and window.tabs.currentWidget() is window.library
 
     window.undo_last_apply()
     assert runner.settings["ColorScheme"] == "BreezeLight"
+    assert window.theme.name == "Breeze Light Copy"  # the editor went back with the desktop
     assert window.library.current().title == "Nordic"  # the selection stays where the user put it
     window.library.list.setFocus()
     QTest.keyClick(window.library.list, Qt.Key.Key_Return)

@@ -154,6 +154,107 @@ def test_switching_to_an_installed_scheme_and_back(home, runner):
     assert snapshots.list_snapshots() == []
 
 
+def test_restore_to_undoes_every_apply_made_after_the_snapshot(home, runner):
+    theme = Theme()
+    first = engine.apply(theme, runner).snapshot
+    theme.set("colors", "accent", "#ff0000")
+    engine.apply(theme, runner)
+    engine.switch_color_scheme("BreezeDark", "Breeze Dark", runner)
+
+    reached, failures = engine.restore_to(first, runner)
+
+    assert (reached.id, failures) == (first.id, [])
+    assert runner.settings["ColorScheme"] == "BreezeLight"
+    assert not scheme_path(home).exists()
+    assert snapshots.list_snapshots() == []
+
+
+def test_restore_to_leaves_the_older_snapshots_for_later(home, runner):
+    theme = Theme()
+    first = engine.apply(theme, runner).snapshot
+    original = scheme_path(home).read_text()
+    theme.set("colors", "accent", "#ff0000")
+    second = engine.apply(theme, runner).snapshot
+    engine.switch_color_scheme("BreezeDark", "Breeze Dark", runner)
+
+    reached, failures = engine.restore_to(second, runner)
+
+    assert (reached.id, failures) == (second.id, [])
+    assert runner.settings["ColorScheme"] == "MyTheme"
+    assert scheme_path(home).read_text() == original
+    assert [item.id for item in snapshots.list_snapshots()] == [first.id]
+
+
+def test_restore_to_stops_at_the_apply_that_cannot_be_undone(home, runner):
+    first = engine.apply(Theme(), runner).snapshot
+    engine.switch_color_scheme("BreezeDark", "Breeze Dark", runner)
+    last = engine.switch_color_scheme("BreezeLight", "Breeze Light", runner)
+    runner.known.discard("BreezeDark")  # Plasma cannot go back to it
+
+    reached, failures = engine.restore_to(first, runner)
+
+    assert reached.id == last.id and failures
+    assert runner.settings["ColorScheme"] == "BreezeLight"
+    assert scheme_path(home).exists()
+    assert len(snapshots.list_snapshots()) == 3  # kept for one more try, the older ones untouched
+
+    runner.known.add("BreezeDark")
+    reached, failures = engine.restore_to(first, runner)
+
+    assert (reached.id, failures) == (first.id, [])
+    assert not scheme_path(home).exists()
+    assert snapshots.list_snapshots() == []
+
+
+def test_restore_to_a_snapshot_that_is_gone_changes_nothing(home, runner):
+    first = engine.apply(Theme(), runner).snapshot
+    engine.switch_color_scheme("BreezeDark", "Breeze Dark", runner)
+    snapshots.delete(first)
+
+    reached, failures = engine.restore_to(first, runner)
+
+    assert reached is None
+    assert [str(failure) for failure in failures] == [f"There is no snapshot called {first.id}."]
+    assert runner.settings["ColorScheme"] == "BreezeDark"
+    assert len(snapshots.list_snapshots()) == 1
+
+
+def test_restore_to_stops_before_a_snapshot_that_cannot_be_read(home, runner):
+    first = engine.apply(Theme(), runner).snapshot
+    broken = engine.switch_color_scheme("BreezeDark", "Breeze Dark", runner)
+    engine.switch_color_scheme("BreezeLight", "Breeze Light", runner)
+    (broken.directory / "manifest.json").write_text("{bad")
+
+    reached, failures = engine.restore_to(first, runner)
+
+    assert reached is None
+    assert broken.id in str(failures[0]) and "cannot be read" in str(failures[0])
+    assert runner.settings["ColorScheme"] == "BreezeDark"  # the newest apply was undone, nothing older
+    assert scheme_path(home).exists()
+    assert [item.id for item in snapshots.list_snapshots()] == [first.id]
+
+    # Undo goes on without the one that cannot be read.
+    reached, failures = engine.restore_to(snapshots.latest(), runner)
+
+    assert (reached.id, failures) == (first.id, [])
+    assert not scheme_path(home).exists()
+
+
+def test_a_snapshot_folder_that_cannot_be_written_to_is_reported_like_any_failure(home, runner, monkeypatch):
+    snapshot = engine.switch_color_scheme("BreezeDark", "Breeze Dark", runner)
+    runner.known.discard("BreezeLight")  # Plasma cannot go back to it
+
+    def refuse(snapshot):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(snapshots, "mark_tried", refuse)
+
+    reached, failures = engine.restore_to(snapshot, runner)
+
+    assert reached.id == snapshot.id
+    assert len(failures) == 2 and "Permission denied" in str(failures[1])
+
+
 def test_is_current_only_when_written_and_active(home, runner):
     theme = Theme()
     assert not engine.is_current(engine.build_plan(theme), runner)

@@ -35,8 +35,10 @@ Supporting pieces:
 - `write_atomic` writes through a file that is a link, so a theme file or config file kept in a dotfiles folder stays a link.
 - Numbers that TOML allows but that are no size (`inf`, `nan`) are refused like any other bad value.
 - Each editor page shows the notes of the targets that read it, below the controls (`Generator.section_notes`): the Shadows page only says what concerns shadows.
+- The editor follows the Themes tab (`MainWindow.use_entry`): a switch loads the theme that was switched to into the editor, after asking about unsaved changes, and records it as the file the next start opens. An installed color scheme becomes a new unsaved theme. The entry that is the editor's own theme (its file, or the scheme an apply wrote from it) is applied with the unsaved changes. `MainWindow.switches` remembers what the editor held before each switch, so that undoing the switch brings it back; this only happens while the editor is clean and still holds the theme of the switch.
+- Going back to an older snapshot undoes every apply after it, newest first (`engine.restore_to`), in the window and with `restore ID`. A snapshot only records what its own apply was about to change, so restoring one out of order would leave the later applies half in place. It stops at the first apply that cannot be undone completely, and before a snapshot on the way whose manifest cannot be read; *Undo last apply* then goes on with the newest readable one.
 - `scripts/desktop_rig.py`: a headless KWin (and optionally plasmashell) with its own home, for trying applies without touching the developer's desktop.
-- Tests: every generator against a fake KWin, plasmashell and KDE tools (`tests/test_windowframe.py`, `test_plasmastyle.py`, `test_panellayout.py`, `test_kconfig.py`), and all targets together through the engine, the window and the CLI (`tests/test_desktop.py`). The script that is sent to plasmashell also runs as it is in Qt's JavaScript engine (`run_program` in `tests/test_panellayout.py`).
+- Tests: every generator against a fake KWin, plasmashell and KDE tools (`tests/test_windowframe.py`, `test_plasmastyle.py`, `test_panellayout.py`, `test_kconfig.py`), and all targets together through the engine, the window and the CLI (`tests/test_desktop.py`); switching on the Themes tab followed by edits, applies and undos (`tests/test_switching.py`, `tests/test_undo.py`). The script that is sent to plasmashell also runs as it is in Qt's JavaScript engine (`run_program` in `tests/test_panellayout.py`).
 
 ## Not applied to the desktop yet
 
@@ -82,6 +84,9 @@ Smaller open items:
 - It aborts without a display. `SystemRunner` sets `QT_QPA_PLATFORM=offscreen` when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set.
 - Installed color schemes vary: many lack `[Colors:Header]` and `[Colors:Complementary]`, and some color values have four components (`r,g,b,a`). `library.read_scheme` handles both.
 - System Settings modules cannot be embedded in a PySide6 app, so the app builds its own controls and writes through Plasma's tools.
+- Whatever puts a theme on the desktop must also make it the theme in the editor. The Themes tab once switched the desktop and left the editor on the old theme; the next apply from an editor page then brought the old theme back with one value changed. `tests/test_switching.py` states the rule for every way of switching.
+- What the desktop uses is asked for when it matters (`current_scheme`), never taken from what a list showed earlier: the scheme can be changed in System Settings while the app is open.
+- By design, not a fault: a theme that leaves the window frame, panel style or panel position at *unchanged* keeps what an earlier theme put there, and every apply runs the reload command of each target the theme asks for, changed or not.
 - Use the distribution's PySide6 (`/usr/bin/python3`), not one from pip, so the app gets the desktop's Qt style and platform integration.
 - `QApplication.setDesktopFileName` with an ID whose desktop file is not installed triggers a portal warning; only set it when the file exists.
 
@@ -117,6 +122,7 @@ Smaller open items:
 
 **Working on it without disturbing the desktop**
 
+- `tests/conftest.py` gives every test its own `QSettings` folder and application name, so `last_file` neither leaks between tests nor reaches the real settings.
 - When taking screenshots or testing the UI from a script, use `QT_QPA_PLATFORM=offscreen` so no window appears on the developer's desktop, and mark the undo stack clean before quitting so the unsaved-changes dialog does not block.
 - Create a Qt application before using `QtSvg` (`QSvgRenderer` aborts without one), and keep generated SVG free of `<text>`. Run helper scripts and rig programs under `prlimit --core=1:1 --` so that a crash leaves no core dump notification.
 - Never run `kwriteconfig6`, `plasma-apply-*`, KWin `reconfigure` or a writing `evaluateScript` against the session you work in. Use the rig, or a throwaway home with `env -i HOME=… XDG_CONFIG_HOME=…`.

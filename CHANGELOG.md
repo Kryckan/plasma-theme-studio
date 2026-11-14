@@ -10,7 +10,7 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 - Editor window with sections, live preview, undo and redo, and a view of the files an apply writes.
 - Color scheme target: writes a `.colors` file and activates it with `plasma-apply-colorscheme`.
 - Snapshot before every apply, *Undo last apply*, a snapshot list, and automatic rollback when an apply fails.
-- Themes tab: saved themes and every installed color scheme as thumbnails, with the one in use marked. Select one and press the apply button (or double-click it, or press Enter) to switch the desktop to it; *Edit* opens it in the editor.
+- Themes tab: saved themes and every installed color scheme as thumbnails, with the one in use marked. Select one and press the apply button (or double-click it, or press Enter) to switch the desktop to it. The editor takes that theme over, so what you change next builds on it; *Edit* opens a theme in the editor without applying it.
 - The apply button always names the theme it will put on the desktop: the one selected on the Themes tab, or on the other tabs the theme in the editor.
 - Windows and the panel can each have their own corner radius and border width. They follow *Shapes* until overridden.
 - Window frame target. Choose *Breeze* to set Breeze's border and shadow to the nearest steps it has, or *Generated* to get a frame drawn for the theme with the exact corner radius, border width, shadow and colors. The editor says beforehand what the desktop can and cannot show, for example how round the bottom corners can be with the chosen border.
@@ -39,3 +39,9 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 - Undo switches back to Breeze Light when no color scheme was set before the apply. It used to leave the theme's colors on.
 - Files that an apply replaces keep their permissions, and new files get the usual ones instead of being readable by the owner only.
 - The list of what an apply does is no longer cut off at the panel command.
+- After a switch on the Themes tab, a change in the editor (the panel position, for example) followed by an apply used to put the previous theme back on the desktop, because the editor still held it. The editor now takes over the theme that was switched to. An installed color scheme becomes a new theme named after it. With unsaved changes in the editor the switch asks first, and Cancel leaves everything as it was.
+- Undoing a switch brings the editor back to the theme it held before, unless it has unsaved changes or holds another theme by then.
+- The theme that was switched to is the one the next start opens.
+- A switch asks the desktop which color scheme is in use. It used to trust what the Themes tab showed, and said "already uses" after the scheme had been changed in System Settings.
+- The theme in the editor is applied with its unsaved changes when it is chosen on the Themes tab as the color scheme that was written from it. It used to be replaced by a plain copy of that scheme.
+- Restoring an older snapshot, from the list or with `restore ID`, undoes the applies made after it as well and uses their snapshots up. *Undo last apply* afterwards used to put a newer state back on the desktop. When one of those applies cannot be undone, the restore stops there and says so; `restore` on the command line no longer reports success in that case.

@@ -45,7 +45,7 @@ Use the distribution's PySide6, not the one from pip. Only the distribution's bu
 - The app writes only inside your home folder and never asks for root.
 - The **Files written** tab shows every file and its content before you apply.
 - It also lists the desktop settings an apply changes. The window frame, the panel style and the panel position are only touched when the theme asks for them.
-- A snapshot is taken before every apply. **Undo last apply** puts the files and settings back.
+- A snapshot is taken before every apply. **Undo last apply** puts the files and settings back, one apply at a time. Restoring an older snapshot undoes every apply made after it as well.
 - If the desktop becomes hard to use, switch to a text console (Ctrl+Alt+F3), log in and run:
 
   ```sh
@@ -61,7 +61,7 @@ plasma-theme-studio [FILE]           open the editor
 plasma-theme-studio validate FILE    check a theme file
 plasma-theme-studio apply FILE       apply a theme file to the desktop
 plasma-theme-studio restore          undo the latest apply (repeat to go further back)
-plasma-theme-studio restore ID       go back to a chosen snapshot
+plasma-theme-studio restore ID       go back to a chosen snapshot, undoing the applies after it
 plasma-theme-studio restore --list   list the snapshots
 ```
 

@@ -498,16 +498,31 @@ def test_an_undo_that_fails_through_the_window_can_be_tried_once_more(window, de
     assert not window.undo_apply_button.isEnabled()
 
 
-def test_a_restore_from_the_list_does_not_talk_about_undo(window, desktop):
+def test_a_restore_from_the_list_stops_at_the_apply_it_cannot_undo(window, desktop):
+    window.editors[("panel_layout", "location")].choose("top")
+    window.apply_theme()
+    oldest = snapshots.latest()
     window.editors[("window", "decoration")].choose("generated")
     window.apply_theme()
     tired_kwin(desktop)
 
-    window._restore(snapshots.latest(), consume=False)
+    window._restore(oldest)
 
-    ((_title, problems),) = window.problems
-    assert len(problems) == 1
-    assert len(snapshots.list_snapshots()) == 1
+    ((title, problems),) = window.problems
+    assert title == "Some things could not be put back."
+    assert str(problems[-2]).startswith("The undo stopped at the apply of ")
+    assert str(problems[-2]).endswith(". The applies before it were left as they are.")
+    assert str(problems[-1]) == "The snapshot is kept, so Undo last apply can try once more."
+    assert desktop.shell.state()["location"] == "top"  # the older apply was not touched
+    assert len(snapshots.list_snapshots()) == 2
+
+    rested_kwin(desktop)
+    window.problems.clear()
+    window._restore(oldest)
+
+    assert window.problems == []
+    assert desktop.shell.state()["location"] == "bottom"
+    assert snapshots.list_snapshots() == []
 
 
 def test_the_summary_shows_commands_as_they_are(window):
@@ -647,3 +662,60 @@ def test_the_command_line_does_nothing_when_the_desktop_already_has_the_theme(co
     assert cli.main(["apply", str(path)]) == 0
     assert "Applied Rounded." in capsys.readouterr().out
     assert len(snapshots.list_snapshots()) == 2
+
+
+# ---- from one theme to the next --------------------------------------------------------------------
+
+
+def test_a_theme_with_colors_only_leaves_the_frame_and_panel_of_the_one_before(desktop):
+    """ "Leave as it is" means just that: nothing of the earlier theme is taken away
+    while KWin and Plasma still use it."""
+    first = rounded()
+    engine.apply(first, desktop.runner)
+
+    engine.apply(Theme({("meta", "name"): "Plain"}), desktop.runner)
+
+    folder = wf.frame_folder(first)
+    assert (paths.data_home() / "aurorae/themes" / folder / "decoration.svg").exists()
+    assert kconfig.user_value(*KWIN, "theme") == wf.AURORAE_THEME_PREFIX + folder
+    assert (paths.data_home() / "plasma/desktoptheme" / style_id(first) / "metadata.json").exists()
+    assert kconfig.user_value("plasmarc", ["Theme"], "name") == style_id(first)
+    assert desktop.shell.state()["location"] == "top"
+    assert desktop.runner.settings["ColorScheme"] == "Plain"
+
+
+def test_a_color_scheme_switch_and_its_undo_leave_the_other_parts_alone(desktop):
+    engine.apply(rounded(), desktop.runner)
+    state = system_state(desktop)
+
+    snapshot = engine.switch_color_scheme("BreezeDark", "Breeze Dark", desktop.runner)
+
+    assert desktop.runner.settings["ColorScheme"] == "BreezeDark"
+    assert list(snapshot.settings) == ["colors"]
+    assert engine.restore(snapshot, desktop.runner, consume=True) == []
+    assert system_state(desktop) == state
+
+
+def test_a_theme_applied_again_after_a_scheme_switch_brings_all_of_it_back(desktop):
+    engine.apply(rounded(), desktop.runner)
+    engine.switch_color_scheme("BreezeDark", "Breeze Dark", desktop.runner)
+    moved = rounded(panel_layout__location="left")
+
+    engine.apply(moved, desktop.runner)
+
+    assert desktop.runner.settings["ColorScheme"] == "Rounded"
+    assert desktop.shell.state()["location"] == "left"
+    assert engine.is_current(engine.build_plan(moved, desktop.runner), desktop.runner)
+
+
+def test_one_changed_panel_value_keeps_the_colors_of_the_same_theme(desktop):
+    theme = rounded()
+    engine.apply(theme, desktop.runner)
+    scheme = paths.color_schemes_dir() / f"{theme.slug}.colors"
+    before = scheme.read_text()
+
+    engine.apply(rounded(panel_layout__location="left"), desktop.runner)
+
+    assert scheme.read_text() == before
+    assert desktop.runner.settings["ColorScheme"] == "Rounded"
+    assert desktop.shell.state()["location"] == "left"
