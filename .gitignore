@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.qm
+.venv/
+build/
+dist/
+*.egg-info/
+pkg/
+*.pkg.tar.*
+.scratch/

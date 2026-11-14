@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plasma Theme Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Noto+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0}
+/* Layout: narrow reading column that opens into a wide, interactive app mockup, followed by architecture and technology choices. */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --sunk:#e3e8ef; --line:#cdd5df;
+  --fg:#1b2430; --muted:#5b6878; --accent:#1d8fd1; --accent-ink:#ffffff;
+  --ok:#2e8b57;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Noto Sans", system-ui, -apple-system, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "DejaVu Sans Mono", monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14181e; --surface:#1c222a; --sunk:#232a33; --line:#323b47;
+  --fg:#e4e9ef; --muted:#97a3b2; --accent:#3daee9; --accent-ink:#0b1620; --ok:#5cc28a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14181e; --surface:#1c222a; --sunk:#232a33; --line:#323b47;
+  --fg:#e4e9ef; --muted:#97a3b2; --accent:#3daee9; --accent-ink:#0b1620; --ok:#5cc28a; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:40px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+.prose{max-width:68ch}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(2rem,4.5vw,3.1rem);font-weight:700;letter-spacing:-.02em}
+h2{font-size:1.6rem;font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.05rem;font-weight:700}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.stack{display:flex;flex-direction:column;gap:14px}
+code,.mono{font-family:var(--f-mono);font-size:.85em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  box-shadow:0 20px 50px -24px rgb(0 0 0 / .35)}
+.titlebar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--sunk)}
+.titlebar .name{font-weight:600;font-size:.9rem;white-space:nowrap}
+.titlebar .file{font-family:var(--f-mono);font-size:.75rem;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.titlebar .sp{flex:1}
+.wbtn{width:12px;height:12px;border-radius:50%;background:var(--line);flex:none}
+.body3{display:grid;grid-template-columns:190px minmax(0,1fr) 280px;min-height:560px}
+.side{border-right:1px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:2px;background:var(--surface)}
+.side .grp{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px 10px 4px}
+.side button{all:unset;cursor:pointer;padding:6px 10px;border-radius:6px;font-size:.88rem;display:flex;justify-content:space-between;gap:8px}
+.side button:hover{background:var(--sunk)}
+.side button.on{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--fg);font-weight:600}
+.side button small{font-family:var(--f-mono);font-size:.68rem;color:var(--muted)}
+.center{display:flex;flex-direction:column;min-width:0;background:var(--sunk)}
+.tabs{display:flex;gap:4px;padding:8px 10px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{all:unset;cursor:pointer;padding:7px 12px;font-size:.85rem;border-radius:6px 6px 0 0;color:var(--muted);white-space:nowrap}
+.tabs button.on{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)}
+.view{flex:1;padding:18px;min-width:0;overflow:auto}
+.insp{border-left:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:14px;background:var(--surface)}
+.insp h3{font-size:.95rem}
+.field{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;font-size:.84rem}
+.field input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.field output{font-family:var(--f-mono);font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.swatches{display:flex;gap:6px;flex-wrap:wrap;grid-column:1/-1}
+.sw{all:unset;cursor:pointer;width:24px;height:24px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
+.sw.on{box-shadow:0 0 0 2px var(--fg)}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;grid-column:1/-1}
+.seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:5px 0;font-size:.8rem}
+.seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.chip{all:unset;cursor:pointer;font-size:.78rem;padding:3px 10px;border:1px solid var(--line);border-radius:999px}
+.chip:hover{border-color:var(--accent)}
+.footer{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line);background:var(--sunk);flex-wrap:wrap}
+.footer .status{font-size:.8rem;color:var(--muted);flex:1;min-width:0}
+.footer .status b{color:var(--ok);font-weight:600}
+.btn{all:unset;cursor:pointer;font-size:.85rem;padding:6px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+
+.desk{--t-accent:#3daee9;--t-r:8px;--t-b:1px;--t-sh:24px;--t-sho:.35;--t-op:.85;
+  --t-bg:#fcfcfc;--t-win:#eff0f1;--t-fg:#232629;--t-line:#c5c9cd;--t-wall1:#3a6b8f;--t-wall2:#1f3446;
+  position:relative;border-radius:8px;overflow:hidden;min-height:440px;
+  background:radial-gradient(120% 90% at 20% 10%,var(--t-wall1),var(--t-wall2));
+  padding:26px 26px 64px;font-family:var(--f-body);color:var(--t-fg)}
+.desk.dark{--t-bg:#202326;--t-win:#2a2e32;--t-fg:#fcfcfc;--t-line:#4d5257;--t-wall1:#2c3e50;--t-wall2:#0d1418}
+.win{background:var(--t-win);border:var(--t-b) solid var(--t-line);border-radius:var(--t-r);max-width:440px;overflow:hidden;
+  box-shadow:0 calc(var(--t-sh) * .4) var(--t-sh) rgb(0 0 0 / var(--t-sho))}
+.win .tb{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:.82rem;font-weight:600;border-bottom:var(--t-b) solid var(--t-line)}
+.win .tb .t{flex:1;text-align:center}
+.dot{width:14px;height:14px;border-radius:calc(var(--t-r) * .6);background:color-mix(in srgb,var(--t-fg) 18%,transparent)}
+.dot.x{background:#da4453}
+.win .ct{background:var(--t-bg);padding:16px;display:flex;flex-direction:column;gap:12px;font-size:.84rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.qbtn{padding:5px 14px;border-radius:var(--t-r);border:var(--t-b) solid var(--t-line);background:var(--t-win);font-size:.82rem}
+.qbtn.def{background:var(--t-accent);color:#fff;border-color:var(--t-accent)}
+.qin{flex:1;min-width:120px;padding:5px 9px;border-radius:var(--t-r);border:var(--t-b) solid var(--t-line);background:var(--t-bg);font-size:.82rem;
+  box-shadow:0 0 0 1px var(--t-accent) inset}
+.chk{width:16px;height:16px;border-radius:calc(var(--t-r) * .4);background:var(--t-accent);display:grid;place-items:center;color:#fff;font-size:11px}
+.prog{height:6px;border-radius:99px;background:color-mix(in srgb,var(--t-fg) 15%,transparent);overflow:hidden}
+.prog i{display:block;height:100%;width:62%;background:var(--t-accent);border-radius:inherit}
+.menu{position:absolute;right:30px;top:60px;width:190px;background:var(--t-bg);border:var(--t-b) solid var(--t-line);border-radius:var(--t-r);
+  padding:5px;font-size:.8rem;box-shadow:0 calc(var(--t-sh) * .3) var(--t-sh) rgb(0 0 0 / var(--t-sho))}
+.menu div{padding:5px 9px;border-radius:calc(var(--t-r) * .6)}
+.menu div.hl{background:var(--t-accent);color:#fff}
+.panel{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;display:flex;gap:8px;align-items:center;padding:6px 10px;
+  border-radius:calc(var(--t-r) * 1.5);background:color-mix(in srgb,var(--t-win) calc(var(--t-op) * 100%),transparent);
+  border:var(--t-b) solid color-mix(in srgb,var(--t-line) 70%,transparent);box-shadow:0 6px var(--t-sh) rgb(0 0 0 / var(--t-sho));backdrop-filter:blur(10px)}
+.panel i{width:26px;height:26px;border-radius:calc(var(--t-r) * .7);background:color-mix(in srgb,var(--t-fg) 16%,transparent)}
+.panel i.act{background:var(--t-accent)}
+.panel .clk{font-size:.75rem;padding:0 6px;font-variant-numeric:tabular-nums}
+
+.svged{display:grid;grid-template-columns:44px minmax(0,1fr) 180px;gap:12px;min-height:420px}
+.tools{display:flex;flex-direction:column;gap:4px}
+.tools button{all:unset;cursor:pointer;width:36px;height:36px;border-radius:6px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line)}
+.tools button.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tools svg{width:18px;height:18px;stroke:var(--fg);fill:none;stroke-width:1.6}
+.canvas{background:var(--surface);border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;padding:12px;
+  background-image:linear-gradient(45deg,var(--sunk) 25%,transparent 25%,transparent 75%,var(--sunk) 75%),linear-gradient(45deg,var(--sunk) 25%,transparent 25%,transparent 75%,var(--sunk) 75%);
+  background-size:16px 16px;background-position:0 0,8px 8px}
+.canvas svg{width:100%;max-width:420px;height:auto}
+.elist{font-family:var(--f-mono);font-size:.72rem;display:flex;flex-direction:column;gap:2px;min-width:0}
+.elist .h{font-family:var(--f-body);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.elist div{padding:3px 6px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.elist div.on{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+.note{font-size:.8rem;color:var(--muted);margin-top:10px}
+
+.files{width:100%;border-collapse:collapse;font-size:.8rem}
+.files th{text-align:left;font-weight:600;color:var(--muted);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+.files td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.files td:nth-child(2),.files td:nth-child(3){font-family:var(--f-mono);font-size:.72rem}
+.tblwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1.4fr;gap:12px;align-items:stretch}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.box .k{font-family:var(--f-mono);font-size:.72rem;color:var(--accent)}
+.box p{font-size:.85rem;color:var(--muted)}
+.arrow{display:grid;place-items:center;color:var(--muted);font-size:1.3rem}
+.targets{display:flex;flex-direction:column;gap:6px}
+.target{display:flex;justify-content:space-between;gap:10px;font-size:.84rem;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.target span:last-child{font-family:var(--f-mono);font-size:.72rem;color:var(--muted);text-align:right}
+.target.svg{border-left:3px solid var(--accent)}
+.key{font-size:.8rem;color:var(--muted)}
+.key b{color:var(--accent)}
+
+.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.choice{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.choice .pick{font-family:var(--f-display);font-size:1.25rem;font-weight:700}
+.choice ul{margin:0;padding-left:18px;font-size:.86rem;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.choice .no{font-size:.82rem;border-top:1px dashed var(--line);padding-top:8px;color:var(--muted)}
+.choice .no b{color:var(--fg)}
+.tag{display:inline-block;font-size:.68rem;font-family:var(--f-mono);letter-spacing:.04em;padding:1px 7px;border-radius:99px;
+  background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--fg);align-self:flex-start}
+
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.step{border-top:3px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:4px}
+.step:first-child{border-top-color:var(--accent)}
+.step .n{font-family:var(--f-mono);font-size:.72rem;color:var(--muted)}
+.step p{font-size:.84rem;color:var(--muted)}
+
+@media (max-width:1000px){
+  .body3{grid-template-columns:1fr}
+  .side{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line)}
+  .side .grp{display:none}
+  .insp{border-left:0;border-top:1px solid var(--line)}
+  .flow{grid-template-columns:1fr}
+  .arrow{transform:rotate(90deg)}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:640px){
+  .choices,.steps{grid-template-columns:1fr}
+  .svged{grid-template-columns:1fr}
+  .tools{flex-direction:row}
+  .menu{display:none}
+}
+@media (prefers-reduced-motion:no-preference){
+  .win,.menu,.panel,.qbtn,.qin{transition:border-radius .15s,box-shadow .15s,background .15s}
+}
+</style>
+
+<div class="wrap">
+
+<header class="stack prose">
+  <span class="eyebrow">Mockup · KDE Plasma 6.8</span>
+  <h1>Plasma Theme Studio</h1>
+  <p>One app for editing a whole Plasma theme in one place. You set colors, corner radii, borders and shadows once. The app then writes the right files for Kvantum, Klassy, the Plasma style and GTK, and reloads the desktop live. The mockup below is interactive: drag the sliders on the right.</p>
+</header>
+
+<section class="app" aria-label="App mockup">
+  <div class="titlebar">
+    <span class="wbtn"></span><span class="wbtn"></span><span class="wbtn"></span>
+    <span class="name">Plasma Theme Studio</span>
+    <span class="file">~/.local/share/plasma-theme-studio/themes/my-theme.toml</span>
+    <span class="sp"></span>
+  </div>
+  <div class="body3">
+    <nav class="side" aria-label="Theme parts">
+      <span class="grp">Foundation</span>
+      <button class="on">Colors <small>.colors</small></button>
+      <button>Shapes <small>radius, border</small></button>
+      <button>Shadows</button>
+      <button>Fonts</button>
+      <span class="grp">Targets</span>
+      <button>Apps <small>Kvantum</small></button>
+      <button>Windows <small>Klassy</small></button>
+      <button>Panel &amp; popups <small>SVG</small></button>
+      <button>GTK apps <small>CSS</small></button>
+      <button>Icons &amp; cursors</button>
+      <span class="grp">More</span>
+      <button>Snapshots</button>
+      <button>Export</button>
+    </nav>
+
+    <div class="center">
+      <div class="tabs" role="tablist">
+        <button class="on" data-tab="prev" role="tab" id="tab-prev">Preview</button>
+        <button data-tab="svg" role="tab" id="tab-svg">SVG editor</button>
+        <button data-tab="files" role="tab" id="tab-files">Files written</button>
+      </div>
+
+      <div class="view" id="v-prev">
+        <div class="desk" id="desk">
+          <div class="win">
+            <div class="tb"><span class="dot"></span><span class="t">Dolphin — Home</span><span class="dot"></span><span class="dot x"></span></div>
+            <div class="ct">
+              <div class="row"><span class="qin">Search Home…</span></div>
+              <div class="row"><span class="chk">✓</span> Show hidden files</div>
+              <div class="prog"><i></i></div>
+              <div class="row"><span class="qbtn">Cancel</span><span class="qbtn def">Save</span></div>
+            </div>
+          </div>
+          <div class="menu">
+            <div>Open</div><div class="hl">Open With…</div><div>Rename</div><div>Properties</div>
+          </div>
+          <div class="panel"><i class="act"></i><i></i><i></i><i></i><span class="clk">14:32</span></div>
+        </div>
+        <p class="note">In the real app, buttons, fields and menus are drawn with the actual Qt style (Kvantum or Klassy), not an imitation. What you see is exactly what you get.</p>
+      </div>
+
+      <div class="view" id="v-svg" hidden>
+        <div class="svged">
+          <div class="tools" aria-label="Tools">
+            <button class="on" title="Select"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg></button>
+            <button title="Nodes"><svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M7.5 16.5L16.5 7.5"/></svg></button>
+            <button title="Rectangle"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="3"/></svg></button>
+            <button title="Pen"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg></button>
+            <button title="Gradient"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l10-10M10 20l10-10"/></svg></button>
+          </div>
+          <div class="canvas" id="svgcanvas"></div>
+          <div class="elist">
+            <span class="h">widgets/panel-background.svgz</span>
+            <div>topleft</div><div>top</div><div>topright</div>
+            <div>left</div><div class="on">center</div><div>right</div>
+            <div>bottomleft</div><div>bottom</div><div>bottomright</div>
+            <div>shadow-topleft …</div>
+            <div>hint-top-margin</div>
+          </div>
+        </div>
+        <p class="note">Plasma, Kvantum and Aurorae all draw their frames as 9-slice SVG pieces with fixed element IDs. The editor generates those pieces from the sliders, and the dashed lines show the slices. To draw freely, switch to the node tool or open the file in Inkscape.</p>
+      </div>
+
+      <div class="view" id="v-files" hidden>
+        <div class="tblwrap">
+          <table class="files">
+            <thead><tr><th>Target</th><th>File</th><th>Reloaded with</th></tr></thead>
+            <tbody>
+              <tr><td>Color scheme</td><td>~/.local/share/color-schemes/MyTheme.colors</td><td>plasma-apply-colorscheme MyTheme</td></tr>
+              <tr><td>App style</td><td>~/.config/Kvantum/MyTheme/MyTheme.kvconfig + .svg</td><td>kvantummanager --set MyTheme</td></tr>
+              <tr><td>Windows</td><td>~/.config/klassy/klassyrc</td><td>qdbus org.kde.KWin /KWin reconfigure</td></tr>
+              <tr><td>Panel &amp; popups</td><td>~/.local/share/plasma/desktoptheme/MyTheme/</td><td>plasma-apply-desktoptheme MyTheme</td></tr>
+              <tr><td>GTK 3/4</td><td>~/.config/gtk-3.0/gtk.css, gtk-4.0/gtk.css</td><td>gsettings (theme toggled off and on)</td></tr>
+              <tr><td>Global theme</td><td>~/.local/share/plasma/look-and-feel/MyTheme/</td><td>plasma-apply-lookandfeel -a MyTheme</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Every time you apply, the old files are saved as a snapshot first, so you can undo.</p>
+      </div>
+    </div>
+
+    <aside class="insp" aria-label="Properties">
+      <h3>Whole theme</h3>
+      <div class="presets">
+        <button class="chip" data-p="breeze">Breeze</button>
+        <button class="chip" data-p="soft">Soft</button>
+        <button class="chip" data-p="sharp">Sharp</button>
+      </div>
+      <div class="field">
+        <span>Mode</span>
+        <div class="seg"><button class="on" data-mode="light">Light</button><button data-mode="dark">Dark</button></div>
+      </div>
+      <div class="field">
+        <span>Accent color</span>
+        <div class="swatches" id="sw"></div>
+      </div>
+      <div class="field"><label for="r">Corner radius</label><output id="r-o">8 px</output><input type="range" id="r" min="0" max="20" value="8"></div>
+      <div class="field"><label for="b">Border width</label><output id="b-o">1 px</output><input type="range" id="b" min="0" max="3" value="1"></div>
+      <div class="field"><label for="sh">Shadow size</label><output id="sh-o">24 px</output><input type="range" id="sh" min="0" max="60" value="24"></div>
+      <div class="field"><label for="so">Shadow strength</label><output id="so-o">35 %</output><input type="range" id="so" min="0" max="80" value="35"></div>
+      <div class="field"><label for="op">Panel opacity</label><output id="op-o">85 %</output><input type="range" id="op" min="30" max="100" value="85"></div>
+    </aside>
+  </div>
+  <div class="footer">
+    <span class="status">Your changes affect <b>6 targets</b> and 11 files. Nothing has been applied yet.</span>
+    <button class="btn">Undo last apply</button>
+    <button class="btn pri" id="apply">Apply to desktop</button>
+  </div>
+</section>
+
+<section class="stack">
+  <span class="eyebrow">How the pieces fit</span>
+  <h2>One theme file, many generators</h2>
+  <p class="prose">The app does not replace Kvantum, Klassy or Plasma. It drives them. Everything you choose is saved in a single theme file, and each generator translates it into the format its target understands. Three of the targets draw their frames with SVG, so one SVG editor can shape apps, the panel and popups alike.</p>
+  <div class="flow">
+    <div class="box"><span class="k">my-theme.toml</span><h3>Theme file</h3><p>Colors, radii, borders, shadows, opacity and fonts. The only thing you edit.</p></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="box"><span class="k">generators/</span><h3>Generators</h3><p>One per target, built on Jinja templates for text and SVG. They never touch files outside the theme's own folders.</p></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="targets">
+      <div class="target svg"><span>Apps</span><span>Kvantum · SVG</span></div>
+      <div class="target svg"><span>Panel &amp; popups</span><span>Plasma style · SVG</span></div>
+      <div class="target"><span>Window frames</span><span>Klassy · INI</span></div>
+      <div class="target"><span>Colors</span><span>.colors · INI</span></div>
+      <div class="target"><span>GTK apps</span><span>gtk.css</span></div>
+    </div>
+  </div>
+  <p class="key"><b>Blue edge</b> = the target is drawn with SVG and can be edited in the built-in SVG editor.</p>
+</section>
+
+<section class="stack">
+  <span class="eyebrow">Technology</span>
+  <h2>Framework, language and packaging</h2>
+  <div class="choices">
+    <div class="choice">
+      <span class="tag">Framework</span>
+      <span class="pick">Qt 6 Widgets</span>
+      <ul>
+        <li>The same Qt as Plasma. The preview can load the real Kvantum or Klassy style and draw genuine buttons and menus.</li>
+        <li>QtSvg and QGraphicsView are enough for the built-in SVG editor.</li>
+        <li>Freehand drawing: SVG-Edit (MIT) runs inside QtWebEngine. Inkscape is available as an external button.</li>
+      </ul>
+      <p class="no"><b>Not Tauri or Electron:</b> a web view cannot render real Qt styles, so the preview would only approximate them.</p>
+    </div>
+    <div class="choice">
+      <span class="tag">Language</span>
+      <span class="pick">Python + PySide6</span>
+      <ul>
+        <li>Fast to build and change. The generators are mostly text and SVG templates, which suits Python well.</li>
+        <li>Uses the distro's <code>pyside6</code> package, not pip. Otherwise the app cannot load KDE's style plugins.</li>
+        <li>Performance-critical parts can move to C++ later if needed.</li>
+      </ul>
+      <p class="no"><b>Alternative:</b> C++ with Qt gives the most performance and suits an official KDE project, but development is slower.</p>
+    </div>
+    <div class="choice">
+      <span class="tag">Packaging</span>
+      <span class="pick">PKGBUILD (AUR)</span>
+      <ul>
+        <li>The app writes to <code>~/.config</code> and <code>~/.local/share</code>, talks to KWin and plasmashell over D-Bus, and loads the system's Qt plugins.</li>
+        <li>A native package does all of that without workarounds. Other distros can follow with their own packages.</li>
+      </ul>
+      <p class="no"><b>Not Flatpak or AppImage:</b> the sandbox and the bundled Qt would hide Klassy and Kvantum from the preview.</p>
+    </div>
+    <div class="choice">
+      <span class="tag">Reused projects</span>
+      <span class="pick">Drive them, don't fork them</span>
+      <ul>
+        <li><b>Kvantum</b> and <b>Klassy</b> are installed as dependencies. The app only writes their themes and settings.</li>
+        <li><b>Breeze</b>'s Plasma SVGs and <b>Breeze GTK</b>'s CSS serve as templates.</li>
+        <li>All of them are GPL, so the app is GPL-3.0-or-later.</li>
+      </ul>
+      <p class="no"><b>Result:</b> when Kvantum or Klassy improve, the app benefits automatically.</p>
+    </div>
+  </div>
+</section>
+
+<section class="stack">
+  <span class="eyebrow">Roadmap</span>
+  <h2>From prototype to full app</h2>
+  <div class="steps">
+    <div class="step"><span class="n">Milestone 1</span><h3>Theme file + colors</h3><p>The theme file, the color scheme generator and the Apply button. Useful right away.</p></div>
+    <div class="step"><span class="n">Milestone 2</span><h3>Shapes for apps and windows</h3><p>Kvantum and Klassy generators, plus the real-style preview.</p></div>
+    <div class="step"><span class="n">Milestone 3</span><h3>SVG editor</h3><p>9-slice frames for the panel and popups, then freehand drawing.</p></div>
+    <div class="step"><span class="n">Milestone 4</span><h3>GTK and packaging</h3><p>GTK CSS, snapshots, export as a global theme, and the PKGBUILD.</p></div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  const desk=document.getElementById('desk');
+  const set=(k,v)=>desk.style.setProperty(k,v);
+  const accents=['#3daee9','#e95420','#9b59b6','#27ae60','#f39c12','#e84393','#596a7c'];
+  let accent=accents[0];
+  const swWrap=document.getElementById('sw');
+  accents.forEach((c,i)=>{const b=document.createElement('button');b.className='sw'+(i?'':' on');b.style.background=c;b.title=c;b.setAttribute('aria-label','Accent '+c);
+    b.onclick=()=>{accent=c;[...swWrap.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');update();};swWrap.appendChild(b);});
+
+  const ids={r:'px',b:'px',sh:'px',so:'%',op:'%'};
+  const val=id=>+document.getElementById(id).value;
+  function update(){
+    for(const id in ids) document.getElementById(id+'-o').textContent=val(id)+' '+ids[id];
+    set('--t-accent',accent); set('--t-r',val('r')+'px'); set('--t-b',val('b')+'px');
+    set('--t-sh',val('sh')+'px'); set('--t-sho',val('so')/100); set('--t-op',val('op')/100);
+    drawSvg();
+  }
+  for(const id in ids) document.getElementById(id).addEventListener('input',update);
+
+  document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    desk.classList.toggle('dark',b.dataset.mode==='dark');drawSvg();});
+
+  const presets={breeze:{r:8,b:1,sh:24,so:35,op:85},soft:{r:16,b:0,sh:44,so:28,op:70},sharp:{r:0,b:2,sh:6,so:60,op:100}};
+  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{const p=presets[b.dataset.p];for(const k in p)document.getElementById(k).value=p[k];update();});
+
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===b));
+    ['prev','svg','files'].forEach(t=>document.getElementById('v-'+t).hidden=t!==b.dataset.tab);});
+
+  function drawSvg(){
+    const dark=desk.classList.contains('dark');
+    const r=val('r'),bw=val('b'),sh=val('sh'),so=val('so')/100,op=val('op')/100;
+    const fill=dark?'#2a2e32':'#eff0f1',stroke=dark?'#4d5257':'#c5c9cd',txt=dark?'#97a3b2':'#5b6878';
+    const W=360,H=200,pad=40,x=pad,y=pad,w=W-2*pad,h=H-2*pad,cut=Math.max(r,6)+4;
+    const lines=[[x+cut,0,x+cut,H],[x+w-cut,0,x+w-cut,H],[0,y+cut,W,y+cut],[0,y+h-cut,W,y+h-cut]]
+      .map(l=>`<line x1="${l[0]}" y1="${l[1]}" x2="${l[2]}" y2="${l[3]}" stroke="${accent}" stroke-width="1" stroke-dasharray="4 3"/>`).join('');
+    const lbl=(t,lx,ly)=>`<text x="${lx}" y="${ly}" font-family="JetBrains Mono,monospace" font-size="9" fill="${txt}" text-anchor="middle">${t}</text>`;
+    document.getElementById('svgcanvas').innerHTML=
+      `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Panel frame split into nine slices">
+        <defs><filter id="ds" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="${sh*.25}" stdDeviation="${sh/3}" flood-color="#000" flood-opacity="${so}"/></filter></defs>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" fill-opacity="${op}" stroke="${stroke}" stroke-width="${bw}" filter="url(#ds)"/>
+        ${lines}
+        <rect x="${x+cut}" y="${y+cut}" width="${w-2*cut}" height="${h-2*cut}" fill="${accent}" fill-opacity=".12"/>
+        ${lbl('topleft',x+cut/2,y-8)}${lbl('top',W/2,y-8)}${lbl('topright',x+w-cut/2,y-8)}
+        ${lbl('center',W/2,H/2+3)}
+        ${lbl('bottomleft',x+cut/2,y+h+16)}${lbl('bottom',W/2,y+h+16)}${lbl('bottomright',x+w-cut/2,y+h+16)}
+        <circle cx="${x+r}" cy="${y}" r="4" fill="${accent}"/>
+      </svg>`;
+  }
+  document.getElementById('apply').onclick=()=>{document.querySelector('.footer .status').innerHTML='<b>Applied</b> (in this mockup). In the app, Plasma and KWin reload immediately.';};
+  update();
+})();
+</script>
