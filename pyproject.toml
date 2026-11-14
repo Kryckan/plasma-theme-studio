@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[project]
+name = "plasma-theme-studio"
+version = "0.1.0"
+description = "Edit every part of a KDE Plasma theme in one place"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.11"
+# PySide6 is deliberately not listed: the app must use the distribution's
+# PySide6 so that it loads the real KDE widget styles.
+dependencies = ["Jinja2>=3.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 110
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E731"]

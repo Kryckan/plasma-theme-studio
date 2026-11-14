@@ -1,0 +1,9 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Runs Plasma Theme Studio from a source checkout, without installing it.
+# The system Python is used on purpose: the distribution's PySide6 is the
+# one that loads the real KDE widget styles.
+here=$(dirname "$(readlink -f "$0")")
+PYTHONPATH="$here/src${PYTHONPATH:+:$PYTHONPATH}" exec /usr/bin/python3 -m plasma_theme_studio "$@"

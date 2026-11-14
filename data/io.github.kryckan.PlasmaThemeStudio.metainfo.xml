@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+SPDX-License-Identifier: CC0-1.0
+-->
+<component type="desktop-application">
+  <id>io.github.kryckan.PlasmaThemeStudio</id>
+  <name>Plasma Theme Studio</name>
+  <summary>Edit every part of a KDE Plasma theme in one place</summary>
+  <summary xml:lang="sv">Redigera alla delar av ett KDE Plasma-tema på ett ställe</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.kryckan">
+    <name>Plasma Theme Studio contributors</name>
+  </developer>
+  <description>
+    <p>
+      Plasma Theme Studio keeps a whole desktop theme in one file and writes the
+      files that KDE Plasma and its apps read. You edit a value once, see it in a
+      preview, and apply it to the running desktop.
+    </p>
+    <p>
+      Every apply takes a snapshot first, so it can be undone from the app or from
+      a text console. The app only writes inside your home folder and shows the
+      exact files it is about to write.
+    </p>
+    <p>
+      This first version edits and applies the color scheme. Window decoration,
+      widget style, Plasma style, GTK and Rofi are planned.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.kryckan.PlasmaThemeStudio.desktop</launchable>
+  <url type="homepage">https://github.com/Kryckan/plasma-theme-studio</url>
+  <url type="bugtracker">https://github.com/Kryckan/plasma-theme-studio/issues</url>
+  <url type="vcs-browser">https://github.com/Kryckan/plasma-theme-studio</url>
+  <provides>
+    <binary>plasma-theme-studio</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-14" type="development">
+      <description>
+        <p>First development version: theme file, colors, apply, undo and snapshots.</p>
+      </description>
+    </release>
+  </releases>
+</component>

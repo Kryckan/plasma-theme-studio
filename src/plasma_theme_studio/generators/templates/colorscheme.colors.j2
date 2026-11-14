@@ -1,0 +1,41 @@
+{{ marker }} Changes made here are overwritten on the next apply.
+
+[ColorEffects:Disabled]
+Color={{ disabled_color }}
+ColorAmount=0
+ColorEffect=0
+ContrastAmount=0.65
+ContrastEffect=1
+IntensityAmount=0.1
+IntensityEffect=2
+
+[ColorEffects:Inactive]
+ChangeSelectionColor=true
+Color={{ inactive_color }}
+ColorAmount=0.025
+ColorEffect=2
+ContrastAmount=0.1
+ContrastEffect=2
+Enable=false
+IntensityAmount=0
+IntensityEffect=0
+
+{% for group, entries in groups %}
+[{{ group }}]
+{% for key, value in entries %}
+{{ key }}={{ value }}
+{% endfor %}
+
+{% endfor %}
+[General]
+ColorScheme={{ slug }}
+Name={{ name }}
+shadeSortColumn=true
+
+[KDE]
+contrast=4
+
+[WM]
+{% for key, value in wm.items() %}
+{{ key }}={{ value }}
+{% endfor %}

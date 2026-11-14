@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Desktop Entry]
+Type=Application
+Name=Plasma Theme Studio
+GenericName=Theme Editor
+GenericName[sv]=Temaredigerare
+Comment=Edit every part of a KDE Plasma theme in one place
+Comment[sv]=Redigera alla delar av ett KDE Plasma-tema på ett ställe
+Exec=plasma-theme-studio %f
+Icon=io.github.kryckan.PlasmaThemeStudio
+Terminal=false
+Categories=Qt;KDE;Settings;DesktopSettings;
+Keywords=theme;colors;color scheme;appearance;plasma;
+Keywords[sv]=tema;färger;färgschema;utseende;plasma;

@@ -8,7 +8,61 @@ One app for editing an entire KDE Plasma theme in one place.
 
 Set colors, corner radii, borders, shadows and opacity once. Plasma Theme Studio writes the files each part of the desktop needs and reloads the desktop live.
 
-> **Status: planning.** There is no usable release yet. The product plan is in [docs/PRD.md](docs/PRD.md). Feedback on the plan is welcome in the issue tracker.
+> **Status: early development (v0.1).** Colors can be edited, previewed, applied and undone. Shapes, shadows and the panel are stored and previewed but not applied to the desktop yet. The plan is in [docs/PRD.md](docs/PRD.md).
+
+![The editor with a dark theme open](docs/screenshots/main-window.png)
+
+## Try it
+
+You need KDE Plasma 6, Python 3.11 or newer, and your distribution's PySide6 and Jinja2 packages.
+
+| Distribution | Install the dependencies |
+|---|---|
+| Arch, CachyOS, Manjaro | `sudo pacman -S --needed pyside6 python-jinja` |
+| Fedora | `sudo dnf install python3-pyside6 python3-jinja2` |
+| Debian, Ubuntu | `sudo apt install python3-pyside6.qtwidgets python3-jinja2` |
+| openSUSE | `sudo zypper install python3-pyside6 python3-Jinja2` |
+
+Run it from a checkout, without installing anything:
+
+```sh
+git clone https://github.com/Kryckan/plasma-theme-studio.git
+cd plasma-theme-studio
+./plasma-theme-studio
+```
+
+On Arch-based systems you can build a package instead:
+
+```sh
+cd packaging/arch
+makepkg -si
+```
+
+Use the distribution's PySide6, not the one from pip. Only the distribution's build loads the KDE widget styles.
+
+## Safety
+
+- The app writes only inside your home folder and never asks for root.
+- The **Files written** tab shows every file and its content before you apply.
+- A snapshot is taken before every apply. **Undo last apply** puts the files and settings back.
+- If the desktop becomes hard to use, switch to a text console (Ctrl+Alt+F3), log in and run:
+
+  ```sh
+  plasma-theme-studio restore
+  ```
+
+Themes are stored in `~/.local/share/plasma-theme-studio/themes/` and snapshots in `~/.local/share/plasma-theme-studio/snapshots/`.
+
+## Command line
+
+```
+plasma-theme-studio [FILE]           open the editor
+plasma-theme-studio validate FILE    check a theme file
+plasma-theme-studio apply FILE       apply a theme file to the desktop
+plasma-theme-studio restore          undo the latest apply (repeat to go further back)
+plasma-theme-studio restore ID       go back to a chosen snapshot
+plasma-theme-studio restore --list   list the snapshots
+```
 
 ## Why
 
@@ -22,13 +76,11 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 
 ## Planned features
 
-- One human-readable theme file as the single source of truth
+- Shapes, shadows and opacity applied to apps, windows and the panel
 - Live preview drawn with the real Qt style
 - Built-in SVG editor for panel, popup and widget frames
-- Snapshots before every apply, undo from the app, and a console recovery command
 - Wallpaper-based colors through pywal and matugen
 - Theme export and import
-- Translatable UI that follows the system language
 
 ## Targets
 
@@ -65,7 +117,11 @@ The first packages target Arch Linux (AUR). Packages for Fedora, openSUSE, Debia
 
 ## Technology
 
-Python with PySide6 (Qt 6 Widgets), Jinja2 templates, and Qt Linguist for translations.
+Python with PySide6 (Qt 6 Widgets), Jinja2 templates, and Qt Linguist for translations. The UI follows the system language; English and Swedish are included.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run the tests and add a translation.
 
 ## License
 
