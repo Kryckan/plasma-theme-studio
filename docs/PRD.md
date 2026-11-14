@@ -208,7 +208,21 @@ Best effort: the Rofi target covers what Rofi's theme format can express (colors
 | RF-4 | Rofi-specific options (window width, number of rows, icon size, layout preset) are per-target overrides. | P1 (M4) |
 | RF-5 | The target is disabled with an explanation when Rofi is not installed. | P0 (M4) |
 
-### 7.8 Language support
+### 7.8 Desktop layout and Plasma's own appearance settings
+
+The goal is one consistent place for everything that affects how the desktop looks, including settings that today live in System Settings or in the panel's edit mode. System Settings modules cannot be embedded in this app (they are C++/QML plugins without Python bindings), so the app has its own controls for these settings, built like the rest of the editor, and changes them through Plasma's documented interfaces (the Plasma shell scripting interface, `plasma-apply-*`, `kwriteconfig6`). Every one of them is previewed, snapshotted and undoable like any other value.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| DL-1 | Each shape value (corner radius, border width) can be set separately for windows and for the panel; unset values follow the global one. | P0 (M1, apply in M2/M3) |
+| DL-2 | Panel layout: screen edge, height, length and alignment, floating, visibility mode and opacity, for each panel, changed from the app and shown in the preview. | P0 (M3) |
+| DL-3 | The Themes tab lists installed color schemes and saved themes with thumbnails and switches between them. | P0 (M1) |
+| DL-4 | Switch between installed Global Themes, Plasma styles, window decorations, application styles, icon themes and cursor themes from the Themes tab. Everything a switch changes is covered by the snapshot. | P1 (M4) |
+| DL-5 | Fonts, title bar button layout and window border size can be set in the app. | P1 (M4) |
+| DL-6 | A setting the app does not cover yet has a link that opens the matching System Settings page. | P2 |
+| DL-7 | Settings the app changes outside its own generated files are read from the system when the editor opens, so the app never shows a stale value. | P0 (with DL-2) |
+
+### 7.9 Language support
 
 | ID | Requirement | Priority |
 |---|---|---|
@@ -360,7 +374,7 @@ Each milestone ends with a tagged release that is usable on its own.
 - SVG draw mode and *Open in Inkscape*.
 
 **Done when**
-- A user can restyle the panel and popups (radius, border, opacity, shadow) without leaving the app.
+- A user can restyle the panel and popups (radius, border, opacity, shadow) and move and resize the panel (DL-2) without leaving the app.
 - Generated Plasma styles load without warnings in `plasmashell`.
 
 ### Milestone 4 — GTK, sharing, 1.0
@@ -368,7 +382,8 @@ Each milestone ends with a tagged release that is usable on its own.
 **Delivers**
 - GTK 3 and GTK 4 CSS generator.
 - Rofi theme generator.
-- Icon and cursor theme selection.
+- Icon and cursor theme selection, and switching of Global Themes, Plasma styles, window decorations and application styles (DL-4).
+- Fonts, title bar buttons and window border size (DL-5).
 - Theme export and import, and Global Theme export.
 - Command-line apply.
 - pywal / matugen follow mode.
@@ -419,6 +434,7 @@ Each milestone ends with a tagged release that is usable on its own.
 | 2026-11-14 | Hosting on GitHub. KDE conventions are followed from the start (section 9.1). Applying to KDE is revisited after 1.0. |
 | 2026-11-14 | Repository: public, at `github.com/Kryckan/plasma-theme-studio`. Application ID `io.github.kryckan.PlasmaThemeStudio`. |
 | 2026-11-14 | App icon: the "corner handle" design on a blue background. |
+| 2026-11-14 | The app covers Plasma's own appearance settings (panel layout, fonts, theme switching) with its own controls, so the user does not need System Settings for anything visual. Every editable value has a visual preview. |
 
 ## 16. Open questions
 
