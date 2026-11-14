@@ -113,6 +113,8 @@ The first packages target Arch Linux (AUR). Packages for Fedora, openSUSE, Debia
 ## Design
 
 - [Product requirements](docs/PRD.md)
+- [Project status](docs/STATUS.md)
+- [Changelog](CHANGELOG.md)
 - [Interactive UI mockup](docs/mockup.html) (download and open in a browser)
 
 ## Technology
