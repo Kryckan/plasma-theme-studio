@@ -39,24 +39,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import APP_DIR, APP_NAME, __version__, library, paths
+from .. import APP_DIR, APP_NAME, __version__, archive, globaltheme, library, paths
 from ..apply import engine
 from ..apply import snapshot as snapshots
 from ..apply.runner import SystemRunner
-from ..generators import ApplyError, section_generators
+from ..generators import ApplyError
 from ..generators.colorscheme import current_scheme
 from ..model.color import contrast
 from ..model.theme import FIELDS, PRESETS, SECTIONS, Field, Theme, ThemeError
 from .banner import INFORMATION, POSITIVE, Banner
 from .editors import editor_for
-from .labels import FIELD_LABELS, PRESET_TITLES, SECTION_ICONS, SECTION_TITLES, UNAPPLIED_NOTES
+from .labels import FIELD_LABELS, PRESET_TITLES, SECTION_ICONS, SECTION_NOTES, SECTION_TITLES
 from .library_view import Entry, LibraryView
 from .preview import PreviewWidget
+from .style_preview import StylePreview
 
 translate = QCoreApplication.translate
 
 MIN_TEXT_CONTRAST = 4.5
 MERGE_SECONDS = 1.0
+STYLE_PREVIEW_DELAY = 250  # milliseconds after the last edit before the style is made again
 APPLY_NAME_LENGTH = 32  # longer theme names are shortened on the apply button
 
 
@@ -69,9 +71,15 @@ def state_titles() -> dict[str, str]:
     }
 
 
+# The sections whose values start from the ones on the Shapes page.
+SHAPED_SECTIONS = {"apps", "window", "panel", "popup", "gtk", "rofi"}
+
+
 def left_out_sections(plan: engine.Plan) -> list[str]:
     """The sections whose values an apply of this plan does not put on the desktop."""
     applied = {section for target in plan.wanted_targets for section in target.generator.sections}
+    if applied & SHAPED_SECTIONS:
+        applied.add("shape")  # the values of the parts that follow it are put on the desktop
     return [
         section
         for section in SECTIONS
@@ -79,6 +87,19 @@ def left_out_sections(plan: engine.Plan) -> list[str]:
         and section not in applied
         and any(plan.theme.get(*f.id) != f.default for f in FIELDS if f.section == section)
     ]
+
+
+# The values that only count while a style is on: field -> the field that turns it on. The
+# value is used when that field is not "unchanged". One Plasma style holds the panel and
+# the popups, so the popup values follow the panel's style.
+GATED = {
+    **{("apps", key): ("apps", "style") for key in ("radius", "border_width")},
+    **{("gtk", key): ("gtk", "style") for key in ("radius", "border_width", "window_radius")},
+    **{("rofi", key): ("rofi", "style") for key in ("radius", "border_width", "opacity", "font")},
+    **{("panel", key): ("panel", "style") for key in ("radius", "border_width", "opacity")},
+    **{("popup", key): ("panel", "style") for key in ("radius", "border_width", "opacity")},
+    **{("window", key): ("window", "decoration") for key in ("radius", "border_width")},
+}
 
 
 class SetValueCommand(QUndoCommand):
@@ -167,6 +188,8 @@ class MainWindow(QMainWindow):
         self.undo_stack.cleanChanged.connect(self._update_title)
         self.refresh_timer = QTimer(self, singleShot=True, interval=30)
         self.refresh_timer.timeout.connect(self.refresh)
+        self.style_timer = QTimer(self, singleShot=True, interval=STYLE_PREVIEW_DELAY)
+        self.style_timer.timeout.connect(self._update_style_preview)
 
         self._build_central()
         self._build_actions()
@@ -197,6 +220,9 @@ class MainWindow(QMainWindow):
         self.library.edit_requested.connect(self.edit_entry)
         self.tabs.addTab(self.library, translate("ui", "Themes"))
         self.tabs.addTab(self.preview, translate("ui", "Preview"))
+        self.style_preview = StylePreview(self.theme)
+        self.style_preview_stale = False
+        self.tabs.addTab(self.style_preview, translate("ui", "Application style"))
         self.tabs.addTab(self._build_files_tab(), translate("ui", "Files written"))
 
         splitter = QSplitter()
@@ -219,6 +245,7 @@ class MainWindow(QMainWindow):
         self.apply_button.clicked.connect(self.apply_shown)
         self.library.selection_changed.connect(self._update_apply_button)
         self.tabs.currentChanged.connect(lambda _index: self._update_apply_button())
+        self.tabs.currentChanged.connect(lambda _index: self._update_style_preview())
         footer = QHBoxLayout()
         footer.addWidget(self.notice, 1)
         footer.addWidget(self.undo_apply_button)
@@ -337,6 +364,20 @@ class MainWindow(QMainWindow):
         )
         file_menu.addSeparator()
         file_menu.addAction(
+            action(translate("ui", "&Import Theme…"), self.import_theme, icon="document-import")
+        )
+        file_menu.addAction(
+            action(translate("ui", "&Export Theme…"), self.export_theme, icon="document-export")
+        )
+        file_menu.addAction(
+            action(
+                translate("ui", "Export as &Global Theme…"),
+                self.export_global_theme,
+                icon="preferences-desktop-theme-global",
+            )
+        )
+        file_menu.addSeparator()
+        file_menu.addAction(
             action(
                 translate("ui", "Show &themes folder"),
                 lambda: self._open_folder(paths.themes_dir()),
@@ -401,10 +442,22 @@ class MainWindow(QMainWindow):
         self.refresh_timer.start()
 
     def _sync_inherited(self) -> None:
-        """Tell the optional fields which value they follow while unset."""
+        """Tell the optional fields which value they follow while unset, and turn off
+        the values of a part that is left as it is."""
         for field in FIELDS:
             if field.inherits:
-                self.editors[field.id].set_inherited(self.theme.get(*field.inherits))
+                self.editors[field.id].set_inherited(self.theme.resolved(*field.inherits))
+        for field_id, gate in GATED.items():
+            editor = self.editors[field_id]
+            on = self.theme.get(*gate) != "unchanged"
+            editor.setEnabled(on)
+            editor.setToolTip(
+                ""
+                if on
+                else translate("ui", "Used when “{setting}” is not “Leave as it is”.").format(
+                    setting=str(FIELD_LABELS[gate])
+                )
+            )
 
     def _load_into_window(self, theme: Theme, path: Path | None) -> None:
         self.theme, self.path = theme, path
@@ -418,6 +471,9 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         """Bring preview, file list and messages in line with the theme."""
         self.preview.set_theme(self.theme)
+        self.style_preview_stale = True
+        if self.tabs.currentWidget() is self.style_preview:
+            self.style_timer.start()  # making the style takes a moment: wait for the edits to stop
         self.plan = engine.build_plan(self.theme)
         selected = max(self.files_list.currentRow(), 0)
         self.files_list.blockSignals(True)
@@ -457,13 +513,19 @@ class MainWindow(QMainWindow):
                 for target in targets
                 for text in target.generator.section_notes(self.plan.theme, section)
             ]
-            if not section_generators(section) and section in UNAPPLIED_NOTES:
-                texts = [str(UNAPPLIED_NOTES[section])]
+            if section in SECTION_NOTES:
+                texts = [str(SECTION_NOTES[section]), *texts]
             note.setText("\n\n".join(texts))
             self.note_rows[section].setVisible(bool(texts))
         self._update_apply_button()
         self.undo_apply_button.setEnabled(snapshots.latest() is not None)
         self._update_title()
+
+    def _update_style_preview(self) -> None:
+        """The application style is only made while its tab is shown."""
+        if self.style_preview_stale and self.tabs.currentWidget() is self.style_preview:
+            self.style_preview_stale = False
+            self.style_preview.set_theme(self.theme)
 
     def _apply_summary(self, commands: list[str]) -> str:
         """Everything an apply does to the system, so that nothing comes as a surprise."""
@@ -602,6 +664,100 @@ class MainWindow(QMainWindow):
         QSettings().setValue("last_file", str(path))
         self.statusBar().showMessage(translate("ui", "Saved {file}").format(file=str(path)), 5000)
         self.reload_library()
+        return True
+
+    def import_theme(self) -> None:
+        """Read a theme from a theme file or archive and open it as a new saved theme."""
+        if not self._discard_ok():
+            return
+        chosen, _ = QFileDialog.getOpenFileName(
+            self,
+            translate("ui", "Import theme"),
+            str(Path.home()),
+            translate("ui", "Plasma Theme Studio themes (*{ext} *.toml)").format(ext=archive.EXTENSION),
+        )
+        if chosen:
+            self.import_path(Path(chosen))
+
+    def import_path(self, path: Path) -> bool:
+        try:
+            theme = archive.import_theme(path)
+            theme, saved = library.save_imported(theme)
+        except archive.ArchiveError as error:
+            self._show_problems(
+                translate("ui", "{file} could not be imported.").format(file=path.name), [error.message]
+            )
+            return False
+        except OSError as error:
+            self._show_problems(
+                translate("ui", "{file} could not be imported.").format(file=path.name), [str(error)]
+            )
+            return False
+        self._take_into_editor(theme, saved)
+        self.reload_library()
+        self.tabs.setCurrentWidget(self.preview)
+        self.banner.show_message(
+            INFORMATION,
+            translate(
+                "ui", "Imported {name}. It is saved as {file}; nothing was applied to the desktop."
+            ).format(name=theme.name, file=str(saved)),
+        )
+        return True
+
+    def export_theme(self) -> None:
+        """Write the theme in the editor as a single shareable file."""
+        chosen, _ = QFileDialog.getSaveFileName(
+            self,
+            translate("ui", "Export theme"),
+            str(Path.home() / f"{self.theme.slug or 'theme'}{archive.EXTENSION}"),
+            translate("ui", "Plasma Theme Studio themes (*{ext})").format(ext=archive.EXTENSION),
+        )
+        if chosen:
+            path = Path(chosen)
+            self.export_path(
+                path if path.suffix == archive.EXTENSION else path.with_name(path.name + archive.EXTENSION)
+            )
+
+    def export_path(self, path: Path) -> bool:
+        try:
+            archive.export_theme(self.theme, path)
+        except OSError as error:
+            self._show_problems(
+                translate("ui", "{file} could not be exported.").format(file=str(path)), [str(error)]
+            )
+            return False
+        self.statusBar().showMessage(translate("ui", "Exported {file}").format(file=str(path)), 5000)
+        return True
+
+    def export_global_theme(self) -> None:
+        """Write the theme as a Global Theme that can be installed and shared."""
+        chosen = QFileDialog.getExistingDirectory(
+            self, translate("ui", "Choose an empty folder for the Global Theme"), str(Path.home())
+        )
+        if chosen:
+            self.export_global_path(Path(chosen))
+
+    def export_global_path(self, folder: Path) -> bool:
+        heading = translate("ui", "The Global Theme could not be exported.")
+        try:
+            written = globaltheme.export_global_theme(self.theme, folder)
+        except globaltheme.ExportError as error:
+            self._show_problems(heading, [error.message])
+            return False
+        except OSError as error:
+            self._show_problems(heading, [str(error)])
+            return False
+        self.banner.show_message(
+            POSITIVE,
+            translate(
+                "ui",
+                "Exported {name} as a Global Theme ({count} files) in {folder}. "
+                "Run install.sh there to install it. It holds the color scheme, the window frame "
+                "and the Plasma style; the application style, GTK and Rofi are not part of it. "
+                "Applying a Global Theme also turns the splash screen off.",
+            ).format(name=self.theme.name, count=len(written), folder=str(folder)),
+            30,
+        )
         return True
 
     def _open_folder(self, folder: Path) -> None:

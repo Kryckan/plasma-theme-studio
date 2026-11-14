@@ -129,7 +129,7 @@ def write_value(
         if not failed:
             if not masked:
                 _unmask(file, groups, key)
-            _drop_if_empty(file)
+            drop_if_empty(file)
     else:
         result = runner.run(["kwriteconfig6", *_location(file, groups, key), "--", value])
         # The tool that reads the value back prints it on a line, so the ends cannot be compared.
@@ -143,7 +143,7 @@ def write_value(
         )
 
 
-def _drop_if_empty(file: str) -> None:
+def drop_if_empty(file: str) -> None:
     """kwriteconfig6 leaves a file without content when it removes the last
     key. KDE reads no file and an empty file alike, so the file goes. A link
     to a file kept somewhere else is the user's own arrangement and stays."""
@@ -202,3 +202,9 @@ def _unmask(file: str, groups: Sequence[str], key: str) -> None:
                 key=key, file=file, detail=str(error)
             )
         ) from error
+
+
+def file_exists(file: str) -> bool:
+    """Whether the user's file is there (a link counts, a broken one too)."""
+    path = paths.config_home() / file
+    return path.exists() or path.is_symlink()

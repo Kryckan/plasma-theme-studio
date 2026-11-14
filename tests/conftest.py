@@ -54,10 +54,12 @@ class _Defaults(dict):
 @pytest.fixture(autouse=True)
 def pauses(monkeypatch):
     """No test waits for Plasma. The pauses the panel code asked for are listed instead."""
+    from plasma_theme_studio.apply import desktop
     from plasma_theme_studio.generators import panellayout
 
     asked: list[float] = []
     monkeypatch.setattr(panellayout, "_pause", asked.append)
+    monkeypatch.setattr(desktop, "pause", asked.append)
     return asked
 
 

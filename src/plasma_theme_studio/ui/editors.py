@@ -183,6 +183,46 @@ class ChoiceEditor(QComboBox):
         self.activated.emit(self.currentIndex())
 
 
+class OptionalTextEditor(QWidget):
+    """A text that is only used once the user gives it a value. Until then
+    the desktop's own value is used."""
+
+    changed = Signal(object)
+
+    def __init__(self, field: Field, parent=None):
+        super().__init__(parent)
+        self.same = QCheckBox(translate("ui", "Same as the desktop"))
+        self.text = QLineEdit()
+        self.text.setMaxLength(120)
+        self.same.toggled.connect(lambda checked: self.changed.emit(None if checked else self.text.text()))
+        self.text.textEdited.connect(lambda text: self.changed.emit(text))
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.same)
+        layout.addWidget(self.text)
+        self.setFocusProxy(self.same)
+
+    def set_title(self, title: str) -> None:
+        self.same.setAccessibleName(f"{title}: {self.same.text()}")
+        self.text.setAccessibleName(title)
+
+    def set_value(self, value) -> None:
+        blocked = self.same.blockSignals(True)
+        self.same.setChecked(value is None)
+        self.same.blockSignals(blocked)
+        self.text.setEnabled(value is not None)
+        if value is not None and self.text.text() != value:
+            self.text.setText(value)
+
+
+# What an inheriting number says it follows.
+INHERIT_TEXTS = {
+    "shape": translate("ui", "Same as Shapes"),
+    "window": translate("ui", "Same as Windows"),
+    "panel": translate("ui", "Same as Panel"),
+}
+
+
 class OverrideEditor(QWidget):
     """A number that is only used once the user gives it a value. Until
     then the field follows another field, or leaves the desktop as it is."""
@@ -194,7 +234,7 @@ class OverrideEditor(QWidget):
         self._value = None
         self._unset_value = OPTIONAL_START.get(field.id, field.minimum)
         self.same = QCheckBox(
-            translate("ui", "Same as Shapes") if field.inherits else translate("ui", "Leave as it is")
+            INHERIT_TEXTS[field.inherits[0]] if field.inherits else translate("ui", "Leave as it is")
         )
         self.number = NumberEditor(field)
         self.same.toggled.connect(lambda checked: self.changed.emit(None if checked else self._unset_value))
@@ -227,6 +267,8 @@ class OverrideEditor(QWidget):
 def editor_for(field: Field) -> QWidget:
     if field.kind in ("choice", "bool"):
         return ChoiceEditor(field)
+    if field.optional and field.kind == "str":
+        return OptionalTextEditor(field)
     if field.inherits or field.optional:
         return OverrideEditor(field)
     if field.kind == "color":

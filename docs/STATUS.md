@@ -40,9 +40,22 @@ Supporting pieces:
 - `scripts/desktop_rig.py`: a headless KWin (and optionally plasmashell) with its own home, for trying applies without touching the developer's desktop.
 - Tests: every generator against a fake KWin, plasmashell and KDE tools (`tests/test_windowframe.py`, `test_plasmastyle.py`, `test_panellayout.py`, `test_kconfig.py`), and all targets together through the engine, the window and the CLI (`tests/test_desktop.py`); switching on the Themes tab followed by edits, applies and undos (`tests/test_switching.py`, `tests/test_undo.py`). The script that is sent to plasmashell also runs as it is in Qt's JavaScript engine (`run_program` in `tests/test_panellayout.py`).
 
-## Not applied to the desktop yet
+## Newer targets (integrated, not yet tried on a real session)
 
-- `shape.radius` and `shape.border_width` for app widgets (buttons, fields, menus). They are previewed, and windows and the panel follow them until overridden, but no application style is written. The editor and the result banner say so. This needs the Kvantum generator (or Union, when Plasma ships it).
+| Target | Module | Theme values | What an apply does |
+|---|---|---|---|
+| Application style | `generators/kvantum.py` | `apps.style` (`unchanged`, `generated`), `apps.radius`, `apps.border_width` | Makes a Kvantum theme from the theme's colors and shape, sets it in `kvantum.kvconfig` and makes Kvantum the widget style (`kdeglobals`). Controls get a corner radius of at most 8 px, menus and frames the whole radius. |
+| Popups and tooltips | `generators/plasmastyle.py` | `popup.*` | The generated Plasma style also holds popup, tooltip and desktop widget backgrounds. |
+| GTK | `generators/gtk.py` | `gtk.style`, `gtk.radius`, `gtk.border_width` | Writes a style sheet and adds one import line to `gtk-3.0/gtk.css` and `gtk-4.0/gtk.css`. |
+| Rofi | `generators/rofi.py` | `rofi.*` | Writes a `.rasi` theme and sets the `@theme` line of `config.rasi`, after a parse check with `rofi -dump-theme`. |
+
+- Registration order in `generators/__init__.py`: colors, Kvantum, GTK, window frame, Plasma style, panel layout, Rofi.
+- `tests/test_targets_together.py`: all targets applied, undone, applied twice, generated going back to *unchanged*, and an older snapshot restored.
+- Shape values on the *Applications*, *Popups*, *GTK* and *Rofi* pages are disabled, with a tooltip, while their style is *Leave as it is*.
+- The drawn preview uses `apps.*` and shows a popup with a tooltip from `popup.*`. The *Application style* tab draws real Qt widgets in a generated Kvantum style (debounced; needs Kvantum and Qt's plugins).
+- File menu: *Import Theme…*, *Export Theme…* (`.ptstheme` archive, `archive.py`) and *Export as Global Theme…* (`globaltheme.py`: colors, window frame and Plasma style only; applying a Global Theme always writes `[ksplashrc][KSplash] Theme=None`, so it turns the splash screen off, which the export message says). The CLI has `export`, `import` and `export-global-theme FILE FOLDER`.
+- Undo removes folders that the apply created and that are empty again; a restore of a file with CRLF line ends is byte-exact.
+- Rig-checked after the repair step: apply and undo with the Plasma style and Rofi from a home with no `plasmarc`, no `kdeglobals` and no Rofi folder; `install.sh` refusing a foreign scheme, installing, being listed by `plasma-apply-lookandfeel -l`, and `uninstall.sh` leaving nothing behind. Not verified: GTK 3 colors in a real session, and none of it on a real desktop. The style preview tests skip when Qt's plugin path is not set (`QT_PLUGIN_PATH=/usr/lib/qt6/plugins` with the pip PySide6).
 
 ## Known limits of the new targets
 
@@ -53,15 +66,18 @@ Supporting pieces:
 - Panel position: only the main panel is handled, and only one panel on one screen has been tried. Offset, minimum and maximum length, screen and the custom length mode are not handled. If Plasma raises the height to the style's minimum, the theme does not count as "in use" (`is_active`). The same holds for *Windows go below* and for an opacity the getters cannot tell apart while Plasma's layout dump cannot be read: the apply then simply runs again.
 - Undoing a window frame does not wait for KWin; the frame changes one to three seconds later. If KWin does not answer at all (asked with `qdbus6`, or with a D-Bus ping through `busctl` when `qdbus6` is missing), the undo counts as done once `kwinrc` is back, since that is all a starting KWin reads. A KWin that answers but does not reload is a failed undo.
 - Undoing the colors switches back to the scheme that was in use (Breeze Light when none was set). `plasma-apply-colorscheme` also rewrites `kdeglobals` and the GTK color files, and those are not put back byte for byte.
-- A config file that ends up empty after an undo is removed (KDE reads a missing and an empty file alike). A file that is a link is written through and never removed.
+- A config file that ends up empty after an undo is removed (KDE reads a missing and an empty file alike); the Plasma style target also removes a `plasmarc` that did not exist before the apply (the style tool of Plasma 6.8 leaves an empty one). A file that is a link is written through and never removed.
+- Undo of the Rofi `config.rasi` and of Kvantum's `kvantum.kvconfig` keeps what you changed after the apply: a file that is still exactly what the apply wrote goes back as it was (a file the apply made is removed); otherwise only our `@theme` line (the Rofi line you had is switched back on) or the `theme=` line is put back. GTK's undo already worked like that.
+- The scripts of an exported Global Theme only replace and remove files that carry this app's mark. `install.sh` stops before copying anything when a file at a target path is not ours (or is a link); `uninstall.sh` keeps such files and says so, and removes the folders that are empty afterwards, also ones that were empty before the install.
+- GTK 3 gets its colors from `colors.css`, which kde-gtk-config writes from the color scheme in a real session; the generated GTK 3 sheet only carries radius and border. The rig has no such module, so the colors were not seen working there. libadwaita (GTK 4) ignores the border width on buttons and entries.
 - Everything in this section has been verified in the headless rig and a sandboxed home, with Plasma 6.8.2. None of it has been applied to a real desktop session yet.
 
 ## Next
 
-1. Try the three new targets on a real session and fix what shows up. Then tag v0.1.0 and publish the AUR package.
-2. **Milestone 2:** Kvantum generator so shapes reach app widgets; preview drawn with the real style; light and dark variants; pywal and matugen import. Klassy as an optional window frame backend.
-3. **Milestone 3:** SVG editor for the generated frames; popups, tooltips and widget backgrounds in the Plasma style; more than one panel.
-4. **Milestone 4:** GTK, Rofi, switching of Global Themes and other installed theme parts (DL-4), fonts and title bar buttons (DL-5), export and import, more distribution packages.
+1. Try the new targets (window frame, panel, Kvantum, GTK, Rofi, popups) on a real session and fix what shows up. Then tag v0.1.0 and publish the AUR package.
+2. **Milestone 2:** (Kvantum generator and the preview with the real style are done.) Light and dark variants; pywal and matugen import. Klassy as an optional window frame backend.
+3. **Milestone 3:** SVG editor for the generated frames; more than one panel. (Popups, tooltips and widget backgrounds in the Plasma style are done.)
+4. **Milestone 4:** (GTK, Rofi, export and import are done.) Switching of Global Themes and other installed theme parts (DL-4), fonts and title bar buttons (DL-5), more distribution packages.
 
 Smaller open items:
 
@@ -111,7 +127,7 @@ Smaller open items:
 
 **Panel style and position (plasmashell)**
 
-- `plasma-apply-desktoptheme <id>` finds a package in `~/.local/share/plasma/desktoptheme/` without `kpackagetool6`. An unknown id exits with 255; an id that is already set exits with 0 and changes nothing; `default` writes `name=default`. Plasma redraws the panels at once when the style name changes, so a changed style gets a new id (name plus content hash).
+- `plasma-apply-desktoptheme <id>` finds a package in `~/.local/share/plasma/desktoptheme/` without `kpackagetool6`. An unknown id exits with 255; an id that is already set exits with 0 and changes nothing; `default` leaves `plasmarc` empty on Plasma 6.8 (older tools wrote `name=default`). Plasma redraws the panels at once when the style name changes, so a changed style gets a new id (name plus content hash).
 - The shadow tiles of a panel background must be transparent under the panel itself, or a translucent panel turns dark.
 - Panel scripting (`evaluateScript` on `org.kde.plasmashell /PlasmaShell`) changes the panel live. The `hiding` getter answers `none` for *windows go below*, and `plasmashellrc` and the applets file are written 5 to 10 seconds late, so the state is read from `dumpCurrentLayoutJS`, which is live. It has no panel ids, and `normal` there means no hiding.
 - Changing only the alignment or the length mode does not move the panel until something else triggers a relayout. The script toggles `floating` and back for that.
@@ -129,6 +145,12 @@ Smaller open items:
 - The tests set `XDG_CONFIG_DIRS` to a temporary folder (`tests/conftest.py`), so they never read the real `kdedefaults`.
 - Rig: `KWIN_COMPOSE=Q` crashes KWin on a screenshot (the rig's default, software rendering for Qt Quick only, works); Xwayland is not started; the rig inherits `XDG_CONFIG_DIRS`, so the real `kdedefaults` are visible in it (read only); `screenshot` is called on its own, not through `run`; `kcmshell6 kcm_kwindecoration` works inside it.
 
+- A restore must be byte-exact: files are read with `newline=""`, or CRLF files come back changed.
+- A file-valued setting that is restored can leave its folder empty (`.config/Kvantum`, `.config/rofi`); `engine.restore` removes the folders the snapshot recorded as created.
+- Generated Kvantum controls grow taller with the radius, so buttons, fields and tabs are capped at 8 px.
+- Rofi's window mode does not work on KWin, and a theme is checked with `rofi -dump-theme` before it is written.
+- Moving a generated target back to *unchanged* reverts nothing: the earlier output stays in use and an undo restores it.
+
 ## How to work on it
 
 ```sh
@@ -141,7 +163,7 @@ The headless rig, for trying an apply against a real KWin and plasmashell that a
 
 ```sh
 /usr/bin/python3 scripts/desktop_rig.py start /tmp/rig --plasmashell
-/usr/bin/python3 scripts/desktop_rig.py run /tmp/rig -- ./plasma-theme-studio apply my-theme.toml
+/usr/bin/python3 scripts/desktop_rig.py run /tmp/rig -- env QT_QPA_PLATFORMTHEME=kde "$PWD/plasma-theme-studio" apply my-theme.toml
 /usr/bin/python3 scripts/desktop_rig.py window /tmp/rig --title Test
 /usr/bin/python3 scripts/desktop_rig.py screenshot /tmp/rig /tmp/shot.png
 /usr/bin/python3 scripts/desktop_rig.py stop /tmp/rig

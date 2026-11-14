@@ -115,3 +115,43 @@ def test_version_and_usage(capsys):
     assert cli.main(["--version"]) == 0
     assert "0.1.0" in capsys.readouterr().out
     assert cli.main(["--bogus"]) == 2
+
+
+def test_export_then_import_gives_the_same_theme_under_a_new_name(home, fake_system, capsys):
+    path = home / "mine.toml"
+    theme = Theme({("meta", "name"): "Mine", ("rofi", "radius"): 9})
+    theme.save(path)
+    assert cli.main(["export", str(path)]) == 0
+    archive_path = home / "mine.ptstheme"
+    assert archive_path.read_bytes().startswith(b"PK")
+    assert cli.main(["import", str(archive_path)]) == 0
+    assert cli.main(["import", str(archive_path)]) == 0
+    saved = sorted((home / ".local/share/plasma-theme-studio/themes").glob("*.toml"))
+    names = [Theme.load(p).name for p in saved]
+    assert names == ["Mine", "Mine 2"]
+    assert Theme.load(saved[0]).get("rofi", "radius") == 9
+    assert "Nothing was applied" in capsys.readouterr().out
+    assert fake_system.calls == []  # nothing ran against the desktop
+
+
+def test_import_refuses_what_is_not_a_theme(home, fake_system, capsys):
+    bad = home / "bad.ptstheme"
+    bad.write_bytes(b"PK\x03\x04 not really")
+    assert cli.main(["import", str(bad)]) == 1
+    assert cli.main(["import", str(home / "missing.ptstheme")]) == 1
+    assert capsys.readouterr().err
+
+
+def test_export_global_theme_writes_the_bundle_and_refuses_a_full_folder(home, fake_system, capsys):
+    path = home / "mine.toml"
+    Theme({("meta", "name"): "Mine"}).save(path)
+    folder = home / "bundle"
+    assert cli.main(["export-global-theme", str(path), str(folder)]) == 0
+    assert (folder / "install.sh").exists()
+    assert (
+        folder / "share/plasma/look-and-feel/io.github.kryckan.plasmathemestudio.mine/metadata.json"
+    ).exists()
+    assert "install.sh" in capsys.readouterr().out
+    assert cli.main(["export-global-theme", str(path), str(folder)]) == 1
+    assert "not empty" in capsys.readouterr().err
+    assert fake_system.calls == []

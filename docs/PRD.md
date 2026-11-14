@@ -215,7 +215,7 @@ The goal is one consistent place for everything that affects how the desktop loo
 
 | ID | Requirement | Priority |
 |---|---|---|
-| DL-1 | Each shape value (corner radius, border width) can be set separately for windows and for the panel; unset values follow the global one. | P0 (M1; applied to windows and the panel in 0.1, to app widgets in M2) |
+| DL-1 | Each shape value (corner radius, border width) can be set separately for windows and for the panel; unset values follow the global one. | P0 (M1; applied to windows, the panel and app widgets in 0.1) |
 | DL-2 | Panel layout: screen edge, height, length and alignment, floating, visibility mode and opacity, for each panel, changed from the app and shown in the preview. | P0 (M3; the main panel in 0.1) |
 | DL-3 | The Themes tab lists installed color schemes and saved themes with thumbnails and switches between them. | P0 (M1) |
 | DL-4 | Switch between installed Global Themes, Plasma styles, window decorations, application styles, icon themes and cursor themes from the Themes tab. Everything a switch changes is covered by the snapshot. | P1 (M4) |

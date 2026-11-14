@@ -132,3 +132,23 @@ def saved_themes() -> list[SavedTheme]:
         except (ThemeError, OSError, UnicodeDecodeError):
             continue
     return sorted(found, key=lambda saved: saved.theme.name.casefold())
+
+
+def save_imported(theme: Theme) -> tuple[Theme, Path]:
+    """Save a theme that came from outside in the themes folder under a name of its own:
+    nothing that is saved already is overwritten, and no two themes share a color scheme name.
+    A name that is taken gets a number ("Name 2"). Returns the theme as saved and its file."""
+    taken = {saved.theme.slug for saved in saved_themes()}
+    folder = paths.themes_dir()
+    base = theme.name or FIELD_BY_ID[("meta", "name")].default
+    imported, number = theme.copy(), 1
+    imported.set("meta", "name", base)
+    while True:
+        slug = imported.slug or "theme"
+        path = folder / f"{slug}.toml"
+        if slug not in taken and not path.exists():
+            break
+        number += 1
+        imported.set("meta", "name", f"{base[: MAX_NAME_LENGTH - len(str(number)) - 1]} {number}")
+    imported.save(path)
+    return imported, path

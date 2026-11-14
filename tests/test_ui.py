@@ -358,6 +358,144 @@ def test_the_preview_draws_every_panel_position(window):
             assert not window.preview.grab().isNull()
 
 
-def test_the_shapes_page_says_what_is_not_applied(window):
-    assert "cannot change the shape of buttons and fields" in window.notes["shape"].text()
+def test_the_shapes_page_says_where_its_values_go(window):
+    text = window.notes["shape"].text()
+    assert "starting point" in text and "Applications" in text and "Rofi" in text
     assert window.notes["colors"].text() == ""
+
+
+def test_every_page_with_a_target_says_what_an_apply_does_with_it(window):
+    for section in ("apps", "gtk", "rofi"):
+        assert "only show in the preview" in window.notes[section].text()
+    assert "keeps its own popups" in window.notes["popup"].text()
+    for section in ("apps", "popup", "gtk", "rofi"):
+        assert "does not apply these values" not in window.notes[section].text()
+    window.edit(FIELD_BY_ID[("rofi", "style")], "generated")
+    window.refresh()
+    assert "reads the theme when it starts" in window.notes["rofi"].text()
+
+
+def test_the_values_of_a_part_that_is_left_as_it_is_are_turned_off(window):
+    for style in ("apps", "gtk", "rofi"):
+        for key in ("radius", "border_width"):
+            assert not window.editors[(style, key)].isEnabled()
+            assert "Leave as it is" in window.editors[(style, key)].toolTip()
+        window.edit(FIELD_BY_ID[(style, "style")], "generated")
+        for key in ("radius", "border_width"):
+            assert window.editors[(style, key)].isEnabled()
+            assert window.editors[(style, key)].toolTip() == ""
+    assert not window.editors[("popup", "radius")].isEnabled()
+    window.edit(FIELD_BY_ID[("panel", "style")], "generated")
+    assert window.editors[("popup", "radius")].isEnabled()
+    assert window.editors[("panel", "opacity")].isEnabled()
+    window.undo_stack.undo()
+    assert not window.editors[("popup", "radius")].isEnabled()
+
+
+def test_the_banner_does_not_call_shapes_unapplied_when_a_part_follows_them(window):
+    from plasma_theme_studio.apply import engine
+    from plasma_theme_studio.ui.main_window import left_out_sections
+
+    theme = Theme({("shape", "radius"): 12, ("rofi", "style"): "generated"})
+    assert "shape" not in left_out_sections(engine.build_plan(theme))
+    assert "shape" in left_out_sections(engine.build_plan(Theme({("shape", "radius"): 12})))
+
+
+def test_the_drawn_preview_follows_apps_and_popup_values(window):
+    window.edit(FIELD_BY_ID[("apps", "radius")], 0)
+    window.edit(FIELD_BY_ID[("popup", "radius")], 20)
+    window.edit(FIELD_BY_ID[("popup", "opacity")], 0.5)
+    for location in ("top", "bottom", "left", "right"):
+        window.edit(FIELD_BY_ID[("panel_layout", "location")], location)
+        assert not window.preview.grab().isNull()
+
+
+def test_the_application_style_tab_is_made_when_it_is_shown(window):
+    index = window.tabs.indexOf(window.style_preview)
+    assert window.tabs.tabText(index) == "Application style"
+    window.edit(FIELD_BY_ID[("apps", "style")], "generated")
+    window.refresh()
+    assert window.style_preview.shows_sample is False  # not made while the tab is hidden
+    window.tabs.setCurrentWidget(window.style_preview)
+    assert window.style_preview.message or window.style_preview.shows_sample
+    window.edit(FIELD_BY_ID[("apps", "radius")], 3)
+    window.refresh()
+    assert window.style_timer.isActive()
+    window.style_timer.timeout.emit()
+    assert not window.grab().isNull()
+
+
+def test_export_and_import_from_the_file_menu(window, home, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    shown = []
+    monkeypatch.setattr(window, "_show_problems", lambda title, lines: shown.append((title, list(lines))))
+    target = home / "out.ptstheme"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(target), "")))
+    window.edit(FIELD_BY_ID[("rofi", "radius")], 5)
+    window.export_theme()
+    assert target.read_bytes().startswith(b"PK") and shown == []
+
+    window.undo_stack.setClean()
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(target), "")))
+    window.import_theme()
+    assert window.theme.get("rofi", "radius") == 5
+    assert window.theme.name == "Breeze Light Copy 2" or window.path is not None
+    assert window.path is not None and window.path.is_file()
+
+    bad = home / "bad.ptstheme"
+    bad.write_bytes(b"PK\x03\x04 broken")
+    assert window.import_path(bad) is False
+    assert shown and "could not be imported" in shown[0][0]
+
+
+def test_export_as_global_theme_from_the_file_menu(window, home, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    shown = []
+    monkeypatch.setattr(window, "_show_problems", lambda title, lines: shown.append((title, list(lines))))
+    folder = home / "global"
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", staticmethod(lambda *a, **k: str(folder)))
+    window.export_global_theme()
+    assert (folder / "install.sh").exists() and shown == []
+    assert "Exported" in window.banner.text() if hasattr(window.banner, "text") else True
+    window.export_global_theme()  # the folder is full now
+    assert shown and "not be exported" in shown[0][0]
+    titles = [action.text() for action in window.menuBar().actions()[0].menu().actions()]
+    assert any("Import Theme" in t for t in titles) and any("Global Theme" in t for t in titles)
+
+
+def test_new_pages_follow_what_they_inherit(window):
+    assert window.editors[("popup", "radius")].same.text() == "Same as Panel"
+    assert window.editors[("gtk", "window_radius")].same.text() == "Same as Windows"
+    assert window.editors[("apps", "radius")].same.text() == "Same as Shapes"
+    window.edit(FIELD_BY_ID[("shape", "radius")], 11)
+    # popup.radius follows panel.radius, which follows shape.radius
+    assert window.editors[("popup", "radius")].number.box.value() == 11
+    window.edit(FIELD_BY_ID[("panel", "opacity")], 0.6)
+    assert window.editors[("popup", "opacity")].number.box.value() == 0.6
+    assert window.theme.resolved("gtk", "window_radius") == 11
+    assert not window.grab().isNull()
+
+
+def test_optional_font_text(window):
+    font = window.editors[("rofi", "font")]
+    assert font.same.isChecked() and not font.text.isEnabled()
+    font.same.setChecked(False)
+    font.text.setText("Inter 11")
+    font.text.textEdited.emit("Inter 11")
+    assert window.theme.get("rofi", "font") == "Inter 11"
+    assert Theme.from_toml(window.theme.to_toml()) == window.theme
+    font.same.setChecked(True)
+    assert window.theme.get("rofi", "font") is None
+    assert "font" not in window.theme.to_toml()
+
+
+def test_export_adds_the_extension_to_a_name_with_another_suffix(window, home, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(home / "my.theme"), ""))
+    )
+    window.export_theme()
+    assert (home / "my.theme.ptstheme").is_file() and not (home / "my.theme").exists()

@@ -63,6 +63,9 @@ plasma-theme-studio apply FILE       apply a theme file to the desktop
 plasma-theme-studio restore          undo the latest apply (repeat to go further back)
 plasma-theme-studio restore ID       go back to a chosen snapshot, undoing the applies after it
 plasma-theme-studio restore --list   list the snapshots
+plasma-theme-studio export FILE ARCHIVE         pack a theme as a .ptstheme archive
+plasma-theme-studio import ARCHIVE              save an archive's theme in the library
+plasma-theme-studio export-global-theme FILE FOLDER   write a Global Theme with install.sh
 ```
 
 ## Why
@@ -77,11 +80,8 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 
 ## Planned features
 
-- Shapes applied to app widgets, and styles for popups and tooltips
-- Live preview drawn with the real Qt style
 - Built-in SVG editor for panel, popup and widget frames
 - Wallpaper-based colors through pywal and matugen
-- Theme export and import
 
 ## Targets
 
@@ -91,10 +91,10 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 | Window decoration | Generated frame (exact radius, border and shadow); Breeze (its fixed steps) | Works |
 | Panel background | Plasma style (SVG) | Works |
 | Panel position | Plasma's scripting interface | Works for the main panel |
-| App widgets | Kvantum (full control); Breeze, Darkly, Klassy style (basic) | Planned |
-| Popups, tooltips, widgets | Plasma style (SVG) | Planned |
-| GTK 3 / GTK 4 apps | CSS overrides | Planned |
-| Rofi | Rofi theme | Planned |
+| App widgets | Kvantum (generated theme) | Works in tests and the rig |
+| Popups, tooltips, widgets | Plasma style (SVG) | Works in tests |
+| GTK 3 / GTK 4 apps | CSS overrides | Works in tests |
+| Rofi | Rofi theme | Works in tests |
 
 The window frame, panel style and panel position have so far been tried with Plasma 6.8 in an isolated test session only.
 

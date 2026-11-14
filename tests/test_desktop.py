@@ -92,12 +92,16 @@ def calls(desktop, *programs):
 def test_the_app_registers_every_target_in_the_order_they_are_applied():
     assert [generator.id for generator in generators.GENERATORS] == [
         "colors",
+        "apps",
+        "gtk",
         "window",
         "panel",
         "panel_layout",
+        "rofi",
     ]
     assert generators.section_generators("shadow") == [generators.generator_by_id("window")]
     assert generators.section_generators("shape") == []
+    assert generators.section_generators("popup") == [generators.generator_by_id("panel")]
 
 
 def test_a_new_theme_only_changes_the_colors(desktop):
@@ -271,7 +275,7 @@ def test_the_plan_names_every_setting_that_changes_besides_the_files(desktop):
     assert all(commands)
 
     plain = engine.build_plan(Theme())
-    assert [target.settings for target in plain.targets] == [[], [], [], []]
+    assert [target.settings for target in plain.targets] == [[]] * 7
 
 
 def test_a_theme_file_with_every_part_survives_saving(desktop):

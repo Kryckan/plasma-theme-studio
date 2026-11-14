@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Generates a Plasma style package that restyles the panel background.
+"""Generates a Plasma style package that restyles the panel and popup backgrounds.
 
 Everything the package does not contain comes from Plasma's default style.
 Plasma does not notice edits to a style it already uses, so every look gets
@@ -21,7 +21,7 @@ from .base import JSON_MARKER, MARKER, XML_MARKER, ApplyError, Generator, Planne
 
 ID_PREFIX = "PlasmaThemeStudio-"
 # Bump when the generated artwork changes, so that existing packages are not reused.
-DESIGN = 3
+DESIGN = 4
 
 _CELL = 8  # width of the stretched middle of the frame
 _SHADOW_TILE = 16
@@ -33,17 +33,20 @@ _GAP = 4
 _SIDES = ("top", "bottom", "left", "right")
 _CORNERS = ("topleft", "topright", "bottomleft", "bottomright")
 _FRAME_PARTS = (*_SIDES, *_CORNERS, "center")
-REQUIRED_IDS = frozenset(
+# What every frame background has; the panel's also has the thick-* pieces.
+POPUP_REQUIRED_IDS = frozenset(
     [
         *_FRAME_PARTS,
         *(f"mask-{part}" for part in _FRAME_PARTS),
         *(f"hint-{side}-margin" for side in _SIDES),
-        "thick-center",
-        *(f"thick-hint-{side}-margin" for side in _SIDES),
         *(f"shadow-{part}" for part in (*_SIDES, *_CORNERS)),
         *(f"shadow-hint-{side}-margin" for side in _SIDES),
     ]
 )
+REQUIRED_IDS = POPUP_REQUIRED_IDS | {"thick-center", *(f"thick-hint-{side}-margin" for side in _SIDES)}
+PANEL_FILE = "widgets/panel-background.svg"
+# Popups, launcher, notifications, KRunner and OSD; tooltips; desktop widgets.
+POPUP_FILES = ("dialogs/background.svg", "widgets/tooltip.svg", "widgets/background.svg")
 _TOOLS = ("plasma-apply-desktoptheme", "kreadconfig6", "kwriteconfig6")
 
 
@@ -59,10 +62,21 @@ def _look(theme: Theme) -> tuple[int, int, float]:
     )
 
 
+def _popup_look(theme: Theme) -> tuple[int, int, float]:
+    """Corner radius, border width and opacity of popups; they follow the panel until set."""
+    return (
+        int(theme.resolved("popup", "radius")),
+        int(theme.resolved("popup", "border_width")),
+        round(float(theme.resolved("popup", "opacity")), 3),
+    )
+
+
 def style_id(theme: Theme) -> str:
-    """The name of the package for the theme's panel look."""
+    """The name of the package for the theme's panel and popup look."""
     radius, border, opacity = _look(theme)
-    digest = hashlib.sha256(f"{DESIGN}/{radius}/{border}/{_num(opacity)}".encode()).hexdigest()[:8]
+    p_radius, p_border, p_opacity = _popup_look(theme)
+    key = f"{DESIGN}/{radius}/{border}/{_num(opacity)}/{p_radius}/{p_border}/{_num(p_opacity)}"
+    digest = hashlib.sha256(key.encode()).hexdigest()[:8]
     return f"{ID_PREFIX}{theme.slug}-{digest}"
 
 
@@ -211,15 +225,16 @@ def _shadow(oy: float) -> tuple[list[str], list[str]]:
     return defs, tiles
 
 
-def panel_svg(radius: int, border: int, opacity: float, *, solid: bool) -> str:
-    """The panel background: a frame with the corner radius and border width,
-    its mask, its shadow and the margins Plasma reads from it. Coordinates are
-    absolute and nothing is transformed, because KSvg cuts the parts out by
-    their bounding boxes."""
+def panel_svg(radius: int, border: int, opacity: float, *, solid: bool, thick: bool = True) -> str:
+    """The panel background, or with `thick` off a popup, tooltip or widget
+    background: a frame with the corner radius and border width, its mask,
+    its shadow and the margins Plasma reads from it. Coordinates are absolute
+    and nothing is transformed, because KSvg cuts the parts out by their
+    bounding boxes."""
     size = max(radius, border, 1)
     total = 2 * size + _CELL
     margin = max(border, round(radius * 0.3), 1)  # clears the rounded corner
-    thick = margin + 4  # the padding Plasma keeps between panel edge and applets
+    thick_margin = margin + 4  # the padding Plasma keeps between panel edge and applets
 
     body = 1.0 if solid else opacity
     mask_y = total + _GAP
@@ -241,7 +256,11 @@ def panel_svg(radius: int, border: int, opacity: float, *, solid: bool) -> str:
         )
         y += max(width, height) + _GAP
 
-    for prefix, value in (("", margin), ("thick-", thick), ("shadow-", _SHADOW_MARGIN)):
+    prefixes = [("", margin)]
+    if thick:
+        prefixes.append(("thick-", thick_margin))
+    prefixes.append(("shadow-", _SHADOW_MARGIN))
+    for prefix, value in prefixes:
         if prefix == "thick-":
             hints.append(
                 f'<rect id="thick-center" x="{column}" y="{_num(y)}" width="{_CELL}" '
@@ -252,7 +271,7 @@ def panel_svg(radius: int, border: int, opacity: float, *, solid: bool) -> str:
             vertical = side in ("top", "bottom")
             hint(f"{prefix}hint-{side}-margin", 1 if vertical else value, value if vertical else 1)
     defs, tiles = _shadow(shadow_y)
-    width = column + max(thick, _CELL) + _GAP
+    width = column + max(thick_margin, _CELL) + _GAP
     height = max(y, shadow_y + shadow_size)
     # What Plasma shows when the style is used before KSvg inserts the colors of
     # the scheme: Breeze Dark.
@@ -275,7 +294,7 @@ def metadata_json(name: str, title: str) -> str:
         "KPlugin": {
             "Authors": [{"Name": "Plasma Theme Studio"}],
             "Category": "",
-            "Description": "Panel background generated by Plasma Theme Studio",
+            "Description": "Panel and popup backgrounds generated by Plasma Theme Studio",
             "EnabledByDefault": True,
             "Id": name,
             "License": "GPL-3.0-or-later",
@@ -323,7 +342,7 @@ def _use_style(name: str, runner) -> None:
 class PlasmaStyleGenerator(Generator):
     id = "panel"
     title = translate("core", "Panel style")
-    sections = ("panel",)
+    sections = ("panel", "popup")
 
     def wanted(self, theme: Theme) -> bool:
         return theme.get("panel", "style") == "generated"
@@ -340,8 +359,9 @@ class PlasmaStyleGenerator(Generator):
         notes = [
             translate(
                 "core",
-                "Only the panel background is restyled. Menus, popups and widgets keep the look of "
-                "Plasma's default style, and the opacity applies while the panel is translucent or adaptive.",
+                "Only the backgrounds of the panel, popups, tooltips and desktop widgets are restyled. "
+                "Menus and everything else keep the look of Plasma's default style, and the opacity "
+                "applies while the background is translucent or adaptive.",
             )
         ]
         radius, border, _opacity = _look(theme)
@@ -353,6 +373,19 @@ class PlasmaStyleGenerator(Generator):
                 ).format(pixels=thinnest)
             )
         return notes
+
+    def section_notes(self, theme: Theme, section: str) -> list[Msg]:
+        if section != "popup":
+            return self.notes(theme)
+        if self.wanted(theme):
+            return []
+        return [
+            translate(
+                "core",
+                'These values take effect when the panel background is "Made from this theme". '
+                "Otherwise the Plasma style in use keeps its own popups.",
+            )
+        ]
 
     def unavailable_reason(self, runner) -> Msg | None:
         for tool in _TOOLS:
@@ -366,20 +399,26 @@ class PlasmaStyleGenerator(Generator):
         name = style_id(theme)
         root = _package_dir(name)
         radius, border, opacity = _look(theme)
-        return [
+        p_radius, p_border, p_opacity = _popup_look(theme)
+        files = [
             PlannedFile(root / "metadata.json", metadata_json(name, theme.name), JSON_MARKER),
             PlannedFile(root / "plasmarc", f"{MARKER}\n\n[AdaptiveTransparency]\nenabled=true\n"),
             PlannedFile(
-                root / "widgets/panel-background.svg",
+                root / PANEL_FILE,
                 panel_svg(radius, border, opacity, solid=False),
                 XML_MARKER,
             ),
             PlannedFile(
-                root / "solid/widgets/panel-background.svg",
+                root / "solid" / PANEL_FILE,
                 panel_svg(radius, border, opacity, solid=True),
                 XML_MARKER,
             ),
         ]
+        for popup_file in POPUP_FILES:
+            for solid in (False, True):
+                svg = panel_svg(p_radius, p_border, p_opacity, solid=solid, thick=False)
+                files.append(PlannedFile(root / ("solid" if solid else "") / popup_file, svg, XML_MARKER))
+        return files
 
     def check_output(self, file: PlannedFile) -> list[Msg]:
         if file.path.name == "metadata.json":
@@ -402,7 +441,9 @@ class PlasmaStyleGenerator(Generator):
             ]
         problems = []
         ids = {element.get("id") for element in root.iter()}
-        for missing in sorted(REQUIRED_IDS - ids):
+        relative = file.path.as_posix()
+        required = REQUIRED_IDS if relative.endswith(PANEL_FILE) else POPUP_REQUIRED_IDS
+        for missing in sorted(required - ids):
             problems.append(
                 translate("core", "The generated panel background has no element {name}.").format(
                     name=missing
@@ -440,8 +481,8 @@ class PlasmaStyleGenerator(Generator):
         return [
             translate(
                 "core",
-                "The Plasma style {name} is in use. Except for the panel background, "
-                "it is replaced by Breeze's look.",
+                "The Plasma style {name} is in use. Except for the backgrounds of the panel, popups, "
+                "tooltips and desktop widgets, it is replaced by Breeze's look.",
             ).format(name=_title_of(current))
         ]
 
@@ -455,12 +496,19 @@ class PlasmaStyleGenerator(Generator):
         return {
             "style": kconfig.user_value("plasmarc", ["Theme"], "name"),
             "masked": kconfig.masked("plasmarc", ["Theme"], "name"),
+            "file": kconfig.file_exists("plasmarc"),
         }
 
     def reload(self, theme: Theme, runner) -> None:
         _use_style(style_id(theme), runner)
 
     def restore_settings(self, settings: dict, runner) -> None:
+        self._restore_style(settings, runner)
+        if settings.get("file") is False:
+            # plasmarc was not there before; the style tool leaves an empty one behind.
+            kconfig.drop_if_empty("plasmarc")
+
+    def _restore_style(self, settings: dict, runner) -> None:
         previous = settings.get("style")
         masked = bool(settings.get("masked"))
         if kconfig.user_value(*STYLE_KEY) == previous and (previous or kconfig.masked(*STYLE_KEY) == masked):

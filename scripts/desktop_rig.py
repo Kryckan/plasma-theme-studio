@@ -56,6 +56,7 @@ RIG_KEYS = (
     "XDG_DATA_HOME",
     "XDG_CACHE_HOME",
     "XDG_STATE_HOME",
+    "XDG_CONFIG_DIRS",
     "XDG_RUNTIME_DIR",
     "DBUS_SESSION_BUS_ADDRESS",
     "WAYLAND_DISPLAY",
@@ -288,6 +289,8 @@ def cmd_start(args) -> int:
         "XDG_DATA_HOME": str(home / ".local/share"),
         "XDG_CACHE_HOME": str(home / ".cache"),
         "XDG_STATE_HOME": str(home / ".local/state"),
+        # Never the real session's: kreadconfig6 must read this rig's own kdedefaults.
+        "XDG_CONFIG_DIRS": f"{home / '.config/kdedefaults'}:/etc/xdg",
         "XDG_RUNTIME_DIR": str(run),
         "WAYLAND_DISPLAY": socket,
         "QT_QPA_PLATFORM": "wayland",

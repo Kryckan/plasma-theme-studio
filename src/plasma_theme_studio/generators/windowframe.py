@@ -9,12 +9,12 @@ import configparser
 import hashlib
 import math
 import re
-import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .. import kconfig, paths
+from ..apply import desktop
 from ..messages import Msg, translate
 from ..model.color import BLACK, WHITE, Color, readable_on
 from ..model.theme import FIELD_BY_ID, Theme
@@ -99,7 +99,7 @@ PING_BUSCTL = ["busctl", "--user", "call", "org.kde.KWin", "/KWin", "org.freedes
 
 
 def _pause(seconds: float) -> None:
-    time.sleep(seconds)
+    desktop.pause(seconds)
 
 
 def breeze_shadow_step(size: int) -> tuple[str, int, str]:

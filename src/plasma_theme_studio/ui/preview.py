@@ -8,7 +8,7 @@ derived colors that are written to the color scheme.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QPointF, QRectF, Qt
+from PySide6.QtCore import QCoreApplication, QPointF, QRectF, QSizeF, Qt
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -65,8 +65,8 @@ class PreviewWidget(QWidget):
         header, selection = groups["Colors:Header"], groups["Colors:Selection"]
         accent = _rgb(selection["BackgroundNormal"])
         text, muted = _rgb(window["ForegroundNormal"]), _rgb(window["ForegroundInactive"])
-        radius = theme.get("shape", "radius")
-        border = theme.get("shape", "border_width")
+        radius = theme.resolved("apps", "radius")
+        border = theme.resolved("apps", "border_width")
         window_radius = theme.resolved("window", "radius")
         window_border = theme.resolved("window", "border_width")
         outline = _rgb(window["ForegroundNormal"], 0.22)
@@ -253,6 +253,66 @@ class PreviewWidget(QWidget):
             clock = panel.adjusted(0, 0, -18, 0)
             p.drawText(clock, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, "12:00")
         p.restore()
+        self._draw_popups(p, groups, panel, vertical, attached)
+
+    def _draw_popups(self, p: QPainter, groups: dict, panel: QRectF, vertical: bool, attached: bool) -> None:
+        """A popup (the launcher, say) and a tooltip beside the panel, drawn from the popup values."""
+        theme = self.theme
+        window, view, selection = groups["Colors:Window"], groups["Colors:View"], groups["Colors:Selection"]
+        radius = theme.resolved("popup", "radius")
+        border = theme.resolved("popup", "border_width")
+        opacity = theme.resolved("popup", "opacity")
+        text, muted = _rgb(window["ForegroundNormal"]), _rgb(window["ForegroundInactive"])
+        outline = _rgb(window["ForegroundNormal"], 0.3)
+        gap = (0 if attached else PANEL_GAP) + 8
+        size, tip = QSizeF(176, 100), QSizeF(92, 28)
+
+        def place(box: QSizeF, along: float) -> QRectF:
+            """A box on the free side of the panel, `along` the panel from its start."""
+            if vertical:
+                x = panel.right() + gap if panel.left() < SCENE_W / 2 else panel.left() - gap - box.width()
+                y = min(max(panel.top() + along, 8), SCENE_H - box.height() - 8)
+            else:
+                x = min(max(panel.left() + along, 8), SCENE_W - box.width() - 8)
+                y = panel.bottom() + gap if panel.top() < SCENE_H / 2 else panel.top() - gap - box.height()
+            return QRectF(QPointF(x, y), box)
+
+        def surface(rect: QRectF) -> None:
+            r = min(radius, min(rect.width(), rect.height()) / 2)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(0, 0, 0, 46))
+            p.drawRoundedRect(rect.translated(0, 3).adjusted(-2, -2, 2, 2), r + 2, r + 2)
+            p.setBrush(_rgb(window["BackgroundNormal"], opacity))
+            p.setPen(QPen(outline, border) if border else Qt.PenStyle.NoPen)
+            p.drawRoundedRect(rect, r, r)
+
+        popup = place(size, 10)
+        surface(popup)
+        field = QRectF(popup.left() + 12, popup.top() + 12, popup.width() - 24, 24)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(_rgb(view["BackgroundNormal"]))
+        p.drawRoundedRect(
+            field, min(theme.resolved("apps", "radius"), 12), min(theme.resolved("apps", "radius"), 12)
+        )
+        p.setPen(muted)
+        p.drawText(
+            field.adjusted(10, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, translate("preview", "Search…")
+        )
+        for index, label in enumerate((translate("preview", "Files"), translate("preview", "Settings"))):
+            row = QRectF(popup.left() + 8, field.bottom() + 6 + index * 22, popup.width() - 16, 20)
+            if index == 0:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(_rgb(selection["BackgroundNormal"]))
+                p.drawRoundedRect(row, min(radius, 8), min(radius, 8))
+                p.setPen(_rgb(selection["ForegroundNormal"]))
+            else:
+                p.setPen(text)
+            p.drawText(row.adjusted(10, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, label)
+
+        bubble = place(tip, 10 + size.width() + 14 if not vertical else 10 + size.height() + 14)
+        surface(bubble)
+        p.setPen(text)
+        p.drawText(bubble, Qt.AlignmentFlag.AlignCenter, translate("preview", "Tooltip"))
 
     def _panel_geometry(self) -> tuple[QRectF, bool, bool]:
         """Where the panel is drawn, whether it is vertical and whether it is

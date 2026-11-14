@@ -75,6 +75,9 @@ FIELDS: tuple[Field, ...] = (
     Field("colors", "positive", "color", "#27ae60"),
     Field("shape", "radius", "int", 5, 0, 24),
     Field("shape", "border_width", "int", 1, 0, 4),
+    Field("apps", "style", "choice", "unchanged", choices=("unchanged", "generated")),
+    Field("apps", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
+    Field("apps", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
     Field("window", "decoration", "choice", "unchanged", choices=("unchanged", "breeze", "generated")),
     Field("window", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
     Field("window", "border_width", "int", None, 0, 12, inherits=("shape", "border_width")),
@@ -84,6 +87,9 @@ FIELDS: tuple[Field, ...] = (
     Field("panel", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
     Field("panel", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
     Field("panel", "opacity", "float", 0.85, 0.2, 1.0),
+    Field("popup", "radius", "int", None, 0, 24, inherits=("panel", "radius")),
+    Field("popup", "border_width", "int", None, 0, 4, inherits=("panel", "border_width")),
+    Field("popup", "opacity", "float", None, 0.2, 1.0, inherits=("panel", "opacity")),
     Field("panel_layout", "location", "choice", None, choices=PANEL_LOCATIONS, optional=True),
     Field("panel_layout", "height", "int", None, 20, 120, optional=True),
     Field("panel_layout", "alignment", "choice", None, choices=("left", "center", "right"), optional=True),
@@ -91,6 +97,15 @@ FIELDS: tuple[Field, ...] = (
     Field("panel_layout", "floating", "bool", None, optional=True),
     Field("panel_layout", "visibility", "choice", None, choices=PANEL_VISIBILITIES, optional=True),
     Field("panel_layout", "opacity_mode", "choice", None, choices=PANEL_OPACITIES, optional=True),
+    Field("gtk", "style", "choice", "unchanged", choices=("unchanged", "generated")),
+    Field("gtk", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
+    Field("gtk", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
+    Field("gtk", "window_radius", "int", None, 0, 24, inherits=("window", "radius")),
+    Field("rofi", "style", "choice", "unchanged", choices=("unchanged", "generated")),
+    Field("rofi", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
+    Field("rofi", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
+    Field("rofi", "opacity", "float", 1.0, 0.3, 1.0),
+    Field("rofi", "font", "str", None, optional=True),
 )
 
 FIELD_BY_ID: dict[tuple[str, str], Field] = {f.id: f for f in FIELDS}
@@ -194,10 +209,12 @@ class Theme:
         self._values[field.id] = stored
 
     def resolved(self, section: str, key: str):
-        """The value in effect: the field's own value, or the one it follows."""
+        """The value in effect: the field's own value, or the one it follows
+        (which may itself follow another field)."""
         value = self._values[(section, key)]
-        if value is None:
-            return self._values[FIELD_BY_ID[(section, key)].inherits]
+        field = FIELD_BY_ID[(section, key)]
+        if value is None and field.inherits:
+            return self.resolved(*field.inherits)
         return value
 
     def color(self, key: str) -> Color:
@@ -250,9 +267,11 @@ class Theme:
     def from_toml(cls, text: str) -> Theme:
         try:
             data = tomllib.loads(text)
-        except tomllib.TOMLDecodeError as error:
+        except (tomllib.TOMLDecodeError, RecursionError, ValueError) as error:
+            # RecursionError: input nested deeper than the parser can follow.
+            detail = str(error) if isinstance(error, tomllib.TOMLDecodeError) else "too deeply nested"
             raise ThemeError(
-                [translate("core", "The file is not valid TOML: {detail}").format(detail=str(error))]
+                [translate("core", "The file is not valid TOML: {detail}").format(detail=detail)]
             ) from error
         return cls.from_data(migrate(data))
 

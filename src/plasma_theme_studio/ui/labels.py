@@ -8,29 +8,38 @@ SECTION_TITLES = {
     "meta": translate("fields", "Theme"),
     "colors": translate("fields", "Colors"),
     "shape": translate("fields", "Shapes"),
+    "apps": translate("fields", "Applications"),
     "window": translate("fields", "Windows"),
     "shadow": translate("fields", "Shadows"),
     "panel": translate("fields", "Panel"),
+    "popup": translate("fields", "Popups and tooltips"),
     "panel_layout": translate("fields", "Panel position"),
+    "gtk": translate("fields", "GTK applications"),
+    "rofi": translate("fields", "Rofi"),
 }
 
 SECTION_ICONS = {
     "meta": "document-properties",
     "colors": "preferences-desktop-color",
     "shape": "draw-rectangle",
+    "apps": "preferences-desktop-theme-applications",
     "window": "window",
     "shadow": "blurfx",
     "panel": "preferences-desktop-plasma",
+    "popup": "preferences-desktop-notification-bell",
     "panel_layout": "align-vertical-bottom",
+    "gtk": "preferences-gtk-config",
+    "rofi": "system-run",
 }
 
-# What a section's page says while no target reads the section.
-UNAPPLIED_NOTES = {
+# What a page says about its values whatever the targets are. No target reads the
+# Shapes page: its values are what the pages of the parts follow until they are set.
+SECTION_NOTES = {
     "shape": translate(
         "fields",
-        "These values shape the buttons and fields in the preview, and windows and the panel "
-        "follow them until they get values of their own. This version cannot change the shape "
-        "of buttons and fields on the desktop yet.",
+        "These values are the starting point for Applications, Windows, Panel, Popups and tooltips, "
+        "GTK applications and Rofi: each follows them until it gets values of its own. They reach "
+        "the desktop through those pages, for every part that is not left as it is.",
     ),
 }
 
@@ -51,6 +60,9 @@ FIELD_LABELS = {
     ("colors", "positive"): translate("fields", "Positive"),
     ("shape", "radius"): translate("fields", "Corner radius"),
     ("shape", "border_width"): translate("fields", "Border width"),
+    ("apps", "style"): translate("fields", "Application style"),
+    ("apps", "radius"): translate("fields", "Corner radius"),
+    ("apps", "border_width"): translate("fields", "Border width"),
     ("window", "decoration"): translate("fields", "Window frame"),
     ("window", "radius"): translate("fields", "Corner radius"),
     ("window", "border_width"): translate("fields", "Border width"),
@@ -60,6 +72,18 @@ FIELD_LABELS = {
     ("panel", "radius"): translate("fields", "Corner radius"),
     ("panel", "border_width"): translate("fields", "Border width"),
     ("panel", "opacity"): translate("fields", "Opacity"),
+    ("popup", "radius"): translate("fields", "Corner radius"),
+    ("popup", "border_width"): translate("fields", "Border width"),
+    ("popup", "opacity"): translate("fields", "Opacity"),
+    ("gtk", "style"): translate("fields", "GTK style"),
+    ("gtk", "radius"): translate("fields", "Corner radius"),
+    ("gtk", "border_width"): translate("fields", "Border width"),
+    ("gtk", "window_radius"): translate("fields", "Window corner radius"),
+    ("rofi", "style"): translate("fields", "Rofi theme"),
+    ("rofi", "radius"): translate("fields", "Corner radius"),
+    ("rofi", "border_width"): translate("fields", "Border width"),
+    ("rofi", "opacity"): translate("fields", "Opacity"),
+    ("rofi", "font"): translate("fields", "Font"),
     ("panel_layout", "location"): translate("fields", "Screen edge"),
     ("panel_layout", "height"): translate("fields", "Thickness"),
     ("panel_layout", "alignment"): translate("fields", "Alignment"),
@@ -74,6 +98,18 @@ CHOICE_LABELS = {
     ("window", "decoration"): {
         "unchanged": translate("fields", "Leave as it is"),
         "breeze": translate("fields", "Breeze, adjusted"),
+        "generated": translate("fields", "Made from this theme"),
+    },
+    ("apps", "style"): {
+        "unchanged": translate("fields", "Leave as it is"),
+        "generated": translate("fields", "Made from this theme"),
+    },
+    ("gtk", "style"): {
+        "unchanged": translate("fields", "Leave as it is"),
+        "generated": translate("fields", "Made from this theme"),
+    },
+    ("rofi", "style"): {
+        "unchanged": translate("fields", "Leave as it is"),
         "generated": translate("fields", "Made from this theme"),
     },
     ("panel", "style"): {

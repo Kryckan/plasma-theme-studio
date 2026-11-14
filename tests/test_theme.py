@@ -204,3 +204,37 @@ def test_saving_a_theme_through_a_link_keeps_the_link(tmp_path):
     theme.save(link)
 
     assert link.is_symlink() and Theme.load(kept).get("shape", "radius") == 9
+
+
+def test_new_fields_default_and_inherit():
+    theme = Theme()
+    assert (
+        theme.get("apps", "style") == theme.get("gtk", "style") == theme.get("rofi", "style") == "unchanged"
+    )
+    assert theme.resolved("popup", "radius") == theme.resolved("shape", "radius")
+    theme.set("panel", "radius", 9)
+    theme.set("panel", "opacity", 0.5)
+    assert theme.resolved("popup", "radius") == 9 and theme.resolved("popup", "opacity") == 0.5
+    theme.set("window", "radius", 3)
+    assert theme.resolved("gtk", "window_radius") == 3
+    assert theme.get("rofi", "opacity") == 1.0 and theme.get("rofi", "font") is None
+    assert "font" not in theme.to_toml() and "[popup]" not in theme.to_toml()
+
+
+def test_new_fields_round_trip_and_limits():
+    theme = Theme({("popup", "opacity"): 0.4, ("rofi", "font"): "Inter 11", ("gtk", "style"): "generated"})
+    assert Theme.from_toml(theme.to_toml()) == theme
+    for section, key, value in (
+        ("popup", "opacity", 0.1),
+        ("rofi", "opacity", 0.2),
+        ("popup", "border_width", 5),
+        ("gtk", "window_radius", 25),
+        ("rofi", "style", "breeze"),
+    ):
+        with pytest.raises(ThemeError):
+            Theme().set(section, key, value)
+
+
+def test_a_theme_from_before_the_new_sections_loads_unchanged():
+    theme = Theme.from_toml('schema_version = 1\n\n[panel]\nstyle = "generated"\n')
+    assert theme.get("rofi", "style") == "unchanged"

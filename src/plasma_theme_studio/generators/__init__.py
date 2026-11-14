@@ -2,19 +2,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The targets a theme is applied to, in the order they are applied."""
 
-from .base import JSON_MARKER, MARKER, XML_MARKER, ApplyError, Generator, PlannedFile, made_here
+from .base import CSS_MARKER, JSON_MARKER, MARKER, XML_MARKER, ApplyError, Generator, PlannedFile, made_here
 from .colorscheme import ColorSchemeGenerator
+from .gtk import GtkGenerator
+from .kvantum import KvantumGenerator
 from .panellayout import PanelLayoutGenerator
 from .plasmastyle import PlasmaStyleGenerator
+from .rofi import RofiGenerator
 from .windowframe import WindowFrameGenerator
 
+# The colors come first: Kvantum and GTK take their palette from the scheme that is in use.
+# Rofi is last: it only reads its theme when it starts, so nothing waits for it.
 # The panel style comes before the panel position: a style can raise the panel's
 # smallest thickness, and the thickness the theme asks for is set after that.
 GENERATORS: tuple[Generator, ...] = (
     ColorSchemeGenerator(),
+    KvantumGenerator(),
+    GtkGenerator(),
     WindowFrameGenerator(),
     PlasmaStyleGenerator(),
     PanelLayoutGenerator(),
+    RofiGenerator(),
 )
 
 
@@ -28,6 +36,7 @@ def section_generators(section: str) -> list[Generator]:
 
 
 __all__ = [
+    "CSS_MARKER",
     "GENERATORS",
     "JSON_MARKER",
     "MARKER",

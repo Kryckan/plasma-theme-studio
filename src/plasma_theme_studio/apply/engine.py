@@ -318,6 +318,9 @@ def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> lis
             failures.append(error.message)
         except OSError as error:
             failures.append(str(error))
+    # A setting that was a file (Rofi's config, Kvantum's selection) can leave a folder empty
+    # that the apply made, once the setting is back.
+    snapshots.remove_empty_dirs(Path(d) for d in snapshot.created_dirs)
     try:
         if consume and failures and not snapshots.tried(snapshot):
             snapshots.mark_tried(snapshot)

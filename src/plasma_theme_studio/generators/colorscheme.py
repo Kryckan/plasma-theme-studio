@@ -244,7 +244,9 @@ def activate_scheme(name: str, runner) -> None:
         _write_scheme_name(runner, RELOAD_PLACEHOLDER)
     result = runner.run(["plasma-apply-colorscheme", name])
     # The tool exits with 0 even when it rejects the scheme, so check the outcome.
-    if _read_setting(runner, "ColorScheme") != name:
+    # Plasma drops the key when the scheme is the default one, so an empty read-back is right then.
+    now = _read_setting(runner, "ColorScheme")
+    if now != name and not (name == FALLBACK_SCHEME and not now):
         if current and current != RELOAD_PLACEHOLDER:
             _write_scheme_name(runner, current)
         detail = (result.output.splitlines() or [""])[0][:200]

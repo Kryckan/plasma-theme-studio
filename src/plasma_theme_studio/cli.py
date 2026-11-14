@@ -9,10 +9,11 @@ from a text console, so a desktop that became hard to use can be put back.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
-from . import APP_NAME, __version__
+from . import APP_NAME, __version__, archive, globaltheme, library
 from .apply import engine
 from .apply import snapshot as snapshots
 from .apply.runner import SystemRunner
@@ -20,7 +21,7 @@ from .generators import ApplyError
 from .messages import translate
 from .model.theme import Theme, ThemeError
 
-COMMANDS = ("apply", "validate", "restore")
+COMMANDS = ("apply", "validate", "restore", "export", "import", "export-global-theme")
 
 
 def _print_problems(problems) -> None:
@@ -93,6 +94,81 @@ def cmd_apply(args) -> int:
             name=theme.name
         )
     )
+    return 0
+
+
+def cmd_export(args) -> int:
+    theme = _load_theme(args.file)
+    if theme is None:
+        return 1
+    target = Path(args.archive) if args.archive else Path(args.file).with_suffix(archive.EXTENSION)
+    try:
+        archive.export_theme(theme, target)
+    except OSError as error:
+        print(
+            translate("core", "Could not write {path}: {detail}").format(path=str(target), detail=str(error)),
+            file=sys.stderr,
+        )
+        return 1
+    print(translate("core", "Exported {name} to {path}.").format(name=theme.name, path=str(target)))
+    return 0
+
+
+def cmd_import(args) -> int:
+    try:
+        theme = archive.import_theme(Path(args.file))
+        theme, saved = library.save_imported(theme)
+    except archive.ArchiveError as error:
+        print(translate("core", "{path} cannot be imported:").format(path=args.file), file=sys.stderr)
+        _print_problems([error.message])
+        return 1
+    except OSError as error:
+        print(
+            translate("core", "Could not import {path}: {detail}").format(path=args.file, detail=str(error)),
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        translate("core", "Imported {name} as {path}. Nothing was applied to the desktop.").format(
+            name=theme.name, path=str(saved)
+        )
+    )
+    return 0
+
+
+def _qt_application() -> None:
+    """A Qt application that draws offscreen, for the preview picture of a Global Theme.
+    Without PySide6 the bundle simply has no picture."""
+    try:
+        from PySide6.QtWidgets import QApplication
+    except ImportError:
+        return
+    if QApplication.instance() is None:
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"  # no window is ever shown by this command
+        QApplication(["plasma-theme-studio"])
+
+
+def cmd_export_global_theme(args) -> int:
+    theme = _load_theme(args.file)
+    if theme is None:
+        return 1
+    _qt_application()
+    try:
+        written = globaltheme.export_global_theme(theme, Path(args.folder))
+    except globaltheme.ExportError as error:
+        print(translate("core", "Nothing was exported:"), file=sys.stderr)
+        _print_problems([error.message])
+        return 1
+    except OSError as error:
+        print(translate("core", "Could not export: {detail}").format(detail=str(error)), file=sys.stderr)
+        return 1
+    print(
+        translate("core", "Exported {name} as a Global Theme ({count} files) in {path}.").format(
+            name=theme.name, count=len(written), path=args.folder
+        )
+    )
+    print(translate("core", "Run install.sh in that folder to install it for the current user."))
+    print(translate("core", "Applying a Global Theme also turns the splash screen off."))
     return 0
 
 
@@ -172,6 +248,22 @@ def _command_parser() -> argparse.ArgumentParser:
     )
     apply.set_defaults(run=cmd_apply)
 
+    export = commands.add_parser("export", help="write a theme file as one shareable archive")
+    export.add_argument("file")
+    export.add_argument("archive", nargs="?", help="where to write it (default: next to the theme file)")
+    export.set_defaults(run=cmd_export)
+
+    import_ = commands.add_parser("import", help="save a theme archive or theme file as a new theme")
+    import_.add_argument("file")
+    import_.set_defaults(run=cmd_import)
+
+    global_theme = commands.add_parser(
+        "export-global-theme", help="write a theme as a Global Theme in a new or empty folder"
+    )
+    global_theme.add_argument("file")
+    global_theme.add_argument("folder")
+    global_theme.set_defaults(run=cmd_export_global_theme)
+
     restore = commands.add_parser("restore", help="go back to the state before an apply")
     restore.add_argument("id", nargs="?", help="snapshot to go back to (default: undo the latest apply)")
     restore.add_argument("--list", action="store_true", help="list the snapshots")
@@ -184,6 +276,10 @@ USAGE = f"""{APP_NAME} {__version__}
 usage: plasma-theme-studio [FILE]             open the editor
        plasma-theme-studio validate FILE      check a theme file
        plasma-theme-studio apply FILE         apply a theme file to the desktop
+       plasma-theme-studio export FILE [OUT]  write a theme file as one shareable archive (.ptstheme)
+       plasma-theme-studio import FILE        save an archive or theme file as a new theme
+       plasma-theme-studio export-global-theme FILE FOLDER
+                                              write a Global Theme with install.sh into FOLDER
        plasma-theme-studio restore            undo the latest apply (repeat to go further back)
        plasma-theme-studio restore ID         go back to a chosen snapshot, undoing the applies after it
        plasma-theme-studio restore --list     list the snapshots

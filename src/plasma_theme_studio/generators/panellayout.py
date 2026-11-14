@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import json
 import re
-import time
 
 from .. import kconfig
+from ..apply import desktop
 from ..messages import Msg, translate
 from ..model.theme import Theme
 from .base import ApplyError, Generator, PlannedFile
@@ -199,7 +199,7 @@ _SETTLE_PAUSE = 0.75
 
 
 def _pause(seconds: float) -> None:
-    time.sleep(seconds)
+    desktop.pause(seconds)
 
 
 def _write_settled(runner, values: dict, panel: int | None = None, min_height: int = 1) -> dict:

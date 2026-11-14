@@ -12,6 +12,8 @@ from plasma_theme_studio.apply.runner import Result
 from plasma_theme_studio.generators import JSON_MARKER, MARKER, XML_MARKER, ApplyError, made_here
 from plasma_theme_studio.generators.plasmastyle import (
     ID_PREFIX,
+    POPUP_FILES,
+    POPUP_REQUIRED_IDS,
     REQUIRED_IDS,
     PlasmaStyleGenerator,
     panel_svg,
@@ -84,10 +86,16 @@ def style(home, runner, use_generators):
 def test_the_package_has_the_files_plasma_needs():
     files = package_files(look())
     assert sorted(files) == [
+        "dialogs/background.svg",
         "metadata.json",
         "plasmarc",
+        "solid/dialogs/background.svg",
+        "solid/widgets/background.svg",
         "solid/widgets/panel-background.svg",
+        "solid/widgets/tooltip.svg",
+        "widgets/background.svg",
         "widgets/panel-background.svg",
+        "widgets/tooltip.svg",
     ]
     assert files["metadata.json"].content.startswith(JSON_MARKER)
     assert files["plasmarc"].content.startswith(MARKER)
@@ -192,7 +200,7 @@ def test_unchanged_is_not_wanted_and_says_so():
     assert "keeps the Plasma style" in str(GENERATOR.notes(theme)[0])
     assert GENERATOR.wanted(look())
     notes = " ".join(str(n) for n in GENERATOR.notes(look()))
-    assert "panel background" in notes and "translucent" in notes
+    assert "panel" in notes and "popups" in notes and "translucent" in notes
     assert len(GENERATOR.notes(look(radius=24))) == 2
     assert len(GENERATOR.notes(look(radius=23, border=1))) == 2
     assert len(GENERATOR.notes(look(radius=12))) == 1
@@ -338,7 +346,7 @@ def test_undo_keeps_a_default_the_user_had_hidden(style):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("[Theme]\nname[$d]\n")
     result = engine.apply(look(), style)
-    assert result.snapshot.settings["panel"] == {"style": None, "masked": True}
+    assert result.snapshot.settings["panel"] == {"style": None, "masked": True, "file": True}
 
     assert engine.restore(result.snapshot, style, consume=True) == []
 
@@ -482,3 +490,118 @@ def test_missing_tools_block_the_apply(style):
     style.missing = set()
     assert GENERATOR.unavailable_reason(style) is None
     assert installed() == []
+
+
+# popups, tooltips and widgets
+
+
+def popup_look(p_radius=None, p_border=None, p_opacity=None, **panel):
+    theme = look(**panel)
+    for key, value in (("radius", p_radius), ("border_width", p_border), ("opacity", p_opacity)):
+        if value is not None:
+            theme.set("popup", key, value)
+    return theme
+
+
+def test_every_popup_file_has_its_required_ids_and_no_text():
+    files = package_files(popup_look(6, 1, 0.7))
+    assert POPUP_FILES == ("dialogs/background.svg", "widgets/tooltip.svg", "widgets/background.svg")
+    for name in POPUP_FILES:
+        for prefix in ("", "solid/"):
+            content = files[prefix + name].content
+            ids = set(re.findall(r' id="([^"]+)"', content))
+            assert POPUP_REQUIRED_IDS <= ids
+            assert "thick-center" not in ids
+            assert "<text" not in content and "transform" not in content.lower()
+            assert 'class="ColorScheme-Background" fill="currentColor"' in content
+            assert GENERATOR.check_output(files[prefix + name]) == []
+    assert "thick-center" in files["widgets/panel-background.svg"].content
+
+
+def test_the_check_requires_the_pieces_of_a_popup_background():
+    file = package_files(popup_look())["dialogs/background.svg"]
+    bad = type(file)(file.path, file.content.replace('id="shadow-top"', 'id="x"'), file.marker)
+    assert GENERATOR.check_output(bad)
+
+
+def test_popup_values_are_independent_from_the_panel():
+    files = package_files(popup_look(14, 0, 0.5, radius=0, border=3, opacity=0.9))
+    panel = files["widgets/panel-background.svg"].content
+    popup = files["dialogs/background.svg"].content
+    assert panel == panel_svg(0, 3, 0.9, solid=False)
+    assert popup == panel_svg(14, 0, 0.5, solid=False, thick=False)
+    assert (
+        'fill-opacity="0.5"' in popup
+        and 'fill-opacity="0.5"' not in files["solid/dialogs/background.svg"].content
+    )
+    assert files["widgets/tooltip.svg"].content == popup
+    assert files["widgets/background.svg"].content == popup
+
+
+def test_popups_follow_the_panel_until_they_have_their_own():
+    files = package_files(look(radius=7, border=1, opacity=0.6))
+    assert files["dialogs/background.svg"].content == panel_svg(7, 1, 0.6, solid=False, thick=False)
+    shared = Theme({("meta", "name"): "T", ("panel", "style"): "generated", ("shape", "radius"): 9})
+    assert shared.resolved("popup", "radius") == 9
+    assert style_id(shared) == style_id(
+        look(
+            radius=9,
+            border=shared.get("panel", "border_width"),
+            opacity=shared.get("panel", "opacity"),
+            name="T",
+        )
+    )
+
+
+def test_the_id_changes_with_the_popup_values():
+    base = style_id(look())
+    assert style_id(popup_look(p_radius=3)) != base
+    assert style_id(popup_look(p_border=3)) != base
+    assert style_id(popup_look(p_opacity=0.5)) != base
+    assert style_id(popup_look(p_radius=3)) != style_id(popup_look(p_radius=4))
+    assert style_id(popup_look(p_radius=12, border=2, opacity=0.85)) == base  # the same as inherited
+
+
+def test_an_old_package_of_this_theme_becomes_stale(style):
+    engine.apply(popup_look(p_radius=3), runner=style)
+    old = packages_dir() / style_id(popup_look(p_radius=3))
+    stale = GENERATOR.stale_files(popup_look(p_radius=4))
+    assert old in stale and old / "dialogs/background.svg" in stale
+    assert old not in GENERATOR.stale_files(popup_look(p_radius=3))
+
+
+def test_the_popup_page_explains_when_the_values_apply():
+    note = " ".join(str(n) for n in GENERATOR.section_notes(look(style="unchanged"), "popup"))
+    assert "Made from this theme" in note and "keeps its own popups" in note
+    assert GENERATOR.section_notes(look(), "popup") == []
+    assert GENERATOR.section_notes(look(style="unchanged"), "panel") == GENERATOR.notes(
+        look(style="unchanged")
+    )
+    assert GENERATOR.sections == ("panel", "popup")
+
+
+def test_undo_removes_the_plasmarc_the_apply_made(style):
+    path = paths.config_home() / "plasmarc"
+    assert not path.exists()
+    result = engine.apply(look(), style)
+    assert result.snapshot.settings["panel"]["file"] is False
+    assert path.exists()
+
+    assert engine.restore(result.snapshot, style, consume=True) == []
+
+    assert not path.exists()
+
+
+def test_undo_removes_an_empty_plasmarc_the_style_tool_left_behind(style):
+    """The tool of Plasma 6.8 leaves an empty file when it switches to the default."""
+    result = engine.apply(look(), style)
+
+    def tool(argv):
+        (paths.config_home() / "plasmarc").write_text("")
+        return Result(0, "Successfully applied\n")
+
+    style.handlers["plasma-apply-desktoptheme"] = tool
+    kconfig.write_value(style, "plasmarc", ["Theme"], "name", None)
+    (paths.config_home() / "plasmarc").write_text("")
+    assert engine.restore(result.snapshot, style, consume=True) == []
+    assert not (paths.config_home() / "plasmarc").exists()
