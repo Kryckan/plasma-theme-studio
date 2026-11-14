@@ -12,7 +12,7 @@ from PySide6.QtCore import QLibraryInfo, QLocale, QSettings, QTranslator
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from .. import APP_DIR, APP_ID, APP_NAME, __version__, translations
+from .. import APP_DIR, APP_ID, APP_NAME, __version__, paths, translations
 
 # The icon in a source checkout, used when the app is not installed.
 SOURCE_ICON = Path(__file__).parents[3] / "data/icons/hicolor/scalable/apps" / f"{APP_ID}.svg"
@@ -24,7 +24,11 @@ def create_app(argv: list[str]) -> QApplication:
     app.setApplicationName(APP_DIR)
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(__version__)
-    app.setDesktopFileName(APP_ID)
+    # Naming a desktop file that is not installed (a source checkout) only
+    # gets a warning from the desktop portal.
+    folders = [paths.data_home(), *paths.system_data_dirs()]
+    if any((folder / "applications" / f"{APP_ID}.desktop").is_file() for folder in folders):
+        app.setDesktopFileName(APP_ID)
     app.setWindowIcon(QIcon.fromTheme(APP_ID, QIcon(str(SOURCE_ICON))))
 
     # Keep the translators alive for as long as the app.

@@ -149,6 +149,33 @@ def apply(theme: Theme, runner, replace_foreign: bool = False) -> ApplyResult:
     return ApplyResult(snapshot, plan)
 
 
+def is_current(plan: Plan, runner) -> bool:
+    """Whether an apply would change nothing: every file is already written
+    and the desktop already uses it."""
+    files = [status for target in plan.targets for status in target.files]
+    return (
+        bool(files)
+        and all(status.state == UNCHANGED for status in files)
+        and all(target.generator.is_active(plan.theme, runner) for target in plan.targets)
+    )
+
+
+def switch_color_scheme(scheme_id: str, scheme_name: str, runner) -> Snapshot:
+    """Make an installed color scheme the active one. No files are written."""
+    generator = generator_by_id("colors")
+    unavailable = generator.unavailable_reason(runner)
+    if unavailable:
+        raise ApplyBlocked([unavailable])
+    snapshot = snapshots.create(scheme_name, [], {generator.id: generator.capture_settings(runner)})
+    try:
+        generator.restore_settings({"color_scheme": scheme_id}, runner)
+    except ApplyError:
+        snapshots.delete(snapshot)
+        raise
+    snapshots.prune()
+    return snapshot
+
+
 def restore(snapshot: Snapshot, runner, consume: bool = False) -> list[Msg]:
     """Put files and desktop settings back to what the snapshot recorded.
 

@@ -8,6 +8,7 @@ SECTION_TITLES = {
     "meta": translate("fields", "Theme"),
     "colors": translate("fields", "Colors"),
     "shape": translate("fields", "Shapes"),
+    "window": translate("fields", "Windows"),
     "shadow": translate("fields", "Shadows"),
     "panel": translate("fields", "Panel"),
 }
@@ -16,13 +17,14 @@ SECTION_ICONS = {
     "meta": "document-properties",
     "colors": "preferences-desktop-color",
     "shape": "draw-rectangle",
+    "window": "window",
     "shadow": "blurfx",
     "panel": "preferences-desktop-plasma",
 }
 
 # Sections that no target reads yet. They are stored in the theme file and
 # shown in the preview.
-PREVIEW_ONLY_SECTIONS = ("shape", "shadow", "panel")
+PREVIEW_ONLY_SECTIONS = ("shape", "window", "shadow", "panel")
 
 FIELD_LABELS = {
     ("meta", "name"): translate("fields", "Name"),
@@ -41,8 +43,12 @@ FIELD_LABELS = {
     ("colors", "positive"): translate("fields", "Positive"),
     ("shape", "radius"): translate("fields", "Corner radius"),
     ("shape", "border_width"): translate("fields", "Border width"),
+    ("window", "radius"): translate("fields", "Corner radius"),
+    ("window", "border_width"): translate("fields", "Border width"),
     ("shadow", "size"): translate("fields", "Size"),
     ("shadow", "strength"): translate("fields", "Strength"),
+    ("panel", "radius"): translate("fields", "Corner radius"),
+    ("panel", "border_width"): translate("fields", "Border width"),
     ("panel", "opacity"): translate("fields", "Opacity"),
 }
 

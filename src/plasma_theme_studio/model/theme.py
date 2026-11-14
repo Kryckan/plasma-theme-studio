@@ -35,6 +35,8 @@ class Field:
     default: object
     minimum: float | None = None
     maximum: float | None = None
+    # An optional value: while it is unset (None) the field follows this other field.
+    inherits: tuple[str, str] | None = None
 
     @property
     def id(self) -> tuple[str, str]:
@@ -62,8 +64,12 @@ FIELDS: tuple[Field, ...] = (
     Field("colors", "positive", "color", "#27ae60"),
     Field("shape", "radius", "int", 5, 0, 24),
     Field("shape", "border_width", "int", 1, 0, 4),
+    Field("window", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
+    Field("window", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
     Field("shadow", "size", "int", 24, 0, 64),
     Field("shadow", "strength", "float", 0.35, 0.0, 1.0),
+    Field("panel", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
+    Field("panel", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
     Field("panel", "opacity", "float", 0.85, 0.2, 1.0),
 )
 
@@ -102,6 +108,8 @@ def slugify(name: str) -> str:
 
 def check_value(field: Field, value) -> tuple[object, Msg | None]:
     """Return the value in its stored form, or a message saying why it is invalid."""
+    if value is None and field.inherits:
+        return None, None
     if field.kind == "color":
         if not Color.is_valid(value):
             return value, translate("core", "{key} must be a hex color such as #3daee9.").format(
@@ -154,6 +162,13 @@ class Theme:
             raise ThemeError([problem])
         self._values[field.id] = stored
 
+    def resolved(self, section: str, key: str):
+        """The value in effect: the field's own value, or the one it follows."""
+        value = self._values[(section, key)]
+        if value is None:
+            return self._values[FIELD_BY_ID[(section, key)].inherits]
+        return value
+
     def color(self, key: str) -> Color:
         return Color.parse(self._values[("colors", key)])
 
@@ -193,7 +208,7 @@ class Theme:
         for section in SECTIONS:
             lines += ["", f"[{section}]"]
             for field in FIELDS:
-                if field.section == section:
+                if field.section == section and self._values[field.id] is not None:
                     lines.append(f"{field.key} = {_toml_value(self._values[field.id])}")
         return "\n".join(lines) + "\n"
 

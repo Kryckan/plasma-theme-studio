@@ -39,15 +39,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import APP_DIR, APP_NAME, __version__, paths
+from .. import APP_DIR, APP_NAME, __version__, library, paths
 from ..apply import engine
 from ..apply import snapshot as snapshots
 from ..apply.runner import SystemRunner
 from ..generators import ApplyError
+from ..generators.colorscheme import current_scheme
 from ..model.color import contrast
 from ..model.theme import FIELDS, PRESETS, SECTIONS, Field, Theme, ThemeError
+from .banner import INFORMATION, POSITIVE, Banner
 from .editors import editor_for
 from .labels import FIELD_LABELS, PRESET_TITLES, PREVIEW_ONLY_SECTIONS, SECTION_ICONS, SECTION_TITLES
+from .library_view import Entry, LibraryView
 from .preview import PreviewWidget
 
 translate = QCoreApplication.translate
@@ -148,7 +151,9 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_actions()
         self.resize(1180, 720)
+        self._sync_inherited()
         self.refresh()
+        self.reload_library()
         self._update_title()
 
     # ---- construction ------------------------------------------------
@@ -167,6 +172,10 @@ class MainWindow(QMainWindow):
         self.preview = PreviewWidget(self.theme)
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
+        self.library = LibraryView()
+        self.library.use_requested.connect(self.use_entry)
+        self.library.edit_requested.connect(self.edit_entry)
+        self.tabs.addTab(self.library, translate("ui", "Themes"))
         self.tabs.addTab(self.preview, translate("ui", "Preview"))
         self.tabs.addTab(self._build_files_tab(), translate("ui", "Files written"))
 
@@ -193,8 +202,10 @@ class MainWindow(QMainWindow):
         footer.addWidget(self.undo_apply_button)
         footer.addWidget(self.apply_button)
 
+        self.banner = Banner()
         central = QWidget()
         layout = QVBoxLayout(central)
+        layout.addWidget(self.banner)
         layout.addWidget(splitter, 1)
         layout.addLayout(footer)
         self.setCentralWidget(central)
@@ -349,16 +360,26 @@ class MainWindow(QMainWindow):
             self.editors[field.id].set_value(self.theme.get(*field.id))
             self.statusBar().showMessage(str(error.problems[0]), 6000)
             return
+        if self.tabs.currentWidget() is self.library:
+            self.tabs.setCurrentWidget(self.preview)  # show what the edit does
         self.undo_stack.push(SetValueCommand(self, field, value))
 
     def store(self, field: Field, value) -> None:
         self.theme.set(field.section, field.key, value)
         self.editors[field.id].set_value(self.theme.get(*field.id))
+        self._sync_inherited()
         self.refresh_timer.start()
+
+    def _sync_inherited(self) -> None:
+        """Tell the optional fields which value they follow while unset."""
+        for field in FIELDS:
+            if field.inherits:
+                self.editors[field.id].set_inherited(self.theme.get(*field.inherits))
 
     def _load_into_window(self, theme: Theme, path: Path | None) -> None:
         self.theme, self.path = theme, path
         self.undo_stack.clear()
+        self._sync_inherited()
         for field in FIELDS:
             self.editors[field.id].set_value(theme.get(*field.id))
         self.refresh()
@@ -498,6 +519,7 @@ class MainWindow(QMainWindow):
         self._update_title()
         QSettings().setValue("last_file", str(path))
         self.statusBar().showMessage(translate("ui", "Saved {file}").format(file=str(path)), 5000)
+        self.reload_library()
         return True
 
     def _open_folder(self, folder: Path) -> None:
@@ -522,11 +544,80 @@ class MainWindow(QMainWindow):
         box.setInformativeText("\n".join(f"• {problem}" for problem in problems))
         box.exec()
 
+    def reload_library(self) -> None:
+        active = current_scheme(self.runner) if self.runner.which("kreadconfig6") else ""
+        self.library.reload(active)
+
+    def use_entry(self, entry: Entry) -> None:
+        """Switch the desktop to a theme from the Themes tab."""
+        if entry.is_saved_theme:
+            self._apply(entry.theme)
+            return
+        if entry.scheme_id == self.library.active:
+            self.banner.show_message(
+                INFORMATION, translate("ui", "The desktop already uses {name}.").format(name=entry.title)
+            )
+            return
+        nothing_changed = translate("ui", "The desktop could not be switched. Nothing was changed.")
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            engine.switch_color_scheme(entry.scheme_id, entry.title, self.runner)
+        except engine.ApplyBlocked as error:
+            self._show_problems(nothing_changed, error.problems)
+            return
+        except ApplyError as error:
+            self._show_problems(nothing_changed, [error.message])
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.refresh()
+            self.reload_library()
+        self.banner.show_message(
+            POSITIVE,
+            translate("ui", "The desktop now uses {name}. Undo last apply takes you back.").format(
+                name=entry.title
+            ),
+            20,
+        )
+
+    def edit_entry(self, entry: Entry) -> None:
+        """Open a theme from the Themes tab in the editor."""
+        if not self._discard_ok():
+            return
+        if entry.is_saved_theme:
+            if not self.open_path(entry.path):
+                return
+            self.banner.hide()
+        else:
+            self._load_into_window(library.theme_from_scheme(entry.scheme), None)
+            self.banner.show_message(
+                INFORMATION,
+                translate(
+                    "ui",
+                    "This is a new theme that starts with the colors of {name}. "
+                    "Change it on the right, then choose Apply to desktop.",
+                ).format(name=entry.title),
+            )
+        self.tabs.setCurrentWidget(self.preview)
+
     def apply_theme(self) -> None:
-        plan = engine.build_plan(self.theme, self.runner)
+        self._apply(self.theme)
+
+    def _apply(self, theme: Theme) -> None:
+        nothing_changed = translate("ui", "The theme cannot be applied. Nothing was changed.")
+        plan = engine.build_plan(theme, self.runner)
         if plan.blocking:
-            self._show_problems(
-                translate("ui", "The theme cannot be applied. Nothing was changed."), plan.blocking
+            self._show_problems(nothing_changed, plan.blocking)
+            return
+        if engine.is_current(plan, self.runner):
+            self.banner.show_message(
+                INFORMATION,
+                translate(
+                    "ui",
+                    "The desktop already uses {name} exactly as it is here, so nothing changed. "
+                    "Change a color and apply again.",
+                ).format(name=theme.name)
+                + self._not_applied_note(theme),
             )
             return
         if plan.foreign_files:
@@ -543,24 +634,34 @@ class MainWindow(QMainWindow):
                 return
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            result = engine.apply(self.theme, self.runner, replace_foreign=True)
+            result = engine.apply(theme, self.runner, replace_foreign=True)
         except engine.ApplyBlocked as error:
-            QApplication.restoreOverrideCursor()
-            self._show_problems(
-                translate("ui", "The theme cannot be applied. Nothing was changed."), error.problems
-            )
+            self._show_problems(nothing_changed, error.problems)
             return
         except ApplyError as error:
-            QApplication.restoreOverrideCursor()
             self._show_problems(
                 translate("ui", "The apply failed. Everything was put back as it was."), [error.message]
             )
-            self.refresh()
             return
-        QApplication.restoreOverrideCursor()
-        self.refresh()
-        message = translate("ui", "Applied {name} to the desktop.").format(name=self.theme.name)
-        self.statusBar().showMessage(" ".join([message, *(str(w) for w in result.plan.warnings)]), 15000)
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.refresh()
+            self.reload_library()
+        message = translate("ui", "Applied {name} to the desktop. Undo last apply takes you back.").format(
+            name=theme.name
+        )
+        warnings = "".join(f" {warning}" for warning in result.plan.warnings)
+        self.banner.show_message(POSITIVE, message + warnings + self._not_applied_note(theme), 20)
+
+    def _not_applied_note(self, theme: Theme) -> str:
+        """Said when the theme has values that this version cannot put on the desktop."""
+        if all(theme.get(*f.id) == f.default for f in FIELDS if f.section in PREVIEW_ONLY_SECTIONS):
+            return ""
+        return " " + translate(
+            "ui",
+            "Only the colors were applied: this version shows shapes, shadows and panel settings "
+            "in the preview but cannot put them on the desktop yet.",
+        )
 
     def _restore(self, snapshot, consume: bool) -> None:
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -571,14 +672,16 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
         self.refresh()
+        self.reload_library()
         if failures:
             self._show_problems(translate("ui", "Some things could not be put back."), failures)
         else:
-            self.statusBar().showMessage(
+            self.banner.show_message(
+                POSITIVE,
                 translate("ui", "The desktop is back to how it was at {time}.").format(
                     time=f"{snapshot.created_at:%H:%M:%S}"
                 ),
-                10000,
+                20,
             )
 
     def undo_last_apply(self) -> None:

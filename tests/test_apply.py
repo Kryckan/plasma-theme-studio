@@ -140,3 +140,24 @@ def test_only_the_latest_snapshots_are_kept(home, runner, monkeypatch):
         theme.set("colors", "accent", f"#0000{index}0")
         engine.apply(theme, runner)
     assert len(snapshots.list_snapshots()) == 3
+
+
+def test_switching_to_an_installed_scheme_and_back(home, runner):
+    snapshot = engine.switch_color_scheme("BreezeDark", "Breeze Dark", runner)
+    assert runner.settings["ColorScheme"] == "BreezeDark"
+    engine.restore(snapshot, runner, consume=True)
+    assert runner.settings["ColorScheme"] == "BreezeLight"
+
+    with pytest.raises(ApplyError):
+        engine.switch_color_scheme("Missing", "Missing", runner)
+    assert runner.settings["ColorScheme"] == "BreezeLight"
+    assert snapshots.list_snapshots() == []
+
+
+def test_is_current_only_when_written_and_active(home, runner):
+    theme = Theme()
+    assert not engine.is_current(engine.build_plan(theme), runner)
+    engine.apply(theme, runner)
+    assert engine.is_current(engine.build_plan(theme), runner)
+    runner.settings["ColorScheme"] = "BreezeDark"
+    assert not engine.is_current(engine.build_plan(theme), runner)

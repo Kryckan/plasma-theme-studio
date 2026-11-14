@@ -159,6 +159,10 @@
       <source>The file was made by a newer version of Plasma Theme Studio (format {found}, this version reads up to format {supported}).</source>
       <translation>Filen skapades av en nyare version av Plasma Theme Studio (format {found}, den här versionen läser upp till format {supported}).</translation>
     </message>
+    <message>
+      <source>{name} Copy</source>
+      <translation>{name} kopia</translation>
+    </message>
   </context>
   <context>
     <name>fields</name>
@@ -173,6 +177,10 @@
     <message>
       <source>Shapes</source>
       <translation>Former</translation>
+    </message>
+    <message>
+      <source>Windows</source>
+      <translation>Fönster</translation>
     </message>
     <message>
       <source>Shadows</source>
@@ -335,6 +343,10 @@
     <message>
       <source> px</source>
       <translation> px</translation>
+    </message>
+    <message>
+      <source>Same as Shapes</source>
+      <translation>Samma som Former</translation>
     </message>
     <message>
       <source>will be created</source>
@@ -517,8 +529,28 @@
       <translation>Sparade {file}</translation>
     </message>
     <message>
+      <source>The desktop already uses {name}.</source>
+      <translation>Skrivbordet använder redan {name}.</translation>
+    </message>
+    <message>
+      <source>The desktop could not be switched. Nothing was changed.</source>
+      <translation>Det gick inte att byta på skrivbordet. Ingenting ändrades.</translation>
+    </message>
+    <message>
+      <source>The desktop now uses {name}. Undo last apply takes you back.</source>
+      <translation>Skrivbordet använder nu {name}. Med Ångra senaste verkställande kommer du tillbaka.</translation>
+    </message>
+    <message>
+      <source>This is a new theme that starts with the colors of {name}. Change it on the right, then choose Apply to desktop.</source>
+      <translation>Det här är ett nytt tema som utgår från färgerna i {name}. Ändra det till höger och välj sedan Verkställ på skrivbordet.</translation>
+    </message>
+    <message>
       <source>The theme cannot be applied. Nothing was changed.</source>
       <translation>Temat kan inte verkställas. Ingenting ändrades.</translation>
+    </message>
+    <message>
+      <source>The desktop already uses {name} exactly as it is here, so nothing changed. Change a color and apply again.</source>
+      <translation>Skrivbordet använder redan {name} precis som det ser ut här, så ingenting ändrades. Ändra en färg och verkställ igen.</translation>
     </message>
     <message>
       <source>Replace existing files?</source>
@@ -541,8 +573,12 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
       <translation>Verkställandet misslyckades. Allt har lagts tillbaka som det var.</translation>
     </message>
     <message>
-      <source>Applied {name} to the desktop.</source>
-      <translation>Verkställde {name} på skrivbordet.</translation>
+      <source>Applied {name} to the desktop. Undo last apply takes you back.</source>
+      <translation>Verkställde {name} på skrivbordet. Med Ångra senaste verkställande kommer du tillbaka.</translation>
+    </message>
+    <message>
+      <source>Only the colors were applied: this version shows shapes, shadows and panel settings in the preview but cannot put them on the desktop yet.</source>
+      <translation>Bara färgerna verkställdes: den här versionen visar former, skuggor och panelinställningar i förhandsvisningen men kan inte lägga dem på skrivbordet än.</translation>
     </message>
     <message>
       <source>Some things could not be put back.</source>
@@ -559,6 +595,46 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
       <source>&lt;h3&gt;{app} {version}&lt;/h3&gt;&lt;p&gt;Edit every part of a KDE Plasma theme in one place.&lt;/p&gt;&lt;p&gt;Themes are stored in &lt;a href="{themes_url}"&gt;{themes}&lt;/a&gt;. Snapshots are stored in &lt;a href="{snapshots_url}"&gt;{snapshots}&lt;/a&gt;.&lt;/p&gt;&lt;p&gt;Free software under the GNU General Public License, version 3 or later.&lt;br&gt;&lt;a href="https://github.com/Kryckan/plasma-theme-studio"&gt;github.com/Kryckan/plasma-theme-studio&lt;/a&gt;&lt;/p&gt;</source>
       <translation>&lt;h3&gt;{app} {version}&lt;/h3&gt;&lt;p&gt;Redigera alla delar av ett KDE Plasma-tema på ett ställe.&lt;/p&gt;&lt;p&gt;Teman sparas i &lt;a href="{themes_url}"&gt;{themes}&lt;/a&gt;. Ögonblicksbilder sparas i &lt;a href="{snapshots_url}"&gt;{snapshots}&lt;/a&gt;.&lt;/p&gt;&lt;p&gt;Fri programvara under GNU General Public License, version 3 eller senare.&lt;br&gt;&lt;a href="https://github.com/Kryckan/plasma-theme-studio"&gt;github.com/Kryckan/plasma-theme-studio&lt;/a&gt;&lt;/p&gt;</translation>
+    </message>
+    <message>
+      <source>Close message</source>
+      <translation>Stäng meddelandet</translation>
+    </message>
+    <message>
+      <source>Your saved themes and the color schemes installed on this computer. Switch the desktop to one of them, or open one in the editor to change it.</source>
+      <translation>Dina sparade teman och färgscheman som är installerade på den här datorn. Byt skrivbordet till ett av dem, eller öppna ett i redigeraren för att ändra det.</translation>
+    </message>
+    <message>
+      <source>Search…</source>
+      <translation>Sök…</translation>
+    </message>
+    <message>
+      <source>Search themes</source>
+      <translation>Sök teman</translation>
+    </message>
+    <message>
+      <source>Themes</source>
+      <translation>Teman</translation>
+    </message>
+    <message>
+      <source>Use on desktop</source>
+      <translation>Använd på skrivbordet</translation>
+    </message>
+    <message>
+      <source>Saved theme</source>
+      <translation>Sparat tema</translation>
+    </message>
+    <message>
+      <source>In use</source>
+      <translation>Används</translation>
+    </message>
+    <message>
+      <source>Edit</source>
+      <translation>Redigera</translation>
+    </message>
+    <message>
+      <source>Edit a copy</source>
+      <translation>Redigera en kopia</translation>
     </message>
   </context>
 </TS>

@@ -51,6 +51,10 @@ class Generator:
     def warnings(self, theme: Theme, runner) -> list[Msg]:
         return []
 
+    def is_active(self, theme: Theme, runner) -> bool:
+        """Whether the desktop is currently using this theme's output for this target."""
+        return False
+
     def reload_command(self, theme: Theme) -> str:
         """The command shown to the user as the way this target is reloaded."""
         return ""

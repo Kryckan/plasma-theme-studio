@@ -8,7 +8,7 @@ One app for editing an entire KDE Plasma theme in one place.
 
 Set colors, corner radii, borders, shadows and opacity once. Plasma Theme Studio writes the files each part of the desktop needs and reloads the desktop live.
 
-> **Status: early development (v0.1).** Colors can be edited, previewed, applied and undone. Shapes, shadows and the panel are stored and previewed but not applied to the desktop yet. The plan is in [docs/PRD.md](docs/PRD.md).
+> **Status: early development (v0.1).** Colors can be edited, previewed, applied and undone. The Themes tab shows your saved themes and every installed color scheme, switches the desktop between them and opens any of them for editing. Shapes, shadows, window frames and the panel (each with its own corner radius and border width) are stored and previewed but not applied to the desktop yet. The plan is in [docs/PRD.md](docs/PRD.md).
 
 ![The editor with a dark theme open](docs/screenshots/main-window.png)
 

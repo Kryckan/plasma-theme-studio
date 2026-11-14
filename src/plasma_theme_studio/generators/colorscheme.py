@@ -204,6 +204,9 @@ class ColorSchemeGenerator(Generator):
             ]
         return []
 
+    def is_active(self, theme: Theme, runner) -> bool:
+        return current_scheme(runner) == theme.slug
+
     def reload_command(self, theme: Theme) -> str:
         return f"plasma-apply-colorscheme {theme.slug}"
 
@@ -222,6 +225,11 @@ class ColorSchemeGenerator(Generator):
 def _read_setting(runner, key: str) -> str:
     result = runner.run(["kreadconfig6", "--file", "kdeglobals", "--group", "General", "--key", key])
     return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def current_scheme(runner) -> str:
+    """The name of the color scheme the desktop uses now."""
+    return _read_setting(runner, "ColorScheme")
 
 
 def _write_scheme_name(runner, name: str) -> None:

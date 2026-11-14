@@ -63,6 +63,8 @@ class PreviewWidget(QWidget):
         text, muted = _rgb(window["ForegroundNormal"]), _rgb(window["ForegroundInactive"])
         radius = theme.get("shape", "radius")
         border = theme.get("shape", "border_width")
+        window_radius = theme.resolved("window", "radius")
+        window_border = theme.resolved("window", "border_width")
         outline = _rgb(window["ForegroundNormal"], 0.22)
 
         def pen(color=outline, width=border):
@@ -80,11 +82,11 @@ class PreviewWidget(QWidget):
             fade = (1 - step / size) ** 2
             p.setBrush(QColor(0, 0, 0, round(255 * strength * fade * 0.16)))
             grown = frame.adjusted(-step, -step + size * 0.25, step, step + size * 0.25)
-            p.drawRoundedRect(grown, radius + step, radius + step)
+            p.drawRoundedRect(grown, window_radius + step, window_radius + step)
 
         # Window body, clipped to its rounded outline
         shape = QPainterPath()
-        shape.addRoundedRect(frame, radius, radius)
+        shape.addRoundedRect(frame, window_radius, window_radius)
         p.save()
         p.setClipPath(shape, Qt.ClipOperation.IntersectClip)
         p.fillRect(frame, _rgb(window["BackgroundNormal"]))
@@ -196,13 +198,13 @@ class PreviewWidget(QWidget):
 
         # Window outline
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(pen())
-        p.drawRoundedRect(frame, radius, radius)
+        p.setPen(pen(width=window_border))
+        p.drawRoundedRect(frame, window_radius, window_radius)
 
         # Panel
         panel = QRectF(150, SCENE_H - 62, SCENE_W - 300, 46)
-        panel_radius = min(radius * 1.5, 23)
-        p.setPen(pen())
+        panel_radius = min(theme.resolved("panel", "radius"), 23)
+        p.setPen(pen(width=theme.resolved("panel", "border_width")))
         p.setBrush(_rgb(window["BackgroundNormal"], theme.get("panel", "opacity")))
         p.drawRoundedRect(panel, panel_radius, panel_radius)
         p.setPen(Qt.PenStyle.NoPen)

@@ -9,6 +9,7 @@ pytest.importorskip("PySide6.QtWidgets")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from plasma_theme_studio.apply import snapshot as snapshots  # noqa: E402
 from plasma_theme_studio.model.theme import FIELD_BY_ID, Theme  # noqa: E402
 from plasma_theme_studio.ui.main_window import MainWindow  # noqa: E402
 
@@ -89,3 +90,87 @@ def test_save_and_open(window, home):
     assert window.open_path(path)
     assert window.theme == Theme.load(path)
     assert window.editors[("shape", "radius")].box.value() == 12
+
+
+def test_applying_twice_says_nothing_changed(window):
+    window.apply_theme()
+    assert window.banner.isVisible() and "Applied" in window.banner.text()
+    window.apply_theme()
+    assert "nothing changed" in window.banner.text()
+    assert len(snapshots.list_snapshots()) == 1
+
+
+def test_apply_says_when_shapes_are_left_out(window):
+    window.edit(FIELD_BY_ID[("shape", "radius")], 12)
+    window.apply_theme()
+    assert "Only the colors were applied" in window.banner.text()
+
+
+def test_window_and_panel_follow_shapes_until_overridden(window):
+    radius = window.editors[("panel", "radius")]
+    assert radius.same.isChecked() and not radius.number.isEnabled()
+    window.edit(FIELD_BY_ID[("shape", "radius")], 9)
+    assert window.theme.resolved("panel", "radius") == 9
+    assert radius.number.box.value() == 9
+
+    radius.same.setChecked(False)
+    radius.number.box.setValue(20)
+    assert window.theme.get("panel", "radius") == 20
+    assert window.theme.resolved("window", "radius") == 9
+    assert "[panel]\nradius = 20" in window.theme.to_toml()
+    assert Theme.from_toml(window.theme.to_toml()) == window.theme
+
+    radius.same.setChecked(True)
+    assert window.theme.get("panel", "radius") is None
+    assert "radius" not in window.theme.to_toml().split("[panel]")[1]
+    assert not window.grab().isNull()
+
+
+@pytest.fixture
+def nordic(home):
+    folder = home / "system/share/color-schemes"
+    folder.mkdir(parents=True)
+    (folder / "Nordic.colors").write_text(
+        "[Colors:Selection]\nBackgroundNormal=136,192,208\n[Colors:Window]\n"
+        "BackgroundNormal=46,52,64\nForegroundNormal=216,222,233\n[General]\nName=Nordic\n"
+    )
+
+
+def test_switch_to_an_installed_scheme_and_back(nordic, window, runner):
+    runner.known.add("Nordic")
+    entry = window.library.select("Nordic")
+    assert entry.title == "Nordic" and window.library.use_button.isEnabled()
+    window.library.use_button.click()
+    assert runner.settings["ColorScheme"] == "Nordic"
+    assert "In use" in window.library.list.currentItem().text()
+    window.undo_last_apply()
+    assert runner.settings["ColorScheme"] == "BreezeLight"
+    assert "In use" not in window.library.list.currentItem().text()
+
+
+def test_edit_a_copy_of_an_installed_scheme(nordic, window):
+    window.library.select("Nordic")
+    window.library.edit_button.click()
+    assert window.theme.name == "Nordic Copy"
+    assert window.theme.get("colors", "window") == "#2e3440"
+    assert window.tabs.currentWidget() is window.preview
+    assert window.path is None
+
+
+def test_saved_themes_are_listed_and_can_be_used(window, home, runner):
+    window.edit(FIELD_BY_ID[("meta", "name")], "Mine")
+    assert window._save_to(home / ".local/share/plasma-theme-studio/themes/mine.toml")
+    window.new_theme("breeze-dark")
+    entry = window.library.select("Mine")
+    assert entry.is_saved_theme
+    window.library.search.setText("zzz")
+    assert window.library.current() is None and not window.library.use_button.isEnabled()
+    window.library.search.clear()
+    window.library.select("Mine")
+    window.library.use_button.click()
+    assert runner.settings["ColorScheme"] == "Mine"
+    # The scheme written for it does not show up as a second entry.
+    titles = [window.library.list.item(row).text() for row in range(window.library.list.count())]
+    assert len([title for title in titles if title.startswith("Mine")]) == 1
+    window.library.edit_button.click()
+    assert window.theme.name == "Mine" and window.path.name == "mine.toml"

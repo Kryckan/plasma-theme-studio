@@ -11,6 +11,7 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QColorDialog,
     QDoubleSpinBox,
     QHBoxLayout,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QSpinBox,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -96,7 +98,12 @@ class ColorEditor(QWidget):
         dialog.setWindowTitle(self._title)
         before = self._value
         dialog.currentColorChanged.connect(lambda color: self.changed.emit(color.name()))
-        if dialog.exec() != QColorDialog.DialogCode.Accepted and self._value != before:
+        if dialog.exec() == QColorDialog.DialogCode.Accepted:
+            # Not every platform color dialog reports changes while it is open.
+            chosen = dialog.selectedColor()
+            if chosen.isValid() and chosen.name() != self._value:
+                self.changed.emit(chosen.name())
+        elif self._value != before:
             self.changed.emit(before)
 
 
@@ -142,7 +149,46 @@ class NumberEditor(QWidget):
         self.changed.emit(round(value, 2) if self._float else value)
 
 
+class OverrideEditor(QWidget):
+    """A number that follows another field until the user gives it its own value."""
+
+    changed = Signal(object)
+
+    def __init__(self, field: Field, parent=None):
+        super().__init__(parent)
+        self._value = None
+        self._inherited = field.minimum
+        self.same = QCheckBox(translate("ui", "Same as Shapes"))
+        self.number = NumberEditor(field)
+        self.same.toggled.connect(lambda checked: self.changed.emit(None if checked else self._inherited))
+        self.number.changed.connect(lambda value: self.changed.emit(value))
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.same)
+        layout.addWidget(self.number)
+        self.setFocusProxy(self.same)
+
+    def set_title(self, title: str) -> None:
+        self.same.setAccessibleName(f"{title}: {self.same.text()}")
+        self.number.set_title(title)
+
+    def set_inherited(self, value) -> None:
+        self._inherited = value
+        if self._value is None:
+            self.number.set_value(value)
+
+    def set_value(self, value) -> None:
+        self._value = value
+        blocked = self.same.blockSignals(True)
+        self.same.setChecked(value is None)
+        self.same.blockSignals(blocked)
+        self.number.setEnabled(value is not None)
+        self.number.set_value(self._inherited if value is None else value)
+
+
 def editor_for(field: Field) -> QWidget:
+    if field.inherits:
+        return OverrideEditor(field)
     if field.kind == "color":
         return ColorEditor(field)
     if field.kind == "str":
