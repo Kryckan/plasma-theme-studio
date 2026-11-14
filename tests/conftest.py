@@ -62,9 +62,10 @@ def pauses(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def settings(tmp_path):
+def settings(tmp_path, home):
     """What the app remembers between starts (QSettings) is kept in the test's
-    own folder, under names of its own, and never reaches the real one."""
+    own folder, under names of its own, and never reaches the real one. The home folder is
+    the test's own too, so the window frame code never reads the real kwinrc."""
     try:
         from PySide6.QtCore import QCoreApplication, QSettings
     except ImportError:

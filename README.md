@@ -44,7 +44,7 @@ Use the distribution's PySide6, not the one from pip. Only the distribution's bu
 
 - The app writes only inside your home folder and never asks for root.
 - The **Files written** tab shows every file and its content before you apply.
-- It also lists the desktop settings an apply changes. The window frame, the panel style and the panel position are only touched when the theme asks for them.
+- It also lists the desktop settings an apply changes. The window frame, the panel style and the panel position are only touched when the theme asks for them, except that a window frame made by this app is recolored when a theme or color scheme with other colors is put on the desktop.
 - A snapshot is taken before every apply. **Undo last apply** puts the files and settings back, one apply at a time. Restoring an older snapshot undoes every apply made after it as well.
 - If the desktop becomes hard to use, switch to a text console (Ctrl+Alt+F3), log in and run:
 

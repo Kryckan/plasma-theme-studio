@@ -398,7 +398,7 @@ def test_the_check_finds_broken_svg_files():
     )
 
 
-def test_unchanged_wants_nothing_and_says_the_values_only_show_in_the_preview():
+def test_unchanged_wants_nothing_and_says_the_values_only_show_in_the_preview(home):
     generator = WindowFrameGenerator()
     t = theme("unchanged")
     assert not generator.wanted(t)
@@ -644,8 +644,8 @@ def test_only_files_made_here_are_removed_from_an_old_folder(home, runner, kwin)
     assert not (old / "decoration.svg").exists()
 
 
-def test_a_theme_that_leaves_the_frame_alone_changes_nothing(home, runner, kwin):
-    engine.apply(theme(), runner)
+def test_a_theme_that_leaves_the_frame_alone_changes_nothing_when_it_is_not_ours(home, runner, kwin):
+    engine.apply(theme("breeze"), runner)
     reconfigured = kwin.reconfigured
     snapshot_keys = {name: kwin_value(name) for name in ("library", "theme", "BorderSize")}
 
@@ -654,7 +654,7 @@ def test_a_theme_that_leaves_the_frame_alone_changes_nothing(home, runner, kwin)
     assert "window" not in result.snapshot.settings
     assert kwin.reconfigured == reconfigured
     assert {name: kwin_value(name) for name in ("library", "theme", "BorderSize")} == snapshot_keys
-    assert len(folders()) == 1  # not even the generated folder is removed
+    assert folders() == []
 
 
 def test_the_busctl_fallback_asks_kwin_to_reconfigure(home, runner, use_generators):
@@ -870,7 +870,7 @@ def test_with_no_tool_to_ask_kwin_the_failed_reload_is_reported(home, runner, kw
     assert "could not be asked to reload" in str(failure)
 
 
-def test_each_page_gets_the_notes_that_concern_it():
+def test_each_page_gets_the_notes_that_concern_it(home):
     generator = WindowFrameGenerator()
 
     unchanged = Theme()
@@ -897,3 +897,124 @@ def test_each_page_gets_the_notes_that_concern_it():
     assert [str(n) for n in generator.section_notes(made, "shadow")] == [
         "The generated window frame draws this shadow, the same on all sides."
     ]
+
+
+# ---- the shape of the frame in use -----------------------------------------------------
+
+
+def apply_generated(runner, **values):
+    engine.apply(theme("generated", **values), runner)
+
+
+def strip_shape_group(folder_name):
+    """Imitate a folder written before the rc had a group for the shape."""
+    rc = paths.data_home() / "aurorae" / "themes" / folder_name / f"{folder_name}rc"
+    text = rc.read_text()
+    assert f"[{wf.SHAPE_GROUP}]" in text
+    rc.write_text(text.split(f"[{wf.SHAPE_GROUP}]")[0])
+
+
+def test_the_shape_is_written_into_a_group_of_its_own_and_the_rc_still_parses(kwin):
+    sample = theme(window__radius=9, window__border_width=3, shadow__size=20, shadow__strength=0.5)
+    rc = next(f for f in WindowFrameGenerator().files(sample) if f.path.name.endswith("rc"))
+
+    assert "[PlasmaThemeStudio]\nRadius=9\nBorder=3\nShadowSize=20\nShadowStrength=0.5\n" in rc.content
+    assert WindowFrameGenerator().check_output(rc) == []
+
+
+SHAPES = [
+    (r, b, s, k)
+    for r, b in ((0, 0), (5, 1), (14, 2), (24, 12), (3, 12), (24, 0))
+    for s, k in ((0, 0.35), (8, 0.0), (24, 0.35), (64, 1.0), (32, 0.123))
+]
+
+
+@pytest.mark.parametrize("stripped", [False, True])
+@pytest.mark.parametrize(("radius", "border", "shadow", "strength"), SHAPES)
+def test_the_shape_of_the_frame_in_use_is_read_back(kwin, runner, radius, border, shadow, strength, stripped):
+    values = {
+        "window__radius": radius,
+        "window__border_width": border,
+        "shadow__size": shadow,
+        "shadow__strength": strength,
+    }
+    apply_generated(runner, **values)
+    if stripped:
+        strip_shape_group(folders()[0])
+    found = wf.frame_in_use_shape()
+    assert found is not None
+    assert found[:3] == (radius, border, shadow)
+    # Without the group, the strength comes from the gradient (3 decimals), or is the default without one.
+    expected = strength if shadow else (strength if not stripped else 0.35)
+    assert found[3] == pytest.approx(expected, abs=1e-9)
+
+
+def test_no_frame_of_ours_in_use_gives_no_shape(kwin, runner):
+    assert wf.frame_in_use_shape() is None
+    kconfig.write_value(runner, *KWIN, "library", wf.BREEZE_LIBRARY)
+    kconfig.write_value(runner, *KWIN, "theme", "Breeze")
+    assert wf.frame_in_use_shape() is None
+    kconfig.write_value(runner, *KWIN, "library", wf.AURORAE_LIBRARY)
+    kconfig.write_value(runner, *KWIN, "theme", wf.AURORAE_THEME_PREFIX + "MoeDark")
+    assert wf.frame_in_use_shape() is None
+
+
+@pytest.mark.parametrize("stripped", [False, True])
+@pytest.mark.parametrize("damage", ["foreign", "missing", "bad_rc", "bad_svg", "range", "path"])
+def test_an_unreadable_or_out_of_range_frame_is_not_ours(kwin, runner, damage, stripped):
+    apply_generated(runner, window__radius=8, window__border_width=2)
+    name = folders()[0]
+    if stripped:
+        strip_shape_group(name)
+    folder = paths.data_home() / "aurorae" / "themes" / name
+    rc = folder / f"{name}rc"
+    if damage == "foreign":
+        (folder / "metadata.desktop").write_text("[Desktop Entry]\nName=x\n")
+    elif damage == "missing":
+        rc.unlink()
+        (folder / "decoration.svg").unlink()
+    elif damage == "bad_rc":
+        rc.write_text("[Layout\nBorderLeft=2\n")
+    elif damage == "bad_svg":
+        (folder / "decoration.svg").write_text("<svg")
+        if not stripped:
+            rc.write_text(rc.read_text().replace("Radius=8", "Radius=x"))
+    elif damage == "range":
+        text = rc.read_text()
+        rc.write_text(text.replace("BorderLeft=2", "BorderLeft=99").replace("Border=2", "Border=99"))
+    else:
+        kconfig.write_value(runner, *KWIN, "theme", wf.AURORAE_THEME_PREFIX + "../" + name)
+    assert wf.frame_in_use_shape() is None
+    assert not WindowFrameGenerator().wanted(theme("unchanged"))
+
+
+def test_a_colors_only_theme_plans_the_frame_in_use_in_its_own_colors(kwin, runner):
+    apply_generated(runner, window__radius=10, window__border_width=3, shadow__size=16)
+    old = folders()[0]
+    plain = theme("unchanged", meta__name="Plain", colors__header="#123456")
+    generator = WindowFrameGenerator()
+
+    assert generator.wanted(plain)
+    files = generator.files(plain)
+    new = wf.frame_folder(plain)
+    assert new != old and {f.path.parent.name for f in files} == {new}
+    assert "#123456" in next(f for f in files if f.path.name == "decoration.svg").content
+    assert [p.name for p in generator.stale_files(plain) if p.name == old] == [old]
+    assert "keeps its shape" in str(generator.notes(plain)[0])
+    assert not generator.is_active(plain, runner)
+
+    engine.apply(plain, runner)
+
+    assert folders() == [new]
+    assert generator.is_active(plain, runner)
+    assert kwin_value("BorderSize") == wf.aurorae_border_size(3)
+
+
+@pytest.mark.parametrize("key", ["Radius", "Border", "ShadowSize", "ShadowStrength"])
+def test_a_shape_group_with_a_missing_key_is_not_ours(kwin, runner, key):
+    apply_generated(runner, window__radius=8, window__border_width=2)
+    name = folders()[0]
+    rc = paths.data_home() / "aurorae" / "themes" / name / f"{name}rc"
+    lines = [line for line in rc.read_text().splitlines() if not line.startswith(key + "=")]
+    rc.write_text("\n".join(lines) + "\n")
+    assert wf.frame_in_use_shape() is None

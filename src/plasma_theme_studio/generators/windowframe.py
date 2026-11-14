@@ -7,18 +7,21 @@ from __future__ import annotations
 
 import configparser
 import hashlib
+import math
+import re
 import time
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .. import kconfig, paths
 from ..messages import Msg, translate
 from ..model.color import BLACK, WHITE, Color, readable_on
-from ..model.theme import Theme
+from ..model.theme import FIELD_BY_ID, Theme
 from .base import MARKER, XML_MARKER, ApplyError, Generator, PlannedFile, made_here
 
 FOLDER_PREFIX = "PlasmaThemeStudio-"
+SHAPE_GROUP = "PlasmaThemeStudio"
 AURORAE_LIBRARY = "org.kde.kwin.aurorae.v2"
 AURORAE_THEME_PREFIX = "__aurorae__svg__"
 BREEZE_LIBRARY = "org.kde.breeze"
@@ -486,6 +489,14 @@ def _rc(look: Look) -> str:
         ("PaddingRight", look.shadow),
         ("PaddingTop", look.shadow),
         ("PaddingBottom", look.shadow),
+        ("", None),
+        # The shape, for the next apply: a theme that leaves the frame alone recolors it.
+        # Aurorae ignores groups it does not know.
+        (f"[{SHAPE_GROUP}]", None),
+        ("Radius", look.radius),
+        ("Border", look.border),
+        ("ShadowSize", look.shadow),
+        ("ShadowStrength", repr(float(look.strength))),
     ]
     lines = [MARKER]
     for key, value in values:
@@ -511,10 +522,9 @@ def frame_contents(look: Look) -> dict[str, str]:
     return files
 
 
-def frame_folder(theme: Theme) -> str:
-    """The folder name of the generated frame. KWin keeps a theme by its name,
+def _folder_name(theme: Theme, look: Look) -> str:
+    """The folder name of a generated frame. KWin keeps a theme by its name,
     so the name changes with everything that decides how the frame looks."""
-    look = Look.of(theme)
     digest = hashlib.sha256(theme.name.encode())
     digest.update(_rc(look).encode())
     for name, content in sorted(frame_contents(look).items()):
@@ -522,8 +532,124 @@ def frame_folder(theme: Theme) -> str:
     return f"{FOLDER_PREFIX}{theme.slug}-{digest.hexdigest()[:8]}"
 
 
+def frame_folder(theme: Theme) -> str:
+    """The folder name of the frame that the theme puts on the desktop."""
+    target = frame_to_generate(theme)
+    return target[1] if target else _folder_name(theme, Look.of(theme))
+
+
+def frame_to_generate(theme: Theme) -> tuple[Look, str] | None:
+    """The look and folder of the frame an apply of the theme generates, or None for
+    none. A theme that asks for a generated frame gets its own. A theme that leaves
+    the frame alone while one of ours is in use gets that frame's shape in its colors."""
+    mode = theme.get("window", "decoration")
+    if mode == "generated":
+        look = Look.of(theme)
+        return look, _folder_name(theme, look)
+    if mode != "unchanged":
+        return None
+    shape = frame_in_use_shape()
+    if shape is None:
+        return None
+    radius, border, shadow, strength = shape
+    look = replace(Look.of(theme), radius=radius, border=border, shadow=shadow, strength=strength)
+    return look, _folder_name(theme, look)
+
+
 def _themes_root() -> Path:
     return paths.data_home() / "aurorae" / "themes"
+
+
+def _in_range(value: float, section: str, key: str) -> bool:
+    field = FIELD_BY_ID[(section, key)]
+    return math.isfinite(value) and field.minimum <= value <= field.maximum
+
+
+def _shape_ok(radius: int, border: int, shadow: int, strength: float) -> bool:
+    return (
+        _in_range(radius, "window", "radius")
+        and _in_range(border, "window", "border_width")
+        and _in_range(shadow, "shadow", "size")
+        and _in_range(strength, "shadow", "strength")
+    )
+
+
+def _frame_folder_in_use() -> Path | None:
+    """The folder of the frame of ours that kwinrc selects, if it was made here."""
+    if kconfig.user_value(KWIN_FILE, KWIN_GROUP, "library") != AURORAE_LIBRARY:
+        return None
+    name = kconfig.user_value(KWIN_FILE, KWIN_GROUP, "theme") or ""
+    if not name.startswith(AURORAE_THEME_PREFIX + FOLDER_PREFIX):
+        return None
+    folder = name.removeprefix(AURORAE_THEME_PREFIX)
+    if "/" in folder or "\\" in folder or folder in (".", ".."):
+        return None
+    path = _themes_root() / folder
+    if path.is_symlink() or not path.is_dir() or not made_here(path / "metadata.desktop"):
+        return None
+    return path
+
+
+def frame_in_use_shape() -> tuple[int, int, int, float] | None:
+    """Radius, border, shadow size and shadow strength of the frame of ours that the
+    desktop uses, or None when it uses another frame or this one cannot be read."""
+    path = _frame_folder_in_use()
+    if path is None:
+        return None
+    try:
+        shape = _shape_from_rc(path)
+        if shape is None:
+            shape = _shape_from_files(path)
+    except (OSError, UnicodeDecodeError, ValueError, ET.ParseError, configparser.Error, KeyError):
+        return None
+    if shape is None or not _shape_ok(*shape):
+        return None
+    return shape
+
+
+def _read_rc(path: Path) -> configparser.ConfigParser:
+    parser = configparser.ConfigParser(interpolation=None, strict=True)
+    parser.optionxform = str
+    parser.read_string((path / f"{path.name}rc").read_text(encoding="utf-8"))
+    return parser
+
+
+def _shape_from_rc(path: Path) -> tuple[int, int, int, float] | None:
+    parser = _read_rc(path)
+    if not parser.has_section(SHAPE_GROUP):
+        return None
+    group = parser[SHAPE_GROUP]
+    return (
+        int(group["Radius"]),
+        int(group["Border"]),
+        int(group["ShadowSize"]),
+        float(group["ShadowStrength"]),
+    )
+
+
+def _shape_from_files(path: Path) -> tuple[int, int, int, float] | None:
+    """The shape of a folder written before the rc had a group for it."""
+    layout = _read_rc(path)["Layout"]
+    border, shadow = int(layout["BorderLeft"]), int(layout["PaddingLeft"])
+    root = ET.fromstring((path / "decoration.svg").read_text(encoding="utf-8"))
+    corner = next((e for e in root.iter() if e.get("id") == "decoration-topleft"), None)
+    if corner is None:
+        return None
+    shape = next((e for e in corner.iter() if _local(e.tag) == "path"), None)
+    if shape is None:
+        return None
+    arc = re.search(r"A\s*([0-9.]+)[ ,]+([0-9.]+)", shape.get("d", ""))
+    radius = 0.0
+    if arc:
+        radius = float(arc.group(1))
+        if radius != float(arc.group(2)) or radius != int(radius):
+            return None
+    strength = FIELD_BY_ID[("shadow", "strength")].default
+    if shadow:
+        stop = next((e for e in root.iter() if _local(e.tag) == "stop"), None)
+        if stop is not None:
+            strength = float(stop.get("stop-opacity", ""))
+    return int(radius), border, shadow, float(strength)
 
 
 REQUIRED_DECORATION = tuple(
@@ -548,11 +674,19 @@ class WindowFrameGenerator(Generator):
         return theme.get("window", "decoration")
 
     def wanted(self, theme: Theme) -> bool:
-        return self.mode(theme) != "unchanged"
+        return self.mode(theme) != "unchanged" or frame_to_generate(theme) is not None
 
     def notes(self, theme: Theme) -> list[Msg]:
         mode = self.mode(theme)
         if mode == "unchanged":
+            if frame_to_generate(theme) is not None:
+                return [
+                    translate(
+                        "core",
+                        "The desktop uses a window frame made by this app. It keeps its shape and gets "
+                        "this theme's colors.",
+                    )
+                ]
             return [
                 translate(
                     "core",
@@ -569,6 +703,8 @@ class WindowFrameGenerator(Generator):
         if section != "shadow":
             return self._breeze_frame_notes(theme) if mode == "breeze" else self.notes(theme)
         if mode == "unchanged":
+            if frame_to_generate(theme) is not None:
+                return [translate("core", "The window frame in use keeps its shadow.")]
             return [
                 translate(
                     "core",
@@ -653,10 +789,10 @@ class WindowFrameGenerator(Generator):
     # ---- files ----------------------------------------------------------
 
     def files(self, theme: Theme) -> list[PlannedFile]:
-        if self.mode(theme) != "generated":
+        target = frame_to_generate(theme)
+        if target is None:
             return []
-        look = Look.of(theme)
-        folder = frame_folder(theme)
+        look, folder = target
         root = _themes_root() / folder
         planned = [PlannedFile(root / "metadata.desktop", _metadata(theme.name, folder))]
         planned.append(PlannedFile(root / f"{folder}rc", _rc(look)))
@@ -668,7 +804,8 @@ class WindowFrameGenerator(Generator):
         root = _themes_root()
         if not root.is_dir():
             return []
-        keep = frame_folder(theme) if self.mode(theme) == "generated" else None
+        target = frame_to_generate(theme)
+        keep = target[1] if target else None
         stale: list[Path] = []
         for folder in sorted(root.glob(f"{FOLDER_PREFIX}*")):
             if folder.is_symlink() or not folder.is_dir() or folder.name == keep:
@@ -749,7 +886,7 @@ class WindowFrameGenerator(Generator):
         return " ".join(RECONFIGURE)
 
     def changed_settings(self, theme: Theme) -> list[Msg]:
-        if self.mode(theme) == "generated":
+        if frame_to_generate(theme) is not None:
             return [translate("core", "which window frame KWin uses and its border size (kwinrc)")]
         return [
             translate(
@@ -778,12 +915,14 @@ class WindowFrameGenerator(Generator):
 
     def _wanted_settings(self, theme: Theme) -> dict[str, str]:
         width = int(theme.resolved("window", "border_width"))
-        if self.mode(theme) == "generated":
+        target = frame_to_generate(theme)
+        if target is not None:
+            look, folder = target
             return {
                 "library": AURORAE_LIBRARY,
-                "theme": AURORAE_THEME_PREFIX + frame_folder(theme),
+                "theme": AURORAE_THEME_PREFIX + folder,
                 "border_size_auto": "false",
-                "border_size": aurorae_border_size(width),
+                "border_size": aurorae_border_size(look.border),
             }
         return {
             "library": BREEZE_LIBRARY,
@@ -818,6 +957,7 @@ class WindowFrameGenerator(Generator):
 
     def reload(self, theme: Theme, runner) -> None:
         wanted = self._wanted_settings(theme)
+        target = frame_to_generate(theme)  # before kwinrc changes: it reads the frame in use
         if self.mode(theme) == "breeze":
             # Breeze is already in use when nothing in the user's files says otherwise.
             if self._decoration(runner) == (BREEZE_LIBRARY, BREEZE_THEME):
@@ -827,7 +967,7 @@ class WindowFrameGenerator(Generator):
             kconfig.write_value(runner, file, groups, key, value)
         _reconfigure(runner)
         library = wanted.get("library", BREEZE_LIBRARY)
-        folder = frame_folder(theme) if self.mode(theme) == "generated" else None
+        folder = target[1] if target else None
         _check_decoration(runner, library, folder)
 
     def restore_settings(self, settings: dict, runner) -> None:

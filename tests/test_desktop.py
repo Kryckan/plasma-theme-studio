@@ -667,21 +667,118 @@ def test_the_command_line_does_nothing_when_the_desktop_already_has_the_theme(co
 # ---- from one theme to the next --------------------------------------------------------------------
 
 
-def test_a_theme_with_colors_only_leaves_the_frame_and_panel_of_the_one_before(desktop):
-    """ "Leave as it is" means just that: nothing of the earlier theme is taken away
-    while KWin and Plasma still use it."""
+DARK = {"colors__window": "#20242c", "colors__header": "#2a2f38", "colors__text": "#e0e4ea"}
+
+
+def dark(name="Dark", **values):
+    """A theme with colors only: it leaves the window frame and the panel alone."""
+    return Theme({("meta", "name"): name} | {tuple(k.split("__")): v for k, v in DARK.items()} | values)
+
+
+def themes_folders():
+    return sorted(p.name for p in (paths.data_home() / "aurorae/themes").iterdir())
+
+
+def test_a_theme_with_colors_only_recolors_the_frame_and_leaves_the_panel_of_the_one_before(desktop):
+    """The frame follows the colors and keeps its shape; the panel style follows the scheme by itself."""
     first = rounded()
     engine.apply(first, desktop.runner)
+    old = wf.frame_folder(first)
 
-    engine.apply(Theme({("meta", "name"): "Plain"}), desktop.runner)
+    plain = dark()
+    plan = engine.build_plan(plain, desktop.runner)
+    assert [t.generator.id for t in plan.wanted_targets] == ["colors", "window"]
+    engine.apply(plain, desktop.runner)
 
-    folder = wf.frame_folder(first)
-    assert (paths.data_home() / "aurorae/themes" / folder / "decoration.svg").exists()
-    assert kconfig.user_value(*KWIN, "theme") == wf.AURORAE_THEME_PREFIX + folder
+    new = wf.frame_folder(plain)
+    assert new != old and themes_folders() == [new]
+    assert kconfig.user_value(*KWIN, "theme") == wf.AURORAE_THEME_PREFIX + new
+    assert kconfig.user_value(*KWIN, "BorderSize") == wf.aurorae_border_size(2)
+    assert wf.frame_in_use_shape() == (14, 2, 32, 0.35)
+    svg = (paths.data_home() / "aurorae/themes" / new / "decoration.svg").read_text()
+    assert "#2a2f38" in svg and "#20242c" in svg
     assert (paths.data_home() / "plasma/desktoptheme" / style_id(first) / "metadata.json").exists()
     assert kconfig.user_value("plasmarc", ["Theme"], "name") == style_id(first)
     assert desktop.shell.state()["location"] == "top"
-    assert desktop.runner.settings["ColorScheme"] == "Plain"
+    assert desktop.runner.settings["ColorScheme"] == "Dark"
+    assert engine.is_current(engine.build_plan(plain, desktop.runner), desktop.runner)
+
+
+def test_undo_of_a_recolor_brings_the_old_frame_back(desktop):
+    first = rounded()
+    engine.apply(first, desktop.runner)
+    state = system_state(desktop)
+    result = engine.apply(dark(), desktop.runner)
+
+    assert engine.restore(result.snapshot, desktop.runner, consume=True) == []
+
+    assert system_state(desktop) == state
+    assert themes_folders() == [wf.frame_folder(first)]
+    assert kconfig.user_value(*KWIN, "theme") == wf.AURORAE_THEME_PREFIX + wf.frame_folder(first)
+
+
+def test_applying_the_same_colors_only_theme_twice_changes_nothing_the_second_time(desktop):
+    engine.apply(rounded(), desktop.runner)
+    plain = dark()
+    engine.apply(plain, desktop.runner)
+    state = system_state(desktop)
+    reloads = desktop.kwin.reconfigured
+
+    plan = engine.build_plan(plain, desktop.runner)
+    assert engine.is_current(plan, desktop.runner)
+    assert not any(t.stale for t in plan.wanted_targets)
+    engine.apply(plain, desktop.runner)
+
+    assert system_state(desktop) == state
+    assert themes_folders() == [wf.frame_folder(plain)]
+    assert desktop.kwin.reconfigured == reloads + 1  # a target is reloaded on every apply
+
+
+def test_a_failed_recolor_is_rolled_back(desktop):
+    engine.apply(rounded(), desktop.runner)
+    state = system_state(desktop)
+    desktop.kwin.fail = True
+
+    with pytest.raises(ApplyError):
+        engine.apply(dark(), desktop.runner)
+
+    desktop.kwin.fail = False
+    assert system_state(desktop) == state
+
+
+@pytest.mark.parametrize("how", ["breeze", "moedark", "foreign", "missing", "unreadable"])
+def test_a_colors_only_theme_leaves_a_frame_that_is_not_ours_alone(desktop, how):
+    root = paths.data_home() / "aurorae/themes"
+    if how == "moedark":
+        kconfig.write_value(desktop.runner, *KWIN, "library", wf.AURORAE_LIBRARY)
+        kconfig.write_value(desktop.runner, *KWIN, "theme", wf.AURORAE_THEME_PREFIX + "MoeDark")
+    elif how != "breeze":
+        engine.apply(rounded(), desktop.runner)
+        folder = root / wf.frame_folder(rounded())
+        if how == "foreign":
+            (folder / "metadata.desktop").write_text("[Desktop Entry]\nName=Not ours\n")
+        elif how == "missing":
+            for item in folder.iterdir():
+                item.unlink()
+            folder.rmdir()
+        else:
+            (folder / f"{folder.name}rc").write_text("not an rc file\n")
+            (folder / "decoration.svg").write_text("<svg")
+    state = system_state(desktop)
+    plan = engine.build_plan(dark(), desktop.runner)
+    assert [t.generator.id for t in plan.wanted_targets] == ["colors"]
+
+    engine.apply(dark(), desktop.runner)
+
+    def without_scheme(items):
+        return [
+            item for item in items if "color-schemes" not in str(item[0] if isinstance(item, tuple) else item)
+        ]
+
+    after = system_state(desktop)
+    assert without_scheme(after[0].items()) == without_scheme(state[0].items())
+    assert without_scheme(after[1]) == without_scheme(state[1])
+    assert after[2] == "Dark"
 
 
 def test_a_color_scheme_switch_and_its_undo_leave_the_other_parts_alone(desktop):
@@ -719,3 +816,40 @@ def test_one_changed_panel_value_keeps_the_colors_of_the_same_theme(desktop):
     assert scheme.read_text() == before
     assert desktop.runner.settings["ColorScheme"] == "Rounded"
     assert desktop.shell.state()["location"] == "left"
+
+
+def test_a_scheme_switch_recolors_the_frame_with_one_undo(desktop):
+    first = rounded()
+    engine.apply(first, desktop.runner)
+    state = system_state(desktop)
+    scheme = dark("Switched")
+    desktop.runner.known.add("Switched")
+
+    snapshot = engine.switch_color_scheme("Switched", "Switched", desktop.runner, scheme)
+
+    assert desktop.runner.settings["ColorScheme"] == "Switched"
+    assert set(snapshot.settings) == {"colors", "window"}
+    assert themes_folders() == [wf.frame_folder(scheme)]
+    assert wf.frame_in_use_shape() == (14, 2, 32, 0.35)
+    assert engine.restore(snapshot, desktop.runner, consume=True) == []
+    assert system_state(desktop) == state
+
+
+def test_a_scheme_switch_without_a_frame_of_ours_writes_no_files(desktop):
+    before = system_state(desktop)
+    snapshot = engine.switch_color_scheme("BreezeDark", "Breeze Dark", desktop.runner, dark("Breeze Dark"))
+    assert list(snapshot.settings) == ["colors"]
+    assert system_state(desktop)[0] == before[0] and desktop.kwin.reconfigured == 0
+
+
+def test_a_failed_scheme_switch_puts_back_the_scheme_and_the_frame(desktop):
+    engine.apply(rounded(), desktop.runner)
+    desktop.runner.known.add("Switched")
+    state = system_state(desktop)
+    desktop.kwin.fail = True
+
+    with pytest.raises(ApplyError):
+        engine.switch_color_scheme("Switched", "Switched", desktop.runner, dark("Switched"))
+
+    desktop.kwin.fail = False
+    assert system_state(desktop) == state

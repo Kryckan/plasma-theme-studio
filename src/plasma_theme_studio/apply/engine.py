@@ -88,6 +88,35 @@ def _inside_home(path: Path) -> bool:
     return path.resolve().is_relative_to(Path.home().resolve())
 
 
+def _plan_target(generator: Generator, theme: Theme, runner) -> TargetPlan:
+    target = TargetPlan(generator)
+    target.notes += generator.notes(theme)
+    target.wanted = generator.wanted(theme)
+    if not target.wanted:
+        return target
+    target.problems += generator.problems(theme)
+    target.reload_command = generator.reload_command(theme)
+    target.settings = generator.changed_settings(theme)
+    for file in generator.files(theme):
+        target.files.append(FileStatus(file, _state(file)))
+        target.problems += generator.check_output(file)
+        if not _inside_home(file.path):
+            target.problems.append(
+                translate("core", "{path} is outside your home folder and will not be written.").format(
+                    path=str(file.path)
+                )
+            )
+    # Only ever remove what is inside the home folder.
+    target.stale = [path for path in generator.stale_files(theme) if _inside_home(path)]
+    if runner is not None:
+        unavailable = generator.unavailable_reason(runner)
+        if unavailable:
+            target.problems.append(unavailable)
+        else:
+            target.warnings += generator.warnings(theme, runner)
+    return target
+
+
 def build_plan(theme: Theme, runner=None) -> Plan:
     """Work out what an apply would do. With a runner, the system is checked
     too: missing tools and settings that would override the theme."""
@@ -96,34 +125,10 @@ def build_plan(theme: Theme, runner=None) -> Plan:
         problems.append(translate("core", "Plasma Theme Studio must not be run as root."))
     targets = []
     for generator in generators.GENERATORS:
-        target = TargetPlan(generator)
-        targets.append(target)
         if theme.problems():
-            continue  # without a usable name there are no file names to plan
-        target.notes += generator.notes(theme)
-        target.wanted = generator.wanted(theme)
-        if not target.wanted:
-            continue
-        target.problems += generator.problems(theme)
-        target.reload_command = generator.reload_command(theme)
-        target.settings = generator.changed_settings(theme)
-        for file in generator.files(theme):
-            target.files.append(FileStatus(file, _state(file)))
-            target.problems += generator.check_output(file)
-            if not _inside_home(file.path):
-                target.problems.append(
-                    translate("core", "{path} is outside your home folder and will not be written.").format(
-                        path=str(file.path)
-                    )
-                )
-        # Only ever remove what is inside the home folder.
-        target.stale = [path for path in generator.stale_files(theme) if _inside_home(path)]
-        if runner is not None:
-            unavailable = generator.unavailable_reason(runner)
-            if unavailable:
-                target.problems.append(unavailable)
-            else:
-                target.warnings += generator.warnings(theme, runner)
+            targets.append(TargetPlan(generator))  # without a usable name there are no file names
+        else:
+            targets.append(_plan_target(generator, theme, runner))
     return Plan(theme, targets, problems)
 
 
@@ -146,13 +151,25 @@ def apply(theme: Theme, runner, replace_foreign: bool = False) -> ApplyResult:
     if blocking:
         raise ApplyBlocked(blocking)
 
-    targets = plan.wanted_targets
+    snapshot = _execute(theme.name, theme, runner, plan.wanted_targets)
+    return ApplyResult(snapshot, plan)
+
+
+def _execute(
+    label: str, theme: Theme, runner, targets: list[TargetPlan], scheme_id: str | None = None
+) -> Snapshot:
+    """Take the snapshot, write the files of the targets, reload them and remove what is
+    stale. With `scheme_id` the color scheme is switched first, in the same snapshot.
+    Everything is rolled back on any error."""
     files = [status.file for target in targets for status in target.files]
     stale = [path for target in targets for path in target.stale]
     stale_files = [path for path in stale if path.is_file()]
     settings = {t.generator.id: t.generator.capture_settings(runner) for t in targets}
+    if scheme_id is not None:
+        colors = generator_by_id("colors")
+        settings[colors.id] = colors.capture_settings(runner)
     try:
-        snapshot = snapshots.create(theme.name, [f.path for f in files] + stale_files, settings)
+        snapshot = snapshots.create(label, [f.path for f in files] + stale_files, settings)
     except OSError as error:
         # Without a snapshot there is no way back, so nothing is touched.
         raise ApplyError(
@@ -162,6 +179,9 @@ def apply(theme: Theme, runner, replace_foreign: bool = False) -> ApplyResult:
         ) from error
     reached: list[str] = []  # the targets whose settings may have changed
     try:
+        if scheme_id is not None:
+            reached.append("colors")
+            colors.restore_settings({"color_scheme": scheme_id}, runner)
         for file in files:
             write_atomic(file.path, file.content)
         for target in targets:
@@ -192,7 +212,7 @@ def apply(theme: Theme, runner, replace_foreign: bool = False) -> ApplyResult:
             ).format(error=str(message), failures=" ".join(str(failure) for failure in failures))
         raise ApplyError(message, restored=not failures) from error
     snapshots.prune()
-    return ApplyResult(snapshot, plan)
+    return snapshot
 
 
 def is_current(plan: Plan, runner) -> bool:
@@ -207,12 +227,19 @@ def is_current(plan: Plan, runner) -> bool:
     )
 
 
-def switch_color_scheme(scheme_id: str, scheme_name: str, runner) -> Snapshot:
-    """Make an installed color scheme the active one. No files are written."""
+def switch_color_scheme(scheme_id: str, scheme_name: str, runner, theme: Theme | None = None) -> Snapshot:
+    """Make an installed color scheme the active one. No files are written, except that a
+    window frame made by this app, when one is in use and can be recolored, gets the colors of `theme` (the
+    scheme's colors): one snapshot holds both, and a failure puts both back."""
     generator = generator_by_id("colors")
     unavailable = generator.unavailable_reason(runner)
     if unavailable:
         raise ApplyBlocked([unavailable])
+    frame = _frame_target(theme, runner)
+    if frame is not None and not frame.problems and not any(s.state == FOREIGN for s in frame.files):
+        return _execute(scheme_name, theme, runner, [frame], scheme_id)
+    # A frame that cannot be recolored now (no way to reload KWin, a foreign file in the way) must
+    # not stop the switch: the scheme is changed alone, as it was before frames followed schemes.
     snapshot = snapshots.create(scheme_name, [], {generator.id: generator.capture_settings(runner)})
     try:
         generator.restore_settings({"color_scheme": scheme_id}, runner)
@@ -221,6 +248,16 @@ def switch_color_scheme(scheme_id: str, scheme_name: str, runner) -> Snapshot:
         raise
     snapshots.prune()
     return snapshot
+
+
+def _frame_target(theme: Theme | None, runner) -> TargetPlan | None:
+    """The plan for recoloring the window frame in use, or None when it is not ours."""
+    if theme is None or theme.problems() or theme.get("window", "decoration") != "unchanged":
+        return None
+    generator = generator_by_id("window")
+    if generator is None or not generator.wanted(theme):
+        return None
+    return _plan_target(generator, theme, runner)
 
 
 def restore_to(snapshot: Snapshot, runner) -> tuple[Snapshot | None, list[Msg]]:

@@ -685,7 +685,7 @@ class MainWindow(QMainWindow):
         nothing_changed = translate("ui", "The desktop could not be switched. Nothing was changed.")
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            snapshot = engine.switch_color_scheme(entry.scheme_id, entry.title, self.runner)
+            snapshot = engine.switch_color_scheme(entry.scheme_id, entry.title, self.runner, entry.theme)
         except engine.ApplyBlocked as error:
             self._show_problems(nothing_changed, error.problems)
             return False

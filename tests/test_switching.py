@@ -532,3 +532,66 @@ def test_a_switch_whose_snapshot_was_removed_as_too_old_is_not_taken_for_undone(
     desk.undo_last_apply()
     assert runner.settings["ColorScheme"] == "Other"
     assert desk.theme.name == "Other"
+
+
+# ---- a frame made by this app follows the scheme ------------------------------------------------
+
+
+def generated_frame_theme():
+    return Theme(
+        {
+            ("meta", "name"): "Framed",
+            ("window", "decoration"): "generated",
+            ("window", "radius"): 12,
+            ("window", "border_width"): 3,
+            ("shadow", "size"): 20,
+        }
+    )
+
+
+def test_a_scheme_switch_recolors_a_generated_frame_and_one_undo_brings_both_back(desk, runner):
+    from plasma_theme_studio.apply import engine
+
+    engine.apply(generated_frame_theme(), runner)
+    root = paths.data_home() / "aurorae/themes"
+    before = sorted(p.name for p in root.iterdir())
+    kwinrc = (paths.config_home() / "kwinrc").read_text()
+
+    use(desk, "Nordic")
+
+    after = sorted(p.name for p in root.iterdir())
+    assert runner.settings["ColorScheme"] == "Nordic"
+    assert len(after) == 1 and after != before
+    assert wf.frame_in_use_shape() == (12, 3, 20, 0.35)
+    assert "#2e3440" in (root / after[0] / "decoration.svg").read_text()  # Nordic's window color
+
+    desk.undo_last_apply()
+
+    assert runner.settings["ColorScheme"] == "Framed"
+    assert sorted(p.name for p in root.iterdir()) == before
+    assert (paths.config_home() / "kwinrc").read_text() == kwinrc
+
+
+def test_a_scheme_switch_without_a_frame_of_ours_writes_no_frame(desk, runner):
+    use(desk, "Nordic")
+    assert runner.settings["ColorScheme"] == "Nordic"
+    assert not (paths.data_home() / "aurorae").exists()
+
+
+def test_a_scheme_switch_still_works_when_the_frame_cannot_be_recolored(desk, runner):
+    from plasma_theme_studio.apply import engine
+
+    engine.apply(generated_frame_theme(), runner)
+    root = paths.data_home() / "aurorae/themes"
+    before = sorted(p.name for p in root.iterdir())
+    nordic = desk.library.select("Nordic").theme
+    blocker = root / wf.frame_folder(nordic) / "decoration.svg"
+    blocker.parent.mkdir()
+    blocker.write_text("not ours")
+
+    use(desk, "Nordic")
+
+    assert runner.settings["ColorScheme"] == "Nordic"
+    assert sorted(p.name for p in root.iterdir()) == sorted([*before, blocker.parent.name])
+    assert blocker.read_text() == "not ours"
+    assert wf.frame_in_use_shape() == (12, 3, 20, 0.35)  # the old frame is still the one in use
