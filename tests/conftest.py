@@ -327,6 +327,28 @@ class DesktopRunner(FakeRunner):
         return Result(0, "\n".join(report))
 
 
+@pytest.fixture(autouse=True)
+def windows_do_not_outlive_their_test():
+    """Every window a test made is deleted when the test ends, with its pages, pictures and
+    worker threads. Left alone they pile up (2 GB and 200 threads by the end of the run),
+    and the run then dies at the memory cap on a machine that lays memory out differently."""
+    yield
+    import gc
+    import sys
+
+    widgets = sys.modules.get("PySide6.QtWidgets")
+    application = widgets.QApplication.instance() if widgets else None
+    if not isinstance(application, widgets.QApplication if widgets else ()):
+        return
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    for widget in application.topLevelWidgets():
+        widget.hide()
+        widget.deleteLater()  # not close(): closing asks about unsaved changes
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+
+
 @pytest.fixture(scope="session")
 def app():
     """The one Qt application of the test run. It has to be a QApplication from

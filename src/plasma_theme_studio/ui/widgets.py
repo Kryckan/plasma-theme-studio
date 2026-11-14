@@ -541,6 +541,7 @@ class CardGrid(QWidget):
         name="",
         type_ahead=True,
         parent=None,
+        flow_class=None,
     ):
         super().__init__(parent)
         self.fit = fit
@@ -580,7 +581,7 @@ class CardGrid(QWidget):
         bar.setContentsMargins(0, 0, 0, 0)
 
         self.body = _Body(self, name or translate("widgets", "Choices"))
-        self.flow = FlowLayout(self.body)
+        self.flow = (flow_class or FlowLayout)(self.body)
         self.flow.setContentsMargins(2, 2, 2, 2)
         self.message = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.message.setTextFormat(Qt.TextFormat.PlainText)

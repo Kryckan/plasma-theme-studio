@@ -169,8 +169,7 @@ class ThemeGrid(CardGrid):
     that holds the groups stays hidden, and the cards fill the width."""
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.flow.__class__ = JustifiedFlow
+        super().__init__(*args, flow_class=JustifiedFlow, **kwargs)
 
     def _update_state(self) -> None:
         super()._update_state()

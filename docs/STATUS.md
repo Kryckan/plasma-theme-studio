@@ -120,7 +120,6 @@ Supporting pieces:
 - Undo of the colors step leaves what `plasma-apply-colorscheme` wrote in the GTK color files, `xsettingsd.conf` and a `kdeglobals` that the apply created. They are not part of the undo snapshot yet.
 - First visits to Icons (150+ themes), Application Style and the pointer status build many cards or read config on the GUI thread; they should build cards in steps and read in a worker.
 - Not done: *From color scheme* in the accent row, a list of the colors *Fix contrast* will change before it runs, the Application Style placeholder cards and check badge, the Panel page's repeated *Leave as it is*, the flexible Panel grid, the greyed-out titlebar-buttons dialog.
-- `ThemeGrid` still swaps `flow.__class__`; `CardGrid` should take a `flow_class` argument.
 - Apply stays enabled right after an edit even when the edit changes nothing on the desktop; the status worker turns it off again. A button that is off after a real edit is the worse fault.
 
 
@@ -211,6 +210,9 @@ Smaller open items:
 - Generated Kvantum controls grow taller with the radius, so buttons, fields and tabs are capped at 8 px.
 - Rofi's window mode does not work on KWin, and a theme is checked with `rofi -dump-theme` before it is written.
 - Moving a generated target back to *unchanged* reverts nothing: the earlier output stays in use and an undo restores it.
+
+- Tests delete every window when the test ends (`windows_do_not_outlive_their_test` in `tests/conftest.py`). Before that the windows of 1700 tests piled up: 2.1 GB and 211 threads at the end of a run, 5.2 GB of address space, and CI (another Python and Qt build) died at the 8 GB cap with a bare `Aborted`. Now a run ends at 0.26 GB and 9 threads.
+- Never assign `__class__` on a live Qt object (a layout, a widget). It worked until a garbage collection ran, then `QAbstractButton.setChecked` crashed in `PySide::MetaObjectBuilder::update` while it looked for sibling buttons. `CardGrid(flow_class=…)` chooses the layout class instead.
 
 ## How to work on it
 
