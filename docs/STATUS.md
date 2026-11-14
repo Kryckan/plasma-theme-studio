@@ -15,21 +15,56 @@ Last updated: 2026-11-14
 - Qt Widgets UI: editor, drawn preview, Themes tab, result banner, snapshot dialog (`ui/`).
 - CLI, Swedish translation, PKGBUILD, CI (ruff, pytest, REUSE, AppStream validation).
 
+**Brought forward from milestones 2 and 3**
+
+Three more targets reach the desktop. Each is opt-in: a theme that leaves the choice at *unchanged* (the default) touches nothing but the colors.
+
+| Target | Module | Theme values | What an apply does |
+|---|---|---|---|
+| Window frame | `generators/windowframe.py` | `window.decoration` (`unchanged`, `breeze`, `generated`), `window.radius`, `window.border_width`, `shadow.size`, `shadow.strength` | *breeze*: sets Breeze as decoration and maps border and shadow to Breeze's fixed steps. *generated*: writes an Aurorae theme (SVG frame with the exact radius, border, shadow and the theme's colors) and selects it. KWin is reloaded and asked which decoration it uses. |
+| Panel style | `generators/plasmastyle.py` | `panel.style` (`unchanged`, `generated`), `panel.radius`, `panel.border_width`, `panel.opacity` | Writes a Plasma style package that only replaces the panel background and selects it with `plasma-apply-desktoptheme`. Everything else falls back to Breeze. |
+| Panel position | `generators/panellayout.py` | `panel_layout.*`: location, height, alignment, length mode, floating, visibility, opacity mode. Every value is optional. | Sets the given values on the main panel (the longest one on the first screen) through Plasma's scripting interface and reads them back. |
+
+Supporting pieces:
+
+- `kconfig.py`: reads and writes single keys in KDE's config files and cleans up after `kwriteconfig6` (see *Things learned*).
+- Generators report the settings they change (`Generator.changed_settings`), notes for the editor page (`Generator.notes`) and files that an apply removes (`stale_files`). The apply summary and the *Files written* tab show them before anything is written.
+- A rollback only restores the targets it reached, and restoring a target that is already as it was does nothing. An apply is rolled back on any error, an interrupt included.
+- When a rollback or an undo cannot put everything back, the snapshot is kept and the message says so. A failed rollback does not count as an undo. The first failed undo marks the snapshot (a `tried` file in its folder) and the second one uses it up, so that *Undo last apply* can move on to the apply before it.
+- A file that cannot be put back (full disk, no permission) is reported like a setting that cannot be put back: the other files and the settings are still restored. An apply that cannot save its snapshot changes nothing.
+- `write_atomic` writes through a file that is a link, so a theme file or config file kept in a dotfiles folder stays a link.
+- Numbers that TOML allows but that are no size (`inf`, `nan`) are refused like any other bad value.
+- Each editor page shows the notes of the targets that read it, below the controls (`Generator.section_notes`): the Shadows page only says what concerns shadows.
+- `scripts/desktop_rig.py`: a headless KWin (and optionally plasmashell) with its own home, for trying applies without touching the developer's desktop.
+- Tests: every generator against a fake KWin, plasmashell and KDE tools (`tests/test_windowframe.py`, `test_plasmastyle.py`, `test_panellayout.py`, `test_kconfig.py`), and all targets together through the engine, the window and the CLI (`tests/test_desktop.py`). The script that is sent to plasmashell also runs as it is in Qt's JavaScript engine (`run_program` in `tests/test_panellayout.py`).
+
 ## Not applied to the desktop yet
 
-Shapes, window frame, shadows and panel values are stored in the theme and shown in the preview only. The app says so in the editor and after an apply.
+- `shape.radius` and `shape.border_width` for app widgets (buttons, fields, menus). They are previewed, and windows and the panel follow them until overridden, but no application style is written. The editor and the result banner say so. This needs the Kvantum generator (or Union, when Plasma ships it).
+
+## Known limits of the new targets
+
+- Breeze cannot change its corner radius. Only the generated frame gives an exact radius. Breeze's border step *Tiny* is 2 px at the sides and 4 px at the bottom.
+- Generated frame: the top corners get the exact radius. KWin does not clip the window's content, so the bottom corners can be rounded by at most about 3.4 × the border width (square with no border). The editor says what the result will be.
+- Generated frame: the title bar is 30 px high, the shadow is the same on all sides, and the colors are baked into the frame, so the theme must be applied again after a color change. Hover and pressed button states are drawn but have not been checked by eye.
+- Panel style: Plasma makes a panel at least 2 × radius thick and does not shrink it back when the style goes away. Undoing the style alone leaves the thicker panel; set the height under *Panel position* to get it back.
+- Panel position: only the main panel is handled, and only one panel on one screen has been tried. Offset, minimum and maximum length, screen and the custom length mode are not handled. If Plasma raises the height to the style's minimum, the theme does not count as "in use" (`is_active`). The same holds for *Windows go below* and for an opacity the getters cannot tell apart while Plasma's layout dump cannot be read: the apply then simply runs again.
+- Undoing a window frame does not wait for KWin; the frame changes one to three seconds later. If KWin does not answer at all (asked with `qdbus6`, or with a D-Bus ping through `busctl` when `qdbus6` is missing), the undo counts as done once `kwinrc` is back, since that is all a starting KWin reads. A KWin that answers but does not reload is a failed undo.
+- Undoing the colors switches back to the scheme that was in use (Breeze Light when none was set). `plasma-apply-colorscheme` also rewrites `kdeglobals` and the GTK color files, and those are not put back byte for byte.
+- A config file that ends up empty after an undo is removed (KDE reads a missing and an empty file alike). A file that is a link is written through and never removed.
+- Everything in this section has been verified in the headless rig and a sandboxed home, with Plasma 6.8.2. None of it has been applied to a real desktop session yet.
 
 ## Next
 
-1. **Milestone 2:** Kvantum and Klassy generators so shapes, borders and shadows reach apps and windows; preview drawn with the real style; light and dark variants; pywal and matugen import.
-2. **Milestone 3:** Plasma style generator and SVG editor; panel layout (position, size, floating) through the Plasma shell scripting interface (PRD DL-2).
-3. **Milestone 4:** GTK, Rofi, switching of Global Themes and other installed theme parts (DL-4), fonts and title bar buttons (DL-5), export and import, more distribution packages.
+1. Try the three new targets on a real session and fix what shows up. Then tag v0.1.0 and publish the AUR package.
+2. **Milestone 2:** Kvantum generator so shapes reach app widgets; preview drawn with the real style; light and dark variants; pywal and matugen import. Klassy as an optional window frame backend.
+3. **Milestone 3:** SVG editor for the generated frames; popups, tooltips and widget backgrounds in the Plasma style; more than one panel.
+4. **Milestone 4:** GTK, Rofi, switching of Global Themes and other installed theme parts (DL-4), fonts and title bar buttons (DL-5), export and import, more distribution packages.
 
 Smaller open items:
 
-- `docs/screenshots/main-window.png` predates the Themes tab and banner.
 - The Fedora, Debian and openSUSE package names in the README are not verified on those systems.
-- Tag v0.1.0 and publish the AUR package once the user has tried the current build.
+- Title bar height, button layout and a directional shadow for the generated frame.
 
 ## Product direction (from the project owner)
 
@@ -40,6 +75,8 @@ Smaller open items:
 
 ## Things learned
 
+**Colors and the app itself**
+
 - `plasma-apply-colorscheme` does nothing when the named scheme is already active, even if its file changed. Workaround in `activate_scheme`: write a placeholder name to `kdeglobals` `General/ColorScheme` with `kwriteconfig6`, then apply.
 - Its exit code is not reliable. Success is verified by reading the setting back with `kreadconfig6`.
 - It aborts without a display. `SystemRunner` sets `QT_QPA_PLATFORM=offscreen` when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set.
@@ -47,12 +84,59 @@ Smaller open items:
 - System Settings modules cannot be embedded in a PySide6 app, so the app builds its own controls and writes through Plasma's tools.
 - Use the distribution's PySide6 (`/usr/bin/python3`), not one from pip, so the app gets the desktop's Qt style and platform integration.
 - `QApplication.setDesktopFileName` with an ID whose desktop file is not installed triggers a portal warning; only set it when the file exists.
+
+**KDE configuration files**
+
+- A global theme writes its choices to `~/.config/kdedefaults/<file>`, which Plasma puts first in `XDG_CONFIG_DIRS`. These are defaults below the user's own file: `plasmarc` `[Theme] name`, `kwinrc` `[org.kde.kdecoration2] library` and `theme`, and more.
+- `kwriteconfig6 --delete` of a key that such a default defines does not remove the line. It leaves `key[$d]`, which hides the default, so the setting falls to the built-in value instead of the global theme's. `kconfig.write_value(…, None)` removes that line again, and removes the group and the file when they end up empty, so an undo leaves the user's file byte for byte as it was. A `[$d]` line the user had before the apply is recorded in the snapshot and kept.
+- `kconfig.default_value` reads the value a key has without the user's file. Undo uses it to go back to the global theme's panel style rather than to `default`.
+- Values are stored escaped in the files (`\s` for a space at either end, `\t`, `\n`, `\\`). `kconfig.parse` turns them back, because `kwriteconfig6` escapes what it is given: a raw value written back would double its backslashes.
+- `kwriteconfig6` writes through a config file that is a link (dotfiles). The cleaning up in `kconfig.py` does the same.
+
+**Window frame (KWin)**
+
+- KWin picks up decoration changes in `kwinrc` after `qdbus6 org.kde.KWin /KWin reconfigure`, without a restart. The *Decoration* block of `supportInformation` (`Plugin:`, `Theme:`) tells which one is in use, about a second late, so the generator asks a few times.
+- Aurorae themes live in `~/.local/share/aurorae/themes/<folder>/` and are selected with `library=org.kde.kwin.aurorae.v2`, `theme=__aurorae__svg__<folder>`. KWin caches a theme by folder name, so the folder name carries a hash of the content and a changed frame gets a new folder. Old folders of the same theme are removed by the apply and put back by an undo.
+- With `BorderSizeAuto=false`, the `BorderSize` names give the generated frame an exact border of 0 to 12 px: Aurorae keeps the border within a range per name, and the generator picks the name whose range holds the wanted width.
+- Breeze's fixed steps, measured in a running KWin: shadow 16, 32, 48, 64 px (Small to VeryLarge), `ShadowStrength` 25 to 255, borders Tiny 2, Normal 4, Large 6, VeryLarge 8, Huge 10, VeryHuge 12, Oversized 20 px.
+- A decoration cannot round the window's own content. A corner is only as round as the border leaves room for: radius ≤ border × (2 + √2).
+- `borderSize` in `supportInformation` is the number of the border size name (Tiny 2, Normal 3 and so on), not pixels. After an undo to "no decoration key at all", KWin reports an empty `Theme:` although it draws Breeze.
+- Measured in the rig: the generated frame's border is exact for 0 to 12 px, the title bar is 30 px, and a maximized window has no border. At scale 2 everything doubles exactly.
+- A window that a top panel pushed down stays where it is when the panel moves back.
+
+**Panel style and position (plasmashell)**
+
+- `plasma-apply-desktoptheme <id>` finds a package in `~/.local/share/plasma/desktoptheme/` without `kpackagetool6`. An unknown id exits with 255; an id that is already set exits with 0 and changes nothing; `default` writes `name=default`. Plasma redraws the panels at once when the style name changes, so a changed style gets a new id (name plus content hash).
+- The shadow tiles of a panel background must be transparent under the panel itself, or a translucent panel turns dark.
+- Panel scripting (`evaluateScript` on `org.kde.plasmashell /PlasmaShell`) changes the panel live. The `hiding` getter answers `none` for *windows go below*, and `plasmashellrc` and the applets file are written 5 to 10 seconds late, so the state is read from `dumpCurrentLayoutJS`, which is live. It has no panel ids, and `normal` there means no hiding.
+- Changing only the alignment or the length mode does not move the panel until something else triggers a relayout. The script toggles `floating` and back for that.
+- The script sent to plasmashell is a fixed program plus one line of JSON with the request, so no value from a theme file is ever run as code. It checks every value before it sets any, so a refused request changes nothing. The lowest height comes with the request: 20 px for a theme, 1 px for an undo, so a thinner panel can be given back.
+- For a few seconds after the Plasma style changes, the old style's minimum thickness still holds: a 14 px panel asked for right after a style with radius 12 went away comes back as 24 px, and Plasma does not make it thinner by itself later. `_write_settled` asks for the thickness again (up to 8 times, 0.75 s apart) while the panel is thicker than wanted. Seen in the rig, where an undo then gives the thin panel back on the first try.
+- Plasma's own lowest panel thickness is 12 px (10 is answered with 12).
+- A floating panel is drawn flat and full width while a window touches it. A screenshot with a window next to the panel therefore shows no rounded panel.
+
+**Working on it without disturbing the desktop**
+
 - When taking screenshots or testing the UI from a script, use `QT_QPA_PLATFORM=offscreen` so no window appears on the developer's desktop, and mark the undo stack clean before quitting so the unsaved-changes dialog does not block.
+- Create a Qt application before using `QtSvg` (`QSvgRenderer` aborts without one), and keep generated SVG free of `<text>`. Run helper scripts and rig programs under `prlimit --core=1:1 --` so that a crash leaves no core dump notification.
+- Never run `kwriteconfig6`, `plasma-apply-*`, KWin `reconfigure` or a writing `evaluateScript` against the session you work in. Use the rig, or a throwaway home with `env -i HOME=… XDG_CONFIG_HOME=…`.
+- The tests set `XDG_CONFIG_DIRS` to a temporary folder (`tests/conftest.py`), so they never read the real `kdedefaults`.
+- Rig: `KWIN_COMPOSE=Q` crashes KWin on a screenshot (the rig's default, software rendering for Qt Quick only, works); Xwayland is not started; the rig inherits `XDG_CONFIG_DIRS`, so the real `kdedefaults` are visible in it (read only); `screenshot` is called on its own, not through `run`; `kcmshell6 kcm_kwindecoration` works inside it.
 
 ## How to work on it
 
 ```sh
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest
+.venv/bin/python -m pytest          # runs offscreen; tests/conftest.py sees to that
 .venv/bin/ruff check . && .venv/bin/ruff format .
 scripts/update-translations.sh sv
+```
+
+The headless rig, for trying an apply against a real KWin and plasmashell that are not yours:
+
+```sh
+/usr/bin/python3 scripts/desktop_rig.py start /tmp/rig --plasmashell
+/usr/bin/python3 scripts/desktop_rig.py run /tmp/rig -- ./plasma-theme-studio apply my-theme.toml
+/usr/bin/python3 scripts/desktop_rig.py window /tmp/rig --title Test
+/usr/bin/python3 scripts/desktop_rig.py screenshot /tmp/rig /tmp/shot.png
+/usr/bin/python3 scripts/desktop_rig.py stop /tmp/rig
 ```

@@ -12,7 +12,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..generators import GENERATORS, MARKER, ApplyError, Generator, PlannedFile, generator_by_id
+from .. import generators
+from ..generators import ApplyError, Generator, PlannedFile, generator_by_id
 from ..messages import Msg, translate
 from ..model.theme import Theme, write_atomic
 from . import snapshot as snapshots
@@ -38,10 +39,14 @@ class FileStatus:
 @dataclass
 class TargetPlan:
     generator: Generator
+    wanted: bool = True  # False: the theme leaves this target alone
     files: list[FileStatus] = field(default_factory=list)
+    stale: list[Path] = field(default_factory=list)  # written earlier, removed by this apply
     problems: list[Msg] = field(default_factory=list)
     warnings: list[Msg] = field(default_factory=list)
+    notes: list[Msg] = field(default_factory=list)
     reload_command: str = ""
+    settings: list[Msg] = field(default_factory=list)  # what else an apply changes, in words
 
 
 @dataclass
@@ -62,6 +67,10 @@ class Plan:
     def foreign_files(self) -> list[Path]:
         return [s.file.path for t in self.targets for s in t.files if s.state == FOREIGN]
 
+    @property
+    def wanted_targets(self) -> list[TargetPlan]:
+        return [target for target in self.targets if target.wanted]
+
 
 def _state(file: PlannedFile) -> str:
     if not file.path.exists():
@@ -72,7 +81,7 @@ def _state(file: PlannedFile) -> str:
         return FOREIGN
     if current == file.content:
         return UNCHANGED
-    return CHANGED if current.startswith(MARKER) else FOREIGN
+    return CHANGED if current.startswith(file.marker) else FOREIGN
 
 
 def _inside_home(path: Path) -> bool:
@@ -86,13 +95,18 @@ def build_plan(theme: Theme, runner=None) -> Plan:
     if runner is not None and os.geteuid() == 0:
         problems.append(translate("core", "Plasma Theme Studio must not be run as root."))
     targets = []
-    for generator in GENERATORS:
+    for generator in generators.GENERATORS:
         target = TargetPlan(generator)
         targets.append(target)
         if theme.problems():
             continue  # without a usable name there are no file names to plan
+        target.notes += generator.notes(theme)
+        target.wanted = generator.wanted(theme)
+        if not target.wanted:
+            continue
         target.problems += generator.problems(theme)
         target.reload_command = generator.reload_command(theme)
+        target.settings = generator.changed_settings(theme)
         for file in generator.files(theme):
             target.files.append(FileStatus(file, _state(file)))
             target.problems += generator.check_output(file)
@@ -102,6 +116,8 @@ def build_plan(theme: Theme, runner=None) -> Plan:
                         path=str(file.path)
                     )
                 )
+        # Only ever remove what is inside the home folder.
+        target.stale = [path for path in generator.stale_files(theme) if _inside_home(path)]
         if runner is not None:
             unavailable = generator.unavailable_reason(runner)
             if unavailable:
@@ -130,21 +146,51 @@ def apply(theme: Theme, runner, replace_foreign: bool = False) -> ApplyResult:
     if blocking:
         raise ApplyBlocked(blocking)
 
-    files = [status.file for target in plan.targets for status in target.files]
-    settings = {t.generator.id: t.generator.capture_settings(runner) for t in plan.targets}
-    snapshot = snapshots.create(theme.name, [f.path for f in files], settings)
+    targets = plan.wanted_targets
+    files = [status.file for target in targets for status in target.files]
+    stale = [path for target in targets for path in target.stale]
+    stale_files = [path for path in stale if path.is_file()]
+    settings = {t.generator.id: t.generator.capture_settings(runner) for t in targets}
+    try:
+        snapshot = snapshots.create(theme.name, [f.path for f in files] + stale_files, settings)
+    except OSError as error:
+        # Without a snapshot there is no way back, so nothing is touched.
+        raise ApplyError(
+            translate("core", "Could not save the snapshot, so nothing was changed: {detail}").format(
+                detail=str(error)
+            )
+        ) from error
+    reached: list[str] = []  # the targets whose settings may have changed
     try:
         for file in files:
             write_atomic(file.path, file.content)
-        for target in plan.targets:
+        for target in targets:
+            reached.append(target.generator.id)
             target.generator.reload(theme, runner)
-    except (ApplyError, OSError) as error:
-        restore(snapshot, runner, consume=True)
-        if isinstance(error, ApplyError):
+        # The desktop has switched to the new files; the old ones can go.
+        for path in stale_files:
+            path.unlink(missing_ok=True)
+        snapshots.remove_empty_dirs(path for path in stale if path.is_dir())
+    except BaseException as error:  # an interrupted apply is rolled back too
+        # The snapshot goes when everything is back. If not, it is kept as it is: this
+        # was not an undo yet, so the user's own undo still gets both of its tries.
+        failures = restore(snapshot, runner, only=reached)
+        if not failures:
+            snapshots.delete(snapshot)
+        if not isinstance(error, (ApplyError, OSError)):
             raise
-        raise ApplyError(
-            translate("core", "Could not write the theme files: {detail}").format(detail=str(error))
-        ) from error
+        message = (
+            error.message
+            if isinstance(error, ApplyError)
+            else translate("core", "Could not write the theme files: {detail}").format(detail=str(error))
+        )
+        if failures:
+            message = translate(
+                "core",
+                "{error} Not everything could be put back either: {failures} "
+                "The snapshot is kept, so the undo can be tried again.",
+            ).format(error=str(message), failures=" ".join(str(failure) for failure in failures))
+        raise ApplyError(message, restored=not failures) from error
     snapshots.prune()
     return ApplyResult(snapshot, plan)
 
@@ -152,11 +198,12 @@ def apply(theme: Theme, runner, replace_foreign: bool = False) -> ApplyResult:
 def is_current(plan: Plan, runner) -> bool:
     """Whether an apply would change nothing: every file is already written
     and the desktop already uses it."""
-    files = [status for target in plan.targets for status in target.files]
+    targets = plan.wanted_targets
     return (
-        bool(files)
-        and all(status.state == UNCHANGED for status in files)
-        and all(target.generator.is_active(plan.theme, runner) for target in plan.targets)
+        bool(targets)
+        and all(status.state == UNCHANGED for target in targets for status in target.files)
+        and not any(target.stale for target in targets)
+        and all(target.generator.is_active(plan.theme, runner) for target in targets)
     )
 
 
@@ -176,22 +223,32 @@ def switch_color_scheme(scheme_id: str, scheme_name: str, runner) -> Snapshot:
     return snapshot
 
 
-def restore(snapshot: Snapshot, runner, consume: bool = False) -> list[Msg]:
+def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> list[Msg]:
     """Put files and desktop settings back to what the snapshot recorded.
 
     Returns messages about settings that could not be restored. With
-    `consume`, the snapshot is removed afterwards (this is what Undo does).
+    `consume`, the snapshot is removed afterwards (this is what Undo does),
+    unless something could not be restored: then it is kept for one more try,
+    so that what it recorded is not lost to a desktop that was busy.
+    `only` names the targets whose settings are put back; the files always are.
     """
-    snapshots.restore_files(snapshot)
     failures = []
+    try:
+        snapshots.restore_files(snapshot)
+    except OSError as error:
+        failures.append(translate("core", "Could not put the files back: {detail}").format(detail=str(error)))
     for target_id, settings in snapshot.settings.items():
         generator = generator_by_id(target_id)
-        if generator is None:
+        if generator is None or (only is not None and target_id not in only):
             continue
         try:
             generator.restore_settings(settings, runner)
         except ApplyError as error:
             failures.append(error.message)
-    if consume:
+        except OSError as error:
+            failures.append(str(error))
+    if consume and failures and not snapshots.tried(snapshot):
+        snapshots.mark_tried(snapshot)
+    elif consume:
         snapshots.delete(snapshot)
     return failures

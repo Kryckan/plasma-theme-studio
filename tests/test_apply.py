@@ -7,7 +7,7 @@ import pytest
 from plasma_theme_studio.apply import engine
 from plasma_theme_studio.apply import snapshot as snapshots
 from plasma_theme_studio.generators import MARKER, ApplyError
-from plasma_theme_studio.generators.colorscheme import COLOR_GROUPS, ColorSchemeGenerator
+from plasma_theme_studio.generators.colorscheme import COLOR_GROUPS, FALLBACK_SCHEME, ColorSchemeGenerator
 from plasma_theme_studio.model.theme import PRESETS, Theme
 
 
@@ -161,3 +161,24 @@ def test_is_current_only_when_written_and_active(home, runner):
     assert engine.is_current(engine.build_plan(theme), runner)
     runner.settings["ColorScheme"] = "BreezeDark"
     assert not engine.is_current(engine.build_plan(theme), runner)
+
+
+def test_undo_without_a_recorded_scheme_goes_to_plasmas_own(home, runner):
+    """A desktop that had no color scheme set uses Breeze Light, so that is what undo picks."""
+    runner.settings["ColorScheme"] = ""
+    result = engine.apply(Theme(), runner)
+    assert result.snapshot.settings["colors"]["color_scheme"] in ("", None)
+    assert runner.settings["ColorScheme"] == "MyTheme"
+
+    assert engine.restore(result.snapshot, runner, consume=True) == []
+
+    assert runner.settings["ColorScheme"] == FALLBACK_SCHEME == "BreezeLight"
+    assert not scheme_path(home).exists()
+
+
+def test_a_command_whose_output_is_not_text_does_not_stop_the_apply(home):
+    from plasma_theme_studio.apply.runner import SystemRunner
+
+    result = SystemRunner().run(["/usr/bin/printf", "caf\\351 \\377\\n"])
+    assert result.returncode == 0
+    assert result.stdout.startswith("caf") and result.stdout.endswith("\n")

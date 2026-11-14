@@ -32,7 +32,15 @@ class SystemRunner:
             # usable from a text console.
             env["QT_QPA_PLATFORM"] = "offscreen"
         try:
-            done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+            done = subprocess.run(
+                argv,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",  # odd bytes in a tool's output must not stop an apply half way
+                timeout=timeout,
+                check=False,
+                env=env,
+            )
         except FileNotFoundError:
             return Result(127, "", f"{argv[0]}: command not found")
         except subprocess.TimeoutExpired:

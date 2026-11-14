@@ -13,6 +13,7 @@ from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
+    QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
     QLineEdit,
@@ -25,8 +26,13 @@ from PySide6.QtWidgets import (
 
 from ..model.color import Color
 from ..model.theme import Field
+from .labels import CHOICE_LABELS
 
 translate = QCoreApplication.translate
+
+# What an optional number starts at when the user first gives it a value.
+# 44 px is the thickness of Plasma's default panel.
+OPTIONAL_START = {("panel_layout", "height"): 44}
 
 
 class TextEditor(QLineEdit):
@@ -149,18 +155,49 @@ class NumberEditor(QWidget):
         self.changed.emit(round(value, 2) if self._float else value)
 
 
+class ChoiceEditor(QComboBox):
+    """One of a few named values. An optional field also offers to leave
+    that part of the desktop as it is."""
+
+    changed = Signal(object)
+
+    def __init__(self, field: Field, parent=None):
+        super().__init__(parent)
+        if field.optional:
+            self.addItem(translate("ui", "Leave as it is"), None)
+        for value in (True, False) if field.kind == "bool" else field.choices:
+            self.addItem(str(CHOICE_LABELS[field.id][value]), value)
+        self.activated.connect(lambda index: self.changed.emit(self.itemData(index)))
+
+    def set_title(self, title: str) -> None:
+        self.setAccessibleName(title)
+
+    def set_value(self, value) -> None:
+        for index in range(self.count()):
+            if self.itemData(index) == value:
+                self.setCurrentIndex(index)
+
+    def choose(self, value) -> None:
+        """Pick a value the way the user does."""
+        self.set_value(value)
+        self.activated.emit(self.currentIndex())
+
+
 class OverrideEditor(QWidget):
-    """A number that follows another field until the user gives it its own value."""
+    """A number that is only used once the user gives it a value. Until
+    then the field follows another field, or leaves the desktop as it is."""
 
     changed = Signal(object)
 
     def __init__(self, field: Field, parent=None):
         super().__init__(parent)
         self._value = None
-        self._inherited = field.minimum
-        self.same = QCheckBox(translate("ui", "Same as Shapes"))
+        self._unset_value = OPTIONAL_START.get(field.id, field.minimum)
+        self.same = QCheckBox(
+            translate("ui", "Same as Shapes") if field.inherits else translate("ui", "Leave as it is")
+        )
         self.number = NumberEditor(field)
-        self.same.toggled.connect(lambda checked: self.changed.emit(None if checked else self._inherited))
+        self.same.toggled.connect(lambda checked: self.changed.emit(None if checked else self._unset_value))
         self.number.changed.connect(lambda value: self.changed.emit(value))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -173,7 +210,8 @@ class OverrideEditor(QWidget):
         self.number.set_title(title)
 
     def set_inherited(self, value) -> None:
-        self._inherited = value
+        """The value of the field this one follows while it is unset."""
+        self._unset_value = value
         if self._value is None:
             self.number.set_value(value)
 
@@ -183,11 +221,13 @@ class OverrideEditor(QWidget):
         self.same.setChecked(value is None)
         self.same.blockSignals(blocked)
         self.number.setEnabled(value is not None)
-        self.number.set_value(self._inherited if value is None else value)
+        self.number.set_value(self._unset_value if value is None else value)
 
 
 def editor_for(field: Field) -> QWidget:
-    if field.inherits:
+    if field.kind in ("choice", "bool"):
+        return ChoiceEditor(field)
+    if field.inherits or field.optional:
         return OverrideEditor(field)
     if field.kind == "color":
         return ColorEditor(field)

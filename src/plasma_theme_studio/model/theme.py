@@ -10,9 +10,11 @@ its controls from it and the file format follows it.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
+import stat
 import tempfile
 import tomllib
 import unicodedata
@@ -31,12 +33,17 @@ MAX_NAME_LENGTH = 60
 class Field:
     section: str
     key: str
-    kind: str  # "color", "int", "float" or "str"
+    kind: str  # "color", "int", "float", "str", "choice" or "bool"
     default: object
     minimum: float | None = None
     maximum: float | None = None
     # An optional value: while it is unset (None) the field follows this other field.
     inherits: tuple[str, str] | None = None
+    # The values a "choice" field accepts. They are identifiers; the UI has their names.
+    choices: tuple[str, ...] = ()
+    # An optional value that follows nothing: while it is unset (None) the
+    # theme leaves that part of the desktop the way it is.
+    optional: bool = False
 
     @property
     def id(self) -> tuple[str, str]:
@@ -46,6 +53,10 @@ class Field:
     def path(self) -> str:
         return f"{self.section}.{self.key}"
 
+
+PANEL_LOCATIONS = ("top", "bottom", "left", "right")
+PANEL_VISIBILITIES = ("none", "autohide", "dodgewindows", "windowsgobelow")
+PANEL_OPACITIES = ("adaptive", "opaque", "translucent")
 
 FIELDS: tuple[Field, ...] = (
     Field("meta", "name", "str", "My Theme"),
@@ -64,13 +75,22 @@ FIELDS: tuple[Field, ...] = (
     Field("colors", "positive", "color", "#27ae60"),
     Field("shape", "radius", "int", 5, 0, 24),
     Field("shape", "border_width", "int", 1, 0, 4),
+    Field("window", "decoration", "choice", "unchanged", choices=("unchanged", "breeze", "generated")),
     Field("window", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
-    Field("window", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
+    Field("window", "border_width", "int", None, 0, 12, inherits=("shape", "border_width")),
     Field("shadow", "size", "int", 24, 0, 64),
     Field("shadow", "strength", "float", 0.35, 0.0, 1.0),
+    Field("panel", "style", "choice", "unchanged", choices=("unchanged", "generated")),
     Field("panel", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
     Field("panel", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
     Field("panel", "opacity", "float", 0.85, 0.2, 1.0),
+    Field("panel_layout", "location", "choice", None, choices=PANEL_LOCATIONS, optional=True),
+    Field("panel_layout", "height", "int", None, 20, 120, optional=True),
+    Field("panel_layout", "alignment", "choice", None, choices=("left", "center", "right"), optional=True),
+    Field("panel_layout", "length_mode", "choice", None, choices=("fill", "fit"), optional=True),
+    Field("panel_layout", "floating", "bool", None, optional=True),
+    Field("panel_layout", "visibility", "choice", None, choices=PANEL_VISIBILITIES, optional=True),
+    Field("panel_layout", "opacity_mode", "choice", None, choices=PANEL_OPACITIES, optional=True),
 )
 
 FIELD_BY_ID: dict[tuple[str, str], Field] = {f.id: f for f in FIELDS}
@@ -108,8 +128,18 @@ def slugify(name: str) -> str:
 
 def check_value(field: Field, value) -> tuple[object, Msg | None]:
     """Return the value in its stored form, or a message saying why it is invalid."""
-    if value is None and field.inherits:
+    if value is None and (field.inherits or field.optional):
         return None, None
+    if field.kind == "choice":
+        if not isinstance(value, str) or value not in field.choices:
+            return value, translate("core", "{key} must be one of: {choices}.").format(
+                key=field.path, choices=", ".join(field.choices)
+            )
+        return value, None
+    if field.kind == "bool":
+        if not isinstance(value, bool):
+            return value, translate("core", "{key} must be true or false.").format(key=field.path)
+        return value, None
     if field.kind == "color":
         if not Color.is_valid(value):
             return value, translate("core", "{key} must be a hex color such as #3daee9.").format(
@@ -124,7 +154,8 @@ def check_value(field: Field, value) -> tuple[object, Msg | None]:
                 "core", "{key} must not contain line breaks, control characters or backslashes."
             ).format(key=field.path)
         return value, None
-    is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    # TOML also has inf and nan, which are no size or strength of anything.
+    is_number = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
     if field.kind == "int":
         if not is_number or float(value) != int(value):
             return value, translate("core", "{key} must be a whole number.").format(key=field.path)
@@ -206,10 +237,13 @@ class Theme:
     def to_toml(self) -> str:
         lines = [f"schema_version = {SCHEMA_VERSION}"]
         for section in SECTIONS:
-            lines += ["", f"[{section}]"]
-            for field in FIELDS:
-                if field.section == section and self._values[field.id] is not None:
-                    lines.append(f"{field.key} = {_toml_value(self._values[field.id])}")
+            values = [
+                f"{field.key} = {_toml_value(self._values[field.id])}"
+                for field in FIELDS
+                if field.section == section and self._values[field.id] is not None
+            ]
+            if values:  # a section where everything is left unset is not written
+                lines += ["", f"[{section}]", *values]
         return "\n".join(lines) + "\n"
 
     @classmethod
@@ -279,6 +313,8 @@ class Theme:
 
 
 def _toml_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
     if isinstance(value, str):
         return json.dumps(value, ensure_ascii=False)
     if isinstance(value, float):
@@ -314,11 +350,24 @@ def migrate(data: dict) -> dict:
 def write_atomic(path: Path, content: str | bytes) -> None:
     """Write a file so that a crash never leaves a half-written file behind."""
     data = content.encode("utf-8") if isinstance(content, str) else content
+    if path.is_symlink():
+        # The file is kept somewhere else; it is written there and the link stays.
+        try:
+            path = path.resolve()
+        except (OSError, RuntimeError):
+            pass  # a link that leads nowhere is replaced by the file
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)  # a file that is replaced keeps its permissions
+    except OSError:
+        mask = os.umask(0)
+        os.umask(mask)
+        mode = 0o666 & ~mask  # what any newly made file gets
     handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(data)
+            os.fchmod(stream.fileno(), mode)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temp_name, path)

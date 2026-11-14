@@ -43,13 +43,13 @@ from .. import APP_DIR, APP_NAME, __version__, library, paths
 from ..apply import engine
 from ..apply import snapshot as snapshots
 from ..apply.runner import SystemRunner
-from ..generators import ApplyError
+from ..generators import ApplyError, section_generators
 from ..generators.colorscheme import current_scheme
 from ..model.color import contrast
 from ..model.theme import FIELDS, PRESETS, SECTIONS, Field, Theme, ThemeError
 from .banner import INFORMATION, POSITIVE, Banner
 from .editors import editor_for
-from .labels import FIELD_LABELS, PRESET_TITLES, PREVIEW_ONLY_SECTIONS, SECTION_ICONS, SECTION_TITLES
+from .labels import FIELD_LABELS, PRESET_TITLES, SECTION_ICONS, SECTION_TITLES, UNAPPLIED_NOTES
 from .library_view import Entry, LibraryView
 from .preview import PreviewWidget
 
@@ -67,6 +67,18 @@ def state_titles() -> dict[str, str]:
         engine.UNCHANGED: translate("ui", "already up to date"),
         engine.FOREIGN: translate("ui", "exists and was not made by this app"),
     }
+
+
+def left_out_sections(plan: engine.Plan) -> list[str]:
+    """The sections whose values an apply of this plan does not put on the desktop."""
+    applied = {section for target in plan.wanted_targets for section in target.generator.sections}
+    return [
+        section
+        for section in SECTIONS
+        if section != "meta"
+        and section not in applied
+        and any(plan.theme.get(*f.id) != f.default for f in FIELDS if f.section == section)
+    ]
 
 
 class SetValueCommand(QUndoCommand):
@@ -143,6 +155,8 @@ class MainWindow(QMainWindow):
         self.theme = Theme.from_preset("breeze-light")
         self.path: Path | None = None
         self.editors: dict[tuple[str, str], QWidget] = {}
+        self.notes: dict[str, QLabel] = {}
+        self.note_rows: dict[str, QWidget] = {}
         self.plan = engine.build_plan(self.theme)
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self._update_title)
@@ -223,17 +237,6 @@ class MainWindow(QMainWindow):
         font.setPointSizeF(font.pointSizeF() * 1.2)
         heading.setFont(font)
         layout.addWidget(heading)
-        if section in PREVIEW_ONLY_SECTIONS:
-            note = QLabel(
-                translate(
-                    "ui",
-                    "These values are saved in the theme and shown in the preview. "
-                    "This version does not apply them to the desktop yet.",
-                )
-            )
-            note.setWordWrap(True)
-            note.setEnabled(False)
-            layout.addWidget(note)
         form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         for field in FIELDS:
@@ -247,6 +250,7 @@ class MainWindow(QMainWindow):
             self.editors[field.id] = editor
             form.addRow(title + translate("ui", ":"), editor)
         layout.addLayout(form)
+        layout.addWidget(self._build_note(section))
         layout.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -258,6 +262,8 @@ class MainWindow(QMainWindow):
     def _build_files_tab(self) -> QWidget:
         self.files_info = QLabel()
         self.files_info.setWordWrap(True)
+        # Commands and paths are shown as they are: "<" must not start a tag.
+        self.files_info.setTextFormat(Qt.TextFormat.PlainText)
         self.files_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.files_list = QListWidget()
         self.files_list.setMaximumHeight(90)
@@ -277,6 +283,22 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.files_list)
         layout.addWidget(self.file_content, 1)
         return tab
+
+    def _build_note(self, section: str) -> QWidget:
+        """What becomes of this section's values on the desktop. Filled in by refresh()."""
+        icon = QLabel()
+        icon.setPixmap(QIcon.fromTheme("dialog-information").pixmap(16, 16))
+        icon.setAlignment(Qt.AlignmentFlag.AlignTop)
+        note = self.notes[section] = QLabel()
+        note.setWordWrap(True)
+        note.setTextFormat(Qt.TextFormat.PlainText)
+        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        row = self.note_rows[section] = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 12, 0, 0)
+        layout.addWidget(icon)
+        layout.addWidget(note, 1)
+        return row
 
     def _build_actions(self) -> None:
         def action(text, slot, shortcut=None, icon=None):
@@ -402,18 +424,15 @@ class MainWindow(QMainWindow):
                 commands.append(target.reload_command)
             for status in target.files:
                 item = QListWidgetItem(f"{status.file.path} — {titles[status.state]}", self.files_list)
-                item.setData(Qt.ItemDataRole.UserRole, status)
+                item.setData(Qt.ItemDataRole.UserRole, status.file)
+            for path in target.stale:
+                if path.is_file():
+                    removed = translate("ui", "no longer needed, will be removed")
+                    QListWidgetItem(f"{path} — {removed}", self.files_list)
         self.files_list.blockSignals(False)
         self.files_list.setCurrentRow(min(selected, self.files_list.count() - 1))
         self._show_file(self.files_list.currentRow())
-        self.files_info.setText(
-            translate(
-                "ui",
-                "Apply writes these files and then runs: {commands}. Nothing else on the system is changed.",
-            ).format(commands=", ".join(commands))
-            if commands
-            else ""
-        )
+        self.files_info.setText(self._apply_summary(commands))
 
         notices = [str(p) for p in self.plan.blocking]
         if not notices:
@@ -426,9 +445,36 @@ class MainWindow(QMainWindow):
                         ).format(surface=str(FIELD_LABELS[("colors", background)]), ratio=f"{ratio:.1f}")
                     )
         self.notice.setText("\n".join(notices))
+        for section, note in self.notes.items():
+            targets = [target for target in self.plan.targets if section in target.generator.sections]
+            texts = [
+                str(text)
+                for target in targets
+                for text in target.generator.section_notes(self.plan.theme, section)
+            ]
+            if not section_generators(section) and section in UNAPPLIED_NOTES:
+                texts = [str(UNAPPLIED_NOTES[section])]
+            note.setText("\n\n".join(texts))
+            self.note_rows[section].setVisible(bool(texts))
         self._update_apply_button()
         self.undo_apply_button.setEnabled(snapshots.latest() is not None)
         self._update_title()
+
+    def _apply_summary(self, commands: list[str]) -> str:
+        """Everything an apply does to the system, so that nothing comes as a surprise."""
+        if not commands:
+            return ""
+        settings = [str(text) for target in self.plan.targets for text in target.settings]
+        if settings:
+            return translate(
+                "ui",
+                "Apply writes these files and then runs: {commands}. It also changes {settings}. "
+                "Nothing else on the system is changed.",
+            ).format(commands=", ".join(commands), settings="; ".join(settings))
+        return translate(
+            "ui",
+            "Apply writes these files and then runs: {commands}. Nothing else on the system is changed.",
+        ).format(commands=", ".join(commands))
 
     def _update_apply_button(self) -> None:
         """Make the apply button name the theme it will put on the desktop."""
@@ -449,8 +495,13 @@ class MainWindow(QMainWindow):
         self.apply_button.setToolTip(tip)
 
     def _show_file(self, row: int) -> None:
+        file = self._listed_file(row)
+        self.file_content.setPlainText(file.content if file else "")
+
+    def _listed_file(self, row: int):
+        """The planned file on a row of the list; None for a file that will be removed."""
         item = self.files_list.item(row)
-        self.file_content.setPlainText(item.data(Qt.ItemDataRole.UserRole).file.content if item else "")
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     def _update_title(self) -> None:
         name = self.path.name if self.path else translate("ui", "Unsaved theme")
@@ -548,9 +599,9 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     def _open_file_folder(self) -> None:
-        item = self.files_list.currentItem()
-        if item is not None:
-            self._open_folder(item.data(Qt.ItemDataRole.UserRole).file.path.parent)
+        file = self._listed_file(self.files_list.currentRow())
+        if file is not None:
+            self._open_folder(file.path.parent)
 
     def closeEvent(self, event) -> None:
         if self._discard_ok():
@@ -648,11 +699,9 @@ class MainWindow(QMainWindow):
                 text = translate(
                     "ui",
                     "The desktop already uses {name} exactly as it is here, so nothing changed. "
-                    "Change a color and apply again.",
+                    "Change something and apply again.",
                 )
-            self.banner.show_message(
-                INFORMATION, text.format(name=theme.name) + self._not_applied_note(theme)
-            )
+            self.banner.show_message(INFORMATION, text.format(name=theme.name) + self._not_applied_note(plan))
             return
         if plan.foreign_files:
             answer = QMessageBox.question(
@@ -673,9 +722,11 @@ class MainWindow(QMainWindow):
             self._show_problems(nothing_changed, error.problems)
             return
         except ApplyError as error:
-            self._show_problems(
-                translate("ui", "The apply failed. Everything was put back as it was."), [error.message]
-            )
+            if error.restored:
+                heading = translate("ui", "The apply failed. Everything was put back as it was.")
+            else:
+                heading = translate("ui", "The apply failed, and not everything could be put back.")
+            self._show_problems(heading, [error.message])
             return
         finally:
             QApplication.restoreOverrideCursor()
@@ -685,17 +736,16 @@ class MainWindow(QMainWindow):
             name=theme.name
         )
         warnings = "".join(f" {warning}" for warning in result.plan.warnings)
-        self.banner.show_message(POSITIVE, message + warnings + self._not_applied_note(theme), 20)
+        self.banner.show_message(POSITIVE, message + warnings + self._not_applied_note(result.plan), 20)
 
-    def _not_applied_note(self, theme: Theme) -> str:
-        """Said when the theme has values that this version cannot put on the desktop."""
-        if all(theme.get(*f.id) == f.default for f in FIELDS if f.section in PREVIEW_ONLY_SECTIONS):
+    def _not_applied_note(self, plan: engine.Plan) -> str:
+        """Said when the theme has values that were not put on the desktop."""
+        sections = left_out_sections(plan)
+        if not sections:
             return ""
         return " " + translate(
-            "ui",
-            "Only the colors were applied: this version shows shapes, shadows and panel settings "
-            "in the preview but cannot put them on the desktop yet.",
-        )
+            "ui", "Not put on the desktop: {sections}. The pages with those names say why."
+        ).format(sections=", ".join(str(SECTION_TITLES[section]) for section in sections))
 
     def _restore(self, snapshot, consume: bool) -> None:
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -708,6 +758,11 @@ class MainWindow(QMainWindow):
         self.refresh()
         self.reload_library()
         if failures:
+            if consume and snapshots.get(snapshot.id) is not None:
+                failures = [
+                    *failures,
+                    translate("ui", "The snapshot is kept, so Undo last apply can try once more."),
+                ]
             self._show_problems(translate("ui", "Some things could not be put back."), failures)
         else:
             self.banner.show_message(

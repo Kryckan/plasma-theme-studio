@@ -85,8 +85,9 @@ Each target has one backend with full control and, where it is cheap and safe, s
 |---|---|---|---|
 | Colors | Plasma color scheme | `~/.local/share/color-schemes/<Name>.colors` | `plasma-apply-colorscheme` |
 | App widgets | Kvantum (full control), Breeze / Darkly / Klassy style (basic) | `~/.config/Kvantum/<Name>/<Name>.kvconfig` + `.svg`, or the style's own config | `kvantummanager --set`, or style reload |
-| Window decoration | Klassy (full control), Breeze (basic) | Klassy or Breeze decoration config | KWin `reconfigure` over D-Bus |
-| Panel, popups, widgets | Plasma style | `~/.local/share/plasma/desktoptheme/<Name>/` | `plasma-apply-desktoptheme` |
+| Window decoration | Generated Aurorae frame (full control), Breeze (basic), Klassy (optional, planned) | `~/.local/share/aurorae/themes/PlasmaThemeStudio-<name>-<hash>/`, and the decoration keys in `kwinrc` and `breezerc` | KWin `reconfigure` over D-Bus |
+| Panel, popups, widgets | Plasma style | `~/.local/share/plasma/desktoptheme/PlasmaThemeStudio-<name>-<hash>/` | `plasma-apply-desktoptheme` |
+| Panel position | Plasma shell scripting | No files; properties of the panel | `evaluateScript` over D-Bus |
 | GTK 3 / GTK 4 apps | CSS overrides | `~/.config/gtk-3.0/gtk.css`, `~/.config/gtk-4.0/gtk.css` | Theme setting toggled |
 | Rofi launcher | Rofi theme | `~/.config/rofi/themes/<Name>.rasi`, plus one `@theme` line in `~/.config/rofi/config.rasi` | None needed. Rofi reads its theme each time it opens |
 | Whole theme | Global theme package | `~/.local/share/plasma/look-and-feel/<Name>/` | `plasma-apply-lookandfeel` |
@@ -214,8 +215,8 @@ The goal is one consistent place for everything that affects how the desktop loo
 
 | ID | Requirement | Priority |
 |---|---|---|
-| DL-1 | Each shape value (corner radius, border width) can be set separately for windows and for the panel; unset values follow the global one. | P0 (M1, apply in M2/M3) |
-| DL-2 | Panel layout: screen edge, height, length and alignment, floating, visibility mode and opacity, for each panel, changed from the app and shown in the preview. | P0 (M3) |
+| DL-1 | Each shape value (corner radius, border width) can be set separately for windows and for the panel; unset values follow the global one. | P0 (M1; applied to windows and the panel in 0.1, to app widgets in M2) |
+| DL-2 | Panel layout: screen edge, height, length and alignment, floating, visibility mode and opacity, for each panel, changed from the app and shown in the preview. | P0 (M3; the main panel in 0.1) |
 | DL-3 | The Themes tab lists installed color schemes and saved themes with thumbnails and switches between them. | P0 (M1) |
 | DL-4 | Switch between installed Global Themes, Plasma styles, window decorations, application styles, icon themes and cursor themes from the Themes tab. Everything a switch changes is covered by the snapshot. | P1 (M4) |
 | DL-5 | Fonts, title bar button layout and window border size can be set in the app. | P1 (M4) |
@@ -346,6 +347,7 @@ Each milestone ends with a tagged release that is usable on its own.
 - First PKGBUILD (`-git` variant).
 - Runs from a source checkout on any distro with PySide6 installed.
 - The `restore` recovery command.
+- Brought forward from milestones 2 and 3 (see section 15): window frame through Breeze's settings or a generated Aurorae frame, a generated panel background, and the layout of the main panel.
 
 **Done when**
 - A user can create a theme, change colors, apply it, see all Qt/KDE apps recolor without logging out, and undo it.
@@ -356,8 +358,8 @@ Each milestone ends with a tagged release that is usable on its own.
 
 **Delivers**
 - Kvantum generator (config + SVG from templates): radius, border, shadows, opacity.
-- Klassy generator for window decoration: radius, border, shadow, button style.
-- Basic backends: Breeze decoration settings, and Breeze / Darkly / Klassy application style settings.
+- Klassy as an optional window decoration backend: radius, border, shadow, button style.
+- Basic backends: Breeze / Darkly / Klassy application style settings. (The Breeze decoration settings shipped in 0.1.)
 - Preview rendered with the real Kvantum style.
 - Light and dark variants.
 - pywal and matugen import with editable color mapping, and generating a palette from a wallpaper.
@@ -369,7 +371,7 @@ Each milestone ends with a tagged release that is usable on its own.
 ### Milestone 3 — SVG editor, panel and popups (v0.3)
 
 **Delivers**
-- Plasma style generator (panel, dialogs, tooltips, widget backgrounds).
+- Plasma style generator: dialogs, tooltips, widget backgrounds. (The panel background shipped in 0.1.)
 - SVG frame editor with validation.
 - SVG draw mode and *Open in Inkscape*.
 
@@ -408,7 +410,7 @@ Each milestone ends with a tagged release that is usable on its own.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Kvantum or Klassy change their config format | A generator produces broken output | Version check at startup, reference-file tests, generators isolated per target |
-| Klassy goes unmaintained or lags behind a new Plasma release | Window decoration target breaks | Klassy is optional. The Breeze decoration backend always works. An Aurorae SVG generator is the long-term fallback |
+| Klassy goes unmaintained or lags behind a new Plasma release | Window decoration target breaks | Klassy is optional. The generated Aurorae frame and the Breeze backend need nothing but KWin |
 | A generated theme makes the desktop hard to use (unreadable colors, broken panel graphics) | User cannot easily get back | Output validation (AP-10), snapshots (AP-2), and the console `restore` command (AP-9). The app never touches system files (AP-11) |
 | Core tier (Plasma 6.3) needs version-specific code | Extra maintenance | Drop the affected target from the core tier instead of adding compatibility code |
 | Plasma style SVGs are intricate (many files, required IDs, hint elements) | Milestone 3 slips | Start from Breeze's files as templates. Ship panel and dialog first, the rest incrementally |
@@ -434,6 +436,9 @@ Each milestone ends with a tagged release that is usable on its own.
 | 2026-11-14 | Hosting on GitHub. KDE conventions are followed from the start (section 9.1). Applying to KDE is revisited after 1.0. |
 | 2026-11-14 | Repository: public, at `github.com/Kryckan/plasma-theme-studio`. Application ID `io.github.kryckan.PlasmaThemeStudio`. |
 | 2026-11-14 | App icon: the "corner handle" design on a blue background. |
+| 2026-11-14 | Replaces the first decision above. The Aurorae (SVG) generator is brought forward to 0.1 and is the full window decoration backend: it needs no extra package and gives an exact radius, border and shadow. Breeze stays the basic backend. Klassy becomes an optional backend in milestone 2. |
+| 2026-11-14 | The panel background of the Plasma style and the layout of the main panel (DL-2) are brought forward to 0.1. Each new target is off until chosen in the theme, so a theme that only sets colors changes nothing else. |
+| 2026-11-14 | Shapes of app widgets stay in milestone 2 (Kvantum). Union is looked at again when Plasma ships it. |
 | 2026-11-14 | The app covers Plasma's own appearance settings (panel layout, fonts, theme switching) with its own controls, so the user does not need System Settings for anything visual. Every editable value has a visual preview. |
 
 ## 16. Open questions

@@ -19,6 +19,10 @@ translate = QCoreApplication.translate
 
 # The scene is drawn in these units and scaled to fit the widget.
 SCENE_W, SCENE_H = 760, 520
+# The space around a floating panel, and the thickest panel the scene has room for.
+PANEL_GAP = 8
+MAX_PANEL_THICKNESS = 84
+PANEL_KEYS = ("location", "height", "alignment", "length_mode", "floating")
 
 
 def _rgb(text: str, alpha: float = 1.0) -> QColor:
@@ -74,8 +78,22 @@ class PreviewWidget(QWidget):
         font.setPixelSize(13)
         p.setFont(font)
 
+        panel, vertical, attached = self._panel_geometry()
+        # The window sits in the middle of what the panel leaves free.
+        free = QRectF(0, 0, SCENE_W, SCENE_H)
+        gap = 0 if attached else PANEL_GAP
+        if vertical:
+            free.setLeft(panel.right() + gap) if panel.left() < SCENE_W / 2 else free.setRight(
+                panel.left() - gap
+            )
+        else:
+            free.setTop(panel.bottom() + gap) if panel.top() < SCENE_H / 2 else free.setBottom(
+                panel.top() - gap
+            )
+        frame = QRectF(0, 0, min(620, free.width() - 78), min(380, free.height() - 78))
+        frame.moveCenter(free.center())
+
         # Window shadow
-        frame = QRectF(70, 40, 620, 380)
         size, strength = theme.get("shadow", "size"), theme.get("shadow", "strength")
         p.setPen(Qt.PenStyle.NoPen)
         for step in range(size, 0, -2):
@@ -202,20 +220,55 @@ class PreviewWidget(QWidget):
         p.drawRoundedRect(frame, window_radius, window_radius)
 
         # Panel
-        panel = QRectF(150, SCENE_H - 62, SCENE_W - 300, 46)
-        panel_radius = min(theme.resolved("panel", "radius"), 23)
+        panel_radius = min(theme.resolved("panel", "radius"), min(panel.width(), panel.height()) / 2)
+        opaque = theme.get("panel_layout", "opacity_mode") == "opaque"
+        p.save()
+        p.setClipRect(QRectF(0, 0, SCENE_W, SCENE_H))
         p.setPen(pen(width=theme.resolved("panel", "border_width")))
-        p.setBrush(_rgb(window["BackgroundNormal"], theme.get("panel", "opacity")))
-        p.drawRoundedRect(panel, panel_radius, panel_radius)
+        p.setBrush(_rgb(window["BackgroundNormal"], 1.0 if opaque else theme.get("panel", "opacity")))
+        # A panel attached to the screen edge has no corners there: they are drawn off screen.
+        out = panel_radius + 4 if attached else 0
+        edges = (
+            -out if panel.left() <= 0 else 0,
+            -out if panel.top() <= 0 else 0,
+            out if panel.right() >= SCENE_W else 0,
+            out if panel.bottom() >= SCENE_H else 0,
+        )
+        p.drawRoundedRect(panel.adjusted(*edges), panel_radius, panel_radius)
         p.setPen(Qt.PenStyle.NoPen)
+        icon = max(min(26.0, (panel.width() if vertical else panel.height()) - 12), 8.0)
         for index in range(6):
             p.setBrush(accent if index == 0 else muted)
+            along = 16 + index * (icon + 12)
+            across = ((panel.width() if vertical else panel.height()) - icon) / 2
+            corner = panel.topLeft() + (QPointF(across, along) if vertical else QPointF(along, across))
             p.drawRoundedRect(
-                QRectF(panel.left() + 16 + index * 38, panel.top() + 10, 26, 26),
-                min(radius, 13),
-                min(radius, 13),
+                QRectF(corner.x(), corner.y(), icon, icon), min(radius, icon / 2), min(radius, icon / 2)
             )
         p.setPen(text)
-        p.drawText(
-            panel.adjusted(0, 0, -18, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, "12:00"
-        )
+        if vertical:
+            clock = QRectF(panel.left(), panel.bottom() - 34, panel.width(), 24)
+            p.drawText(clock, Qt.AlignmentFlag.AlignCenter, "12:00")
+        else:
+            clock = panel.adjusted(0, 0, -18, 0)
+            p.drawText(clock, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, "12:00")
+        p.restore()
+
+    def _panel_geometry(self) -> tuple[QRectF, bool, bool]:
+        """Where the panel is drawn, whether it is vertical and whether it is
+        attached to the screen edge. Settings the theme leaves alone are
+        drawn as a floating panel in the middle of the bottom edge."""
+        layout = {key: self.theme.get("panel_layout", key) for key in PANEL_KEYS}
+        location = layout["location"] or "bottom"
+        vertical = location in ("left", "right")
+        attached = layout["floating"] is False
+        gap = 0 if attached else PANEL_GAP
+        thickness = min(layout["height"] or 46, MAX_PANEL_THICKNESS)
+        edge = SCENE_H if vertical else SCENE_W
+        length = edge - 2 * gap if layout["length_mode"] == "fill" else edge * 0.6
+        start = {"left": gap, "right": edge - gap - length}.get(layout["alignment"], (edge - length) / 2)
+        if vertical:
+            x = gap if location == "left" else SCENE_W - gap - thickness
+            return QRectF(x, start, thickness, length), True, attached
+        y = gap if location == "top" else SCENE_H - gap - thickness
+        return QRectF(start, y, length, thickness), False, attached

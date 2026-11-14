@@ -27,6 +27,7 @@ _TEMPLATES = Environment(
 # already active. To reload an edited scheme, the active name is first set
 # to this placeholder.
 RELOAD_PLACEHOLDER = "PlasmaThemeStudioReload"
+FALLBACK_SCHEME = "BreezeLight"  # what Plasma uses when no scheme is named
 
 COLOR_GROUPS = (
     "Colors:Button",
@@ -116,6 +117,7 @@ def scheme_groups(theme: Theme) -> list[tuple[str, list[tuple[str, str]]]]:
 class ColorSchemeGenerator(Generator):
     id = "colors"
     title = translate("core", "Colors")
+    sections = ("colors",)
 
     def unavailable_reason(self, runner) -> Msg | None:
         for tool in ("plasma-apply-colorscheme", "kreadconfig6", "kwriteconfig6"):
@@ -217,9 +219,8 @@ class ColorSchemeGenerator(Generator):
         activate_scheme(theme.slug, runner)
 
     def restore_settings(self, settings: dict, runner) -> None:
-        previous = settings.get("color_scheme")
-        if previous:
-            activate_scheme(previous, runner)
+        # With no scheme named anywhere, Plasma uses its built-in one.
+        activate_scheme(settings.get("color_scheme") or FALLBACK_SCHEME, runner)
 
 
 def _read_setting(runner, key: str) -> str:

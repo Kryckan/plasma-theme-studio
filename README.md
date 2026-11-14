@@ -6,9 +6,9 @@
 
 One app for editing an entire KDE Plasma theme in one place.
 
-Set colors, corner radii, borders, shadows and opacity once. Plasma Theme Studio writes the files each part of the desktop needs and reloads the desktop live.
+Set colors, corner radii, borders, shadows, opacity and the panel's position in one theme. Plasma Theme Studio writes the files each part of the desktop needs and reloads the desktop live.
 
-> **Status: early development (v0.1).** Colors can be edited, previewed, applied and undone. The Themes tab shows your saved themes and every installed color scheme, switches the desktop between them and opens any of them for editing. Shapes, shadows, window frames and the panel (each with its own corner radius and border width) are stored and previewed but not applied to the desktop yet. The plan is in [docs/PRD.md](docs/PRD.md).
+> **Status: early development (v0.1).** Colors, the window frame (corner radius, border, shadow), the panel's look (corner radius, border, opacity) and the panel's position can be edited, previewed, applied and undone. The Themes tab shows your saved themes and every installed color scheme, switches the desktop between them and opens any of them for editing. Shapes of app widgets (buttons, fields, menus) are previewed but not applied to the desktop yet. What works and what does not is in [docs/STATUS.md](docs/STATUS.md); the plan is in [docs/PRD.md](docs/PRD.md).
 
 ![The editor with a dark theme open](docs/screenshots/main-window.png)
 
@@ -44,6 +44,7 @@ Use the distribution's PySide6, not the one from pip. Only the distribution's bu
 
 - The app writes only inside your home folder and never asks for root.
 - The **Files written** tab shows every file and its content before you apply.
+- It also lists the desktop settings an apply changes. The window frame, the panel style and the panel position are only touched when the theme asks for them.
 - A snapshot is taken before every apply. **Undo last apply** puts the files and settings back.
 - If the desktop becomes hard to use, switch to a text console (Ctrl+Alt+F3), log in and run:
 
@@ -76,7 +77,7 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 
 ## Planned features
 
-- Shapes, shadows and opacity applied to apps, windows and the panel
+- Shapes applied to app widgets, and styles for popups and tooltips
 - Live preview drawn with the real Qt style
 - Built-in SVG editor for panel, popup and widget frames
 - Wallpaper-based colors through pywal and matugen
@@ -84,19 +85,23 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 
 ## Targets
 
-| Part of the desktop | Backend |
-|---|---|
-| Colors | Plasma color scheme |
-| App widgets | Kvantum (full control); Breeze, Darkly, Klassy style (basic) |
-| Window decoration | Klassy (full control); Breeze (basic) |
-| Panel, popups, widgets | Plasma style (SVG) |
-| GTK 3 / GTK 4 apps | CSS overrides |
-| Rofi | Rofi theme |
+| Part of the desktop | Backend | State |
+|---|---|---|
+| Colors | Plasma color scheme | Works |
+| Window decoration | Generated frame (exact radius, border and shadow); Breeze (its fixed steps) | Works |
+| Panel background | Plasma style (SVG) | Works |
+| Panel position | Plasma's scripting interface | Works for the main panel |
+| App widgets | Kvantum (full control); Breeze, Darkly, Klassy style (basic) | Planned |
+| Popups, tooltips, widgets | Plasma style (SVG) | Planned |
+| GTK 3 / GTK 4 apps | CSS overrides | Planned |
+| Rofi | Rofi theme | Planned |
+
+The window frame, panel style and panel position have so far been tried with Plasma 6.8 in an isolated test session only.
 
 ## Platform support
 
 - **Plasma 6.6 or newer:** all targets.
-- **Plasma 6.3 to 6.5:** everything except the Klassy window decoration.
+- **Plasma 6.3 to 6.5:** everything except the optional Klassy window decoration.
 - **Plasma 5:** not supported.
 
 The first packages target Arch Linux (AUR). Packages for Fedora, openSUSE, Debian and Ubuntu are planned for 1.0. Details are in the [PRD](docs/PRD.md#11-platform-support).
@@ -105,9 +110,9 @@ The first packages target Arch Linux (AUR). Packages for Fedora, openSUSE, Debia
 
 | Milestone | Scope |
 |---|---|
-| v0.1 | Theme file, colors, apply, undo, translations, first Arch package |
-| v0.2 | Shapes and shadows for apps and windows, real-style preview, pywal and matugen import |
-| v0.3 | SVG editor, panel and popups |
+| v0.1 | Theme file, colors, window frame, panel look and position, apply, undo, translations, first Arch package |
+| v0.2 | Shapes for app widgets, real-style preview, pywal and matugen import |
+| v0.3 | SVG editor, popups and widgets |
 | v1.0 | GTK, Rofi, export and import, command line, packages for more distributions |
 
 ## Design

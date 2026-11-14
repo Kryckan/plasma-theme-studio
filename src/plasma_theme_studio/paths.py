@@ -15,6 +15,11 @@ def data_home() -> Path:
     return Path(value) if value else Path.home() / ".local" / "share"
 
 
+def config_home() -> Path:
+    value = os.environ.get("XDG_CONFIG_HOME")
+    return Path(value) if value else Path.home() / ".config"
+
+
 def cache_home() -> Path:
     value = os.environ.get("XDG_CACHE_HOME")
     return Path(value) if value else Path.home() / ".cache"

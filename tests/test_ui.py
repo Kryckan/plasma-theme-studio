@@ -1,24 +1,16 @@
 # SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-import os
-
 import pytest
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6.QtWidgets")
 
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle  # noqa: E402
+from PySide6.QtWidgets import QProxyStyle, QStyle  # noqa: E402
 
 from plasma_theme_studio.apply import snapshot as snapshots  # noqa: E402
 from plasma_theme_studio.model.theme import FIELD_BY_ID, Theme  # noqa: E402
 from plasma_theme_studio.ui.main_window import MainWindow  # noqa: E402
-
-
-@pytest.fixture(scope="session")
-def app():
-    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture
@@ -105,7 +97,7 @@ def test_applying_twice_says_nothing_changed(window):
 def test_apply_says_when_shapes_are_left_out(window):
     window.edit(FIELD_BY_ID[("shape", "radius")], 12)
     window.apply_theme()
-    assert "Only the colors were applied" in window.banner.text()
+    assert "Not put on the desktop: Shapes." in window.banner.text()
 
 
 def test_window_and_panel_follow_shapes_until_overridden(window):
@@ -119,7 +111,7 @@ def test_window_and_panel_follow_shapes_until_overridden(window):
     radius.number.box.setValue(20)
     assert window.theme.get("panel", "radius") == 20
     assert window.theme.resolved("window", "radius") == 9
-    assert "[panel]\nradius = 20" in window.theme.to_toml()
+    assert "\nradius = 20\n" in window.theme.to_toml().split("[panel]")[1]
     assert Theme.from_toml(window.theme.to_toml()) == window.theme
 
     radius.same.setChecked(True)
@@ -319,3 +311,52 @@ def test_saved_themes_are_listed_and_can_be_used(window, home, runner):
     assert len([title for title in titles if title.startswith("Mine")]) == 1
     window.library.edit_button.click()
     assert window.theme.name == "Mine" and window.path.name == "mine.toml"
+
+
+def test_panel_position_is_chosen_from_named_values(window):
+    location = window.editors[("panel_layout", "location")]
+    assert location.currentText() == "Leave as it is"
+    assert "[panel_layout]" not in window.theme.to_toml()
+
+    location.choose("top")
+    window.editors[("panel_layout", "floating")].choose(False)
+    assert window.theme.get("panel_layout", "location") == "top"
+    assert '[panel_layout]\nlocation = "top"\nfloating = false\n' in window.theme.to_toml()
+    assert Theme.from_toml(window.theme.to_toml()) == window.theme
+    assert window.tabs.currentWidget() is window.preview and not window.preview.grab().isNull()
+
+    window.undo_stack.undo()
+    window.undo_stack.undo()
+    assert window.theme.get("panel_layout", "location") is None
+    assert location.currentText() == "Leave as it is"
+
+
+def test_panel_thickness_is_left_alone_until_it_gets_a_value(window):
+    height = window.editors[("panel_layout", "height")]
+    assert height.same.text() == "Leave as it is" and height.same.isChecked()
+
+    height.same.setChecked(False)
+    assert window.theme.get("panel_layout", "height") == 44  # Plasma's own default
+    height.number.box.setValue(60)
+    assert window.theme.get("panel_layout", "height") == 60
+
+    height.same.setChecked(True)
+    assert window.theme.get("panel_layout", "height") is None
+
+
+def test_the_preview_draws_every_panel_position(window):
+    for location in ("top", "bottom", "left", "right"):
+        for values in ({}, {"length_mode": "fill", "floating": False, "height": 120, "alignment": "right"}):
+            theme = Theme({("panel_layout", "location"): location})
+            for key, value in values.items():
+                theme.set("panel_layout", key, value)
+            window.preview.set_theme(theme)
+            panel, vertical, attached = window.preview._panel_geometry()
+            assert vertical == (location in ("left", "right")) and attached == bool(values)
+            assert 0 <= panel.left() and panel.right() <= 760 and 0 <= panel.top() and panel.bottom() <= 520
+            assert not window.preview.grab().isNull()
+
+
+def test_the_shapes_page_says_what_is_not_applied(window):
+    assert "cannot change the shape of buttons and fields" in window.notes["shape"].text()
+    assert window.notes["colors"].text() == ""

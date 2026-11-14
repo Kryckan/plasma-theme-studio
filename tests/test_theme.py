@@ -1,10 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
+import os
+import stat
+
 import pytest
 
 from plasma_theme_studio.model import theme as theme_module
 from plasma_theme_studio.model.color import Color, contrast, readable_on
-from plasma_theme_studio.model.theme import Theme, ThemeError, slugify
+from plasma_theme_studio.model.theme import Theme, ThemeError, slugify, write_atomic
 
 
 def test_round_trip_keeps_every_value():
@@ -89,3 +92,115 @@ def test_color_helpers():
     assert not Color.is_valid(123)
     assert round(contrast(Color(0, 0, 0), Color(255, 255, 255))) == 21
     assert readable_on(Color(20, 20, 20)) == Color(255, 255, 255)
+
+
+def test_choices_switches_and_values_left_alone_survive_a_round_trip():
+    theme = Theme()
+    assert theme.get("panel_layout", "location") is None  # the panel is left where it is
+    assert "[panel_layout]" not in theme.to_toml()
+
+    theme.set("window", "decoration", "generated")
+    theme.set("panel_layout", "location", "top")
+    theme.set("panel_layout", "floating", False)
+    theme.set("panel_layout", "height", 60)
+    text = theme.to_toml()
+
+    assert 'decoration = "generated"' in text
+    assert '[panel_layout]\nlocation = "top"\nheight = 60\nfloating = false\n' in text
+    assert Theme.from_toml(text) == theme
+
+    theme.set("panel_layout", "location", None)
+    assert "location" not in theme.to_toml()
+
+
+@pytest.mark.parametrize(
+    "section, key, value",
+    [
+        ("window", "decoration", "fancy"),
+        ("window", "decoration", None),  # this choice always has a value
+        ("panel_layout", "location", "middle"),
+        ("panel_layout", "location", 1),
+        ("panel_layout", "floating", "yes"),
+        ("panel_layout", "floating", 1),
+        ("panel_layout", "height", 500),
+    ],
+)
+def test_values_outside_what_a_field_offers_are_refused(section, key, value):
+    with pytest.raises(ThemeError):
+        Theme().set(section, key, value)
+    if value is not None:  # a key that is missing from a file gets its default
+        with pytest.raises(ThemeError):
+            Theme.from_data({"schema_version": 1, section: {key: value}})
+
+
+def test_a_replaced_file_keeps_its_permissions(tmp_path):
+    path = tmp_path / "private.conf"
+    path.write_text("old\n")
+    path.chmod(0o600)
+
+    write_atomic(path, "new\n")
+
+    assert path.read_text() == "new\n"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert [p.name for p in tmp_path.iterdir()] == ["private.conf"]  # no temporary file is left
+
+
+@pytest.mark.parametrize(("mask", "mode"), [(0o022, 0o644), (0o077, 0o600), (0o002, 0o664)])
+def test_a_new_file_gets_the_permissions_of_any_new_file(tmp_path, mask, mode):
+    old = os.umask(mask)
+    try:
+        write_atomic(tmp_path / "sub" / "new.conf", b"data")
+        assert os.umask(mask) == mask  # asking for the mask does not change it
+    finally:
+        os.umask(old)
+    assert stat.S_IMODE((tmp_path / "sub" / "new.conf").stat().st_mode) == mode
+
+
+@pytest.mark.parametrize("value", ["inf", "-inf", "nan", "1e999"])
+@pytest.mark.parametrize(("section", "key"), [("panel_layout", "height"), ("shadow", "strength")])
+def test_a_number_that_is_no_number_is_refused_like_any_other_bad_value(tmp_path, section, key, value):
+    path = tmp_path / "odd.toml"
+    path.write_text(f'schema_version = 1\n[meta]\nname = "Odd"\n[{section}]\n{key} = {value}\n')
+    with pytest.raises(ThemeError) as caught:
+        Theme.load(path)
+    assert f"{section}.{key} must be a" in str(caught.value)
+
+
+def test_a_file_kept_somewhere_else_is_written_there_and_the_link_stays(tmp_path):
+    kept = tmp_path / "dotfiles" / "theme.toml"
+    kept.parent.mkdir()
+    kept.write_text("old\n")
+    kept.chmod(0o600)
+    link = tmp_path / "themes" / "theme.toml"
+    link.parent.mkdir()
+    link.symlink_to(kept)
+
+    write_atomic(link, "new\n")
+
+    assert link.is_symlink() and kept.read_text() == "new\n"
+    assert stat.S_IMODE(kept.stat().st_mode) == 0o600
+    assert [p.name for p in link.parent.iterdir()] == ["theme.toml"]
+    assert [p.name for p in kept.parent.iterdir()] == ["theme.toml"]
+
+
+def test_a_link_that_leads_nowhere_gets_its_file(tmp_path):
+    link = tmp_path / "theme.toml"
+    link.symlink_to(tmp_path / "elsewhere" / "theme.toml")
+
+    write_atomic(link, "new\n")
+
+    assert link.is_symlink() and (tmp_path / "elsewhere" / "theme.toml").read_text() == "new\n"
+
+
+def test_saving_a_theme_through_a_link_keeps_the_link(tmp_path):
+    kept = tmp_path / "dotfiles" / "rose.toml"
+    kept.parent.mkdir()
+    Theme({("meta", "name"): "Rose"}).save(kept)
+    link = tmp_path / "rose.toml"
+    link.symlink_to(kept)
+
+    theme = Theme.load(link)
+    theme.set("shape", "radius", 9)
+    theme.save(link)
+
+    assert link.is_symlink() and Theme.load(kept).get("shape", "radius") == 9

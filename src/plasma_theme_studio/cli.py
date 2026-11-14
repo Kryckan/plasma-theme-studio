@@ -63,18 +63,31 @@ def cmd_apply(args) -> int:
     theme = _load_theme(args.file)
     if theme is None:
         return 1
+    runner = SystemRunner()
+    plan = engine.build_plan(theme, runner)
+    if not plan.blocking and engine.is_current(plan, runner):
+        # Nothing to do, so no snapshot is made that would undo nothing.
+        print(
+            translate("core", "The desktop already uses {name}. Nothing was changed.").format(name=theme.name)
+        )
+        return 0
     try:
-        result = engine.apply(theme, SystemRunner(), replace_foreign=args.replace)
+        result = engine.apply(theme, runner, replace_foreign=args.replace)
     except engine.ApplyBlocked as error:
         print(translate("core", "Nothing was changed:"), file=sys.stderr)
         _print_problems(error.problems)
         return 1
     except ApplyError as error:
-        print(translate("core", "The apply failed and was rolled back:"), file=sys.stderr)
+        if error.restored:
+            heading = translate("core", "The apply failed and was rolled back:")
+        else:
+            heading = translate("core", "The apply failed, and not everything could be put back:")
+        print(heading, file=sys.stderr)
         _print_problems([error.message])
         return 1
-    for warning in result.plan.warnings:
-        print(translate("core", "Note: {text}").format(text=str(warning)))
+    limits = [note for target in result.plan.wanted_targets for note in target.notes]
+    for text in result.plan.warnings + limits:
+        print(translate("core", "Note: {text}").format(text=str(text)))
     print(
         translate("core", "Applied {name}. To go back, run: plasma-theme-studio restore").format(
             name=theme.name
@@ -116,6 +129,11 @@ def cmd_restore(args) -> int:
     if failures:
         print(translate("core", "Some settings could not be switched back:"), file=sys.stderr)
         _print_problems(failures)
+        if args.id is None and snapshots.get(chosen.id) is not None:
+            print(
+                translate("core", "The snapshot is kept. Run the command again to try once more."),
+                file=sys.stderr,
+            )
         return 1
     remaining = len(snapshots.list_snapshots())
     if args.id is None and remaining:

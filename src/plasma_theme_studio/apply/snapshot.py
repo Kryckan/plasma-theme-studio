@@ -20,6 +20,7 @@ from ..model.theme import write_atomic
 
 KEEP = 20
 _MANIFEST = "manifest.json"
+_TRIED = "tried"  # an undo of this snapshot has failed once already
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,8 @@ class Snapshot:
     theme_name: str
     files: tuple[dict, ...]  # {"path": str, "existed": bool, "stored": str | None}
     settings: dict  # target id -> settings captured by that target's generator
+    # Folders that did not exist yet; a restore removes them again if they are empty.
+    created_dirs: tuple[str, ...] = ()
 
     @property
     def created_at(self) -> datetime:
@@ -42,17 +45,24 @@ def create(theme_name: str, file_paths: list[Path], settings: dict) -> Snapshot:
     directory = paths.snapshots_dir() / snapshot_id
     (directory / "files").mkdir(parents=True)
     files = []
+    created_dirs: list[str] = []
     for index, path in enumerate(file_paths):
         existed = path.is_file()
         stored = f"files/{index}" if existed else None
         if existed:
             shutil.copy2(path, directory / stored)
         files.append({"path": str(path), "existed": existed, "stored": stored})
+        for parent in path.parents:
+            if parent.exists():
+                break
+            if str(parent) not in created_dirs:
+                created_dirs.append(str(parent))
     manifest = {
         "created": now.isoformat(timespec="seconds"),
         "theme": theme_name,
         "files": files,
         "settings": settings,
+        "created_dirs": created_dirs,
     }
     write_atomic(directory / _MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
     return _read(directory)
@@ -68,6 +78,7 @@ def _read(directory: Path) -> Snapshot | None:
             theme_name=data["theme"],
             files=tuple(data["files"]),
             settings=data["settings"],
+            created_dirs=tuple(data.get("created_dirs", ())),
         )
     except (OSError, ValueError, KeyError, TypeError):
         return None
@@ -92,13 +103,39 @@ def get(snapshot_id: str) -> Snapshot | None:
 
 
 def restore_files(snapshot: Snapshot) -> None:
-    """Put every file back the way it was when the snapshot was made."""
+    """Put every file back the way it was when the snapshot was made. A file
+    that cannot be put back does not stop the others; its error is raised at
+    the end."""
+    failed: OSError | None = None
     for entry in snapshot.files:
         path = Path(entry["path"])
-        if entry["existed"]:
-            write_atomic(path, (snapshot.directory / entry["stored"]).read_bytes())
-        else:
-            path.unlink(missing_ok=True)
+        try:
+            if entry["existed"]:
+                write_atomic(path, (snapshot.directory / entry["stored"]).read_bytes())
+            else:
+                path.unlink(missing_ok=True)
+        except OSError as error:
+            failed = failed or error
+    remove_empty_dirs(Path(d) for d in snapshot.created_dirs)
+    if failed:
+        raise failed
+
+
+def remove_empty_dirs(directories) -> None:
+    """Remove the given folders if nothing is left in them, deepest first."""
+    for directory in sorted(directories, key=lambda d: len(d.parts), reverse=True):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass  # not empty, already gone or not ours to remove
+
+
+def tried(snapshot: Snapshot) -> bool:
+    return (snapshot.directory / _TRIED).exists()
+
+
+def mark_tried(snapshot: Snapshot) -> None:
+    (snapshot.directory / _TRIED).touch()
 
 
 def delete(snapshot: Snapshot) -> None:
