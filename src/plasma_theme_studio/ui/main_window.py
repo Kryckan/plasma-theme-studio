@@ -57,6 +57,7 @@ translate = QCoreApplication.translate
 
 MIN_TEXT_CONTRAST = 4.5
 MERGE_SECONDS = 1.0
+APPLY_NAME_LENGTH = 32  # longer theme names are shortened on the apply button
 
 
 def state_titles() -> dict[str, str]:
@@ -196,7 +197,9 @@ class MainWindow(QMainWindow):
             QIcon.fromTheme("dialog-ok-apply"), translate("ui", "Apply to desktop")
         )
         self.apply_button.setDefault(True)
-        self.apply_button.clicked.connect(self.apply_theme)
+        self.apply_button.clicked.connect(self.apply_shown)
+        self.library.selection_changed.connect(self._update_apply_button)
+        self.tabs.currentChanged.connect(lambda _index: self._update_apply_button())
         footer = QHBoxLayout()
         footer.addWidget(self.notice, 1)
         footer.addWidget(self.undo_apply_button)
@@ -336,7 +339,7 @@ class MainWindow(QMainWindow):
 
         desktop_menu = self.menuBar().addMenu(translate("ui", "&Desktop"))
         desktop_menu.addAction(
-            action(translate("ui", "&Apply to desktop"), self.apply_theme, "Ctrl+Return", "dialog-ok-apply")
+            action(translate("ui", "&Apply to desktop"), self.apply_shown, "Ctrl+Return", "dialog-ok-apply")
         )
         desktop_menu.addAction(action(translate("ui", "&Undo last apply"), self.undo_last_apply))
         desktop_menu.addAction(
@@ -423,9 +426,27 @@ class MainWindow(QMainWindow):
                         ).format(surface=str(FIELD_LABELS[("colors", background)]), ratio=f"{ratio:.1f}")
                     )
         self.notice.setText("\n".join(notices))
-        self.apply_button.setEnabled(not self.plan.blocking)
+        self._update_apply_button()
         self.undo_apply_button.setEnabled(snapshots.latest() is not None)
         self._update_title()
+
+    def _update_apply_button(self) -> None:
+        """Make the apply button name the theme it will put on the desktop."""
+        if self.tabs.currentWidget() is self.library:
+            entry = self.library.current()
+            name, enabled = (entry.title if entry else ""), entry is not None
+            tip = "" if entry else translate("ui", "Select a theme first.")
+        else:
+            name, enabled, tip = self.theme.name, not self.plan.blocking, ""
+        if len(name) > APPLY_NAME_LENGTH:
+            name = name[: APPLY_NAME_LENGTH - 1] + "…"
+        self.apply_button.setText(
+            translate("ui", "Apply “{name}” to desktop").format(name=name.replace("&", "&&"))
+            if name
+            else translate("ui", "Apply to desktop")
+        )
+        self.apply_button.setEnabled(enabled)
+        self.apply_button.setToolTip(tip)
 
     def _show_file(self, row: int) -> None:
         item = self.files_list.item(row)
@@ -548,10 +569,21 @@ class MainWindow(QMainWindow):
         active = current_scheme(self.runner) if self.runner.which("kreadconfig6") else ""
         self.library.reload(active)
 
+    def apply_shown(self) -> None:
+        """Apply what the user is looking at: the theme selected on the Themes
+        tab, or on the other tabs the theme in the editor."""
+        if self.tabs.currentWidget() is not self.library:
+            self.apply_theme()
+            return
+        entry = self.library.current()
+        if entry is not None:
+            self.use_entry(entry)
+
     def use_entry(self, entry: Entry) -> None:
         """Switch the desktop to a theme from the Themes tab."""
         if entry.is_saved_theme:
-            self._apply(entry.theme)
+            # The file that is open in the editor is applied with its unsaved edits.
+            self._apply(self.theme if entry.path == self.path else entry.theme, from_library=True)
             return
         if entry.scheme_id == self.library.active:
             self.banner.show_message(
@@ -603,21 +635,23 @@ class MainWindow(QMainWindow):
     def apply_theme(self) -> None:
         self._apply(self.theme)
 
-    def _apply(self, theme: Theme) -> None:
+    def _apply(self, theme: Theme, from_library: bool = False) -> None:
         nothing_changed = translate("ui", "The theme cannot be applied. Nothing was changed.")
         plan = engine.build_plan(theme, self.runner)
         if plan.blocking:
             self._show_problems(nothing_changed, plan.blocking)
             return
         if engine.is_current(plan, self.runner):
-            self.banner.show_message(
-                INFORMATION,
-                translate(
+            if from_library:
+                text = translate("ui", "The desktop already uses {name}.")
+            else:
+                text = translate(
                     "ui",
                     "The desktop already uses {name} exactly as it is here, so nothing changed. "
                     "Change a color and apply again.",
-                ).format(name=theme.name)
-                + self._not_applied_note(theme),
+                )
+            self.banner.show_message(
+                INFORMATION, text.format(name=theme.name) + self._not_applied_note(theme)
             )
             return
         if plan.foreign_files:

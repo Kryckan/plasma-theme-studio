@@ -489,6 +489,14 @@
       <translation>Text är svår att läsa på ”{surface}” (kontrast {ratio}:1, sikta på 4,5:1).</translation>
     </message>
     <message>
+      <source>Select a theme first.</source>
+      <translation>Markera ett tema först.</translation>
+    </message>
+    <message>
+      <source>Apply “{name}” to desktop</source>
+      <translation>Verkställ ”{name}” på skrivbordet</translation>
+    </message>
+    <message>
       <source>Unsaved theme</source>
       <translation>Osparat tema</translation>
     </message>
@@ -601,10 +609,6 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
       <translation>Stäng meddelandet</translation>
     </message>
     <message>
-      <source>Your saved themes and the color schemes installed on this computer. Switch the desktop to one of them, or open one in the editor to change it.</source>
-      <translation>Dina sparade teman och färgscheman som är installerade på den här datorn. Byt skrivbordet till ett av dem, eller öppna ett i redigeraren för att ändra det.</translation>
-    </message>
-    <message>
       <source>Search…</source>
       <translation>Sök…</translation>
     </message>
@@ -617,8 +621,8 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
       <translation>Teman</translation>
     </message>
     <message>
-      <source>Use on desktop</source>
-      <translation>Använd på skrivbordet</translation>
+      <source>Your saved themes and the color schemes installed on this computer. Select one and choose Apply, or double-click it, to switch the desktop to it. Edit opens it in the editor.</source>
+      <translation>Dina sparade teman och färgscheman som är installerade på den här datorn. Markera ett och välj Verkställ, eller dubbelklicka på det, för att byta skrivbordet till det. Redigera öppnar det i redigeraren.</translation>
     </message>
     <message>
       <source>Saved theme</source>

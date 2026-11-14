@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QPointF, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPainterPath, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -116,7 +116,14 @@ def thumbnail(theme: Theme, ratio: float = 1.0, active: bool = False) -> QPixmap
 
 
 class LibraryView(QWidget):
-    use_requested = Signal(object)
+    """Shows the themes and says which one is selected.
+
+    The window's apply button acts on the selection, so there is no second
+    button here that could be mistaken for it.
+    """
+
+    selection_changed = Signal()
+    use_requested = Signal(object)  # double-click or Enter: put it on the desktop
     edit_requested = Signal(object)
 
     def __init__(self, parent=None):
@@ -126,7 +133,8 @@ class LibraryView(QWidget):
             translate(
                 "ui",
                 "Your saved themes and the color schemes installed on this computer. "
-                "Switch the desktop to one of them, or open one in the editor to change it.",
+                "Select one and choose Apply, or double-click it, to switch the desktop to it. "
+                "Edit opens it in the editor.",
             )
         )
         info.setWordWrap(True)
@@ -143,16 +151,19 @@ class LibraryView(QWidget):
         self.list.setIconSize(THUMBNAIL)
         self.list.setGridSize(QSize(THUMBNAIL.width() + 24, THUMBNAIL.height() + 84))
         self.list.setWordWrap(True)
-        self.list.currentItemChanged.connect(lambda *_: self._update_buttons())
-        self.list.itemActivated.connect(lambda _item: self._emit(self.edit_requested))
-        self.use_button = QPushButton(QIcon.fromTheme("dialog-ok-apply"), translate("ui", "Use on desktop"))
-        self.use_button.clicked.connect(lambda: self._emit(self.use_requested))
+        self.list.itemSelectionChanged.connect(self._update_buttons)
+        # Not itemActivated: with single-click activation turned on in Plasma,
+        # that would switch the desktop as soon as a theme is selected.
+        self.list.itemDoubleClicked.connect(lambda _item: self._emit(self.use_requested))
+        for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            shortcut = QShortcut(QKeySequence(key), self.list)
+            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+            shortcut.activated.connect(lambda: self._emit(self.use_requested))
         self.edit_button = QPushButton(QIcon.fromTheme("document-edit"), "")
         self.edit_button.clicked.connect(lambda: self._emit(self.edit_requested))
         buttons = QHBoxLayout()
         buttons.addWidget(self.search, 1)
         buttons.addWidget(self.edit_button)
-        buttons.addWidget(self.use_button)
         layout = QVBoxLayout(self)
         layout.addWidget(info)
         layout.addWidget(self.list, 1)
@@ -164,6 +175,8 @@ class LibraryView(QWidget):
         self.active = active
         current = self.current()
         keep = (current.scheme_id, current.is_saved_theme) if current else (active, False)
+        # Keep the place the user scrolled to, except the first time.
+        position = self.list.verticalScrollBar().value() if self.list.count() else None
         self.list.clear()
         chosen = None
         for entry in entries():
@@ -187,13 +200,17 @@ class LibraryView(QWidget):
         self._filter(self.search.text())
         if chosen is not None:
             self.list.setCurrentItem(chosen)
-            # The grid is laid out later; scroll once it has been.
+        # The grid is laid out later; scroll once it has been.
+        if position is not None:
+            QTimer.singleShot(0, lambda: self.list.verticalScrollBar().setValue(position))
+        elif chosen is not None:
             QTimer.singleShot(0, lambda: self.list.scrollToItem(self.list.currentItem()))
         self._update_buttons()
 
     def current(self) -> Entry | None:
-        item = self.list.currentItem()
-        return item.data(Qt.ItemDataRole.UserRole) if item is not None and not item.isHidden() else None
+        """The theme that is visibly selected, or None."""
+        selected = [item for item in self.list.selectedItems() if not item.isHidden()]
+        return selected[0].data(Qt.ItemDataRole.UserRole) if selected else None
 
     def select(self, scheme_id: str) -> Entry | None:
         for row in range(self.list.count()):
@@ -211,10 +228,10 @@ class LibraryView(QWidget):
 
     def _update_buttons(self) -> None:
         entry = self.current()
-        self.use_button.setEnabled(entry is not None)
         self.edit_button.setEnabled(entry is not None)
         saved = entry is not None and entry.is_saved_theme
         self.edit_button.setText(translate("ui", "Edit") if saved else translate("ui", "Edit a copy"))
+        self.selection_changed.emit()
 
     def _emit(self, signal) -> None:
         entry = self.current()
