@@ -56,6 +56,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..model.color import BLACK, Color, readable_on
+
 translate = QCoreApplication.translate
 
 THUMB_SIZE = QSize(176, 110)  # 16:10, the size of most thumbnails
@@ -197,6 +199,7 @@ class Card(QAbstractButton):
         self._thumb: QImage | QPixmap | None = None
         self._pixmap: QPixmap | None = None
         self._requested = False
+        self.no_preview = False  # the picture could not be made
         self._hover = False
         self._action = ""
         self._action_tip = ""
@@ -217,6 +220,10 @@ class Card(QAbstractButton):
 
     def set_thumbnail(self, thumbnail: QImage | QPixmap | None) -> None:
         self._thumb, self._pixmap = thumbnail, None
+        self.update()
+
+    def set_no_preview(self) -> None:
+        self.no_preview = True
         self.update()
 
     def has_thumbnail(self) -> bool:
@@ -351,10 +358,9 @@ class Card(QAbstractButton):
         width = self.width()
         p = QPainter(self)
         p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
-        if not self.isEnabled():
-            p.setOpacity(0.4)
-        elif self.dimmed:
-            p.setOpacity(0.55)
+        # a card that is in the background is dimmed in its picture only: its words stay readable
+        resting = 1.0 if self.isEnabled() else 0.4
+        p.setOpacity(resting)
         highlight, base, text = palette.highlight().color(), palette.base().color(), palette.text().color()
         hover = self.isEnabled() and (self._hover or self.forced_hover)
         selected = self.isChecked()
@@ -366,6 +372,8 @@ class Card(QAbstractButton):
         rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
         p.drawRoundedRect(rect.adjusted(1, 1, -1, -1) if selected else rect, 6, 6)
         # the thumbnail, clipped to rounded corners
+        if self.dimmed and self.isEnabled():
+            p.setOpacity(resting * 0.55)
         thumb = self._thumb_rect()
         outline = QPainterPath()
         outline.addRoundedRect(thumb, 4, 4)
@@ -376,6 +384,9 @@ class Card(QAbstractButton):
             p.drawPixmap(thumb.toRect(), pixmap)
         else:
             p.fillRect(thumb, mix(base, text, 0.07))
+            if self.no_preview:
+                p.setPen(with_alpha(text, 0.6))
+                p.drawText(thumb, Qt.AlignmentFlag.AlignCenter, translate("widgets", "No preview"))
         p.restore()
         if pixmap is None and not self._requested:
             self._requested = True
@@ -383,6 +394,7 @@ class Card(QAbstractButton):
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.setPen(QPen(with_alpha(text, 0.18), 1))
         p.drawRoundedRect(thumb, 4, 4)
+        p.setOpacity(resting)
         # the check badge of a selected card, in the corner opposite the action
         if selected:
             badge = QRectF(thumb.right() - 24, thumb.top() + 4, 20, 20)
@@ -545,6 +557,7 @@ class CardGrid(QWidget):
         self._typed_timer = QTimer(self, singleShot=True, interval=900)
         self._typed_timer.timeout.connect(lambda: setattr(self, "_typed", ""))
         self._empty_text = empty_text or translate("widgets", "Nothing to show here.")
+        self._filter_empty: dict = {}
 
         placeholder = translate("widgets", "Search…")
         self.search = QLineEdit(placeholderText=placeholder, clearButtonEnabled=True)
@@ -574,6 +587,8 @@ class CardGrid(QWidget):
         self.message.setWordWrap(True)
         self.message.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         self.message.setMinimumHeight(96)
+        if not fit:  # the message takes the place of the grid, so the page keeps its shape
+            self.message.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.message.hide()
 
         layout = QVBoxLayout(self)
@@ -635,8 +650,10 @@ class CardGrid(QWidget):
             card.set_in_use(card.item_id == self._in_use)
         self._apply_filter()
 
-    def set_filters(self, filters) -> None:
-        """Offer a combo of categories: a list of (category, label). Items name theirs as the fourth value."""
+    def set_filters(self, filters, empty: dict | None = None) -> None:
+        """Offer a combo of categories: a list of (category, label). Items name theirs as the fourth value.
+        `empty` says, by category, what to show when nothing is in it."""
+        self._filter_empty = dict(empty or {})
         self.filter.blockSignals(True)
         self.filter.clear()
         if filters:
@@ -668,6 +685,12 @@ class CardGrid(QWidget):
         card = self._by_id.get(item_id)
         if card is not None:
             card.set_thumbnail(image)
+
+    def set_no_preview(self, item_id) -> None:
+        """Say on a card that its picture cannot be made (a style that fails to draw)."""
+        card = self._by_id.get(item_id)
+        if card is not None:
+            card.set_no_preview()
 
     def set_in_use(self, item_id) -> None:
         self._in_use = item_id
@@ -725,7 +748,11 @@ class CardGrid(QWidget):
         if not self.cards:
             text = self._empty_text
         elif not shown:
-            text = translate("widgets", "Nothing matches your search.")
+            category = self.filter.currentData() if self.filter.count() else None
+            if category is not None and not self.search.text().strip():
+                text = self._filter_empty.get(category) or translate("widgets", "Nothing is in this group.")
+            else:
+                text = translate("widgets", "Nothing matches your search.")
         else:
             text = ""
         self.message.setText(text)
@@ -734,6 +761,13 @@ class CardGrid(QWidget):
         self.search.setVisible(self._with_search and bool(self.cards))
         self.filter.setVisible(self.filter.count() > 0 and bool(self.cards))
         self.bar.setVisible(not (self.search.isHidden() and self.filter.isHidden()))
+
+    def ask_again_for_thumbnails(self) -> None:
+        """Let the cards that have no picture ask for it when they are painted next. A page that is
+        left cancels the pictures still being made, and a card asks only once."""
+        for card in self.cards:
+            if not card.has_thumbnail():
+                card._requested = False
 
     def _thumbnail_wanted(self, card: Card) -> None:
         if not card.has_thumbnail():
@@ -1254,12 +1288,16 @@ class _ElidedLabel(QLabel):
 
 
 class DesktopBar(QWidget):
-    """The permanent bar at the bottom of the window: what Apply will do, and the three buttons."""
+    """The permanent bar at the bottom of the window: what Apply will do, and its buttons."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pending = False
         self.status = _ElidedLabel()
+        self.files_button = QPushButton(
+            themed_icon("document-open", "text-x-generic"), translate("widgets", "Show files…")
+        )
+        self.files_button.setFlat(True)
         self.snapshots_button = QPushButton(
             themed_icon("document-open-recent", "view-history"), translate("widgets", "Snapshots…")
         )
@@ -1267,15 +1305,14 @@ class DesktopBar(QWidget):
         self.apply_button = QPushButton(
             themed_icon("dialog-ok-apply", "dialog-ok"), translate("widgets", "Apply to Desktop")
         )
-        self.apply_button.setDefault(True)
-        self.apply_button.setShortcut("Ctrl+Return")
+        # Ctrl+Return belongs to the Desktop menu action of the window, which is the only place for it
         self._dot = _StatusDot(self)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 1, 16, 0)
         layout.setSpacing(SPACING)
         layout.addWidget(self._dot)
         layout.addWidget(self.status, 1)
-        for button in (self.snapshots_button, self.undo_button, self.apply_button):
+        for button in (self.files_button, self.snapshots_button, self.undo_button, self.apply_button):
             layout.addWidget(button)
         self.setMinimumHeight(54)
 
@@ -1356,7 +1393,7 @@ class _Swatch(QAbstractButton):
         p.setBrush(self.color)
         p.drawEllipse(QRectF(inset, inset, side - 2 * inset, side - 2 * inset))
         if self.isChecked():
-            pen = QPen(QColor("white") if self.color.lightness() < 150 else QColor("black"), 2)
+            pen = QPen(QColor(readable_on(Color.parse(self.color.name()), dark=BLACK).hex), 2)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             p.setPen(pen)

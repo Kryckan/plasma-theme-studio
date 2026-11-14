@@ -11,7 +11,8 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from .. import paths
 from ..messages import Msg, translate
-from ..model.color import BLACK, WHITE, Color, readable_on
+from ..model.color import BLACK, Color
+from ..model.color import on_accent as readable_on_accent
 from ..model.theme import Theme
 from .base import MARKER, ApplyError, Generator, PlannedFile
 
@@ -79,8 +80,8 @@ def scheme_groups(theme: Theme) -> list[tuple[str, list[tuple[str, str]]]]:
     window_alt = window.mix(text, 0.06)
     view_alt = view.mix(window, 0.5)
     accent_tint = button.mix(accent, 0.45)
-    # Breeze keeps white text on mid-tone accents; only light accents get dark text.
-    on_accent = WHITE if accent.luminance < 0.45 else readable_on(accent, dark=_darkest(text, window))
+    # Whichever of white and the theme's darkest color reads better on the accent.
+    on_accent = readable_on_accent(accent, text, window)
 
     if window.is_dark:
         comp_bg, comp_fg, comp_muted = window, text, muted
@@ -191,19 +192,6 @@ class ColorSchemeGenerator(Generator):
                         "Give the theme another name.",
                     ).format(name=theme.slug)
                 ]
-        return []
-
-    def warnings(self, theme: Theme, runner) -> list[Msg]:
-        accent = _read_setting(runner, "AccentColor")
-        from_wallpaper = _read_setting(runner, "accentColorFromWallpaper").lower() == "true"
-        if accent or from_wallpaper:
-            return [
-                translate(
-                    "core",
-                    "A custom accent color is set in System Settings. It overrides the theme's "
-                    'accent color until you choose "Accent color from color scheme" there.',
-                )
-            ]
         return []
 
     def is_active(self, theme: Theme, runner) -> bool:

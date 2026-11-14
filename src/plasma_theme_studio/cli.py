@@ -21,7 +21,7 @@ from .generators import ApplyError
 from .messages import translate
 from .model.theme import Theme, ThemeError
 
-COMMANDS = ("apply", "validate", "restore", "export", "import", "export-global-theme")
+COMMANDS = ("apply", "status", "validate", "restore", "export", "import", "export-global-theme")
 
 
 def _print_problems(problems) -> None:
@@ -94,6 +94,33 @@ def cmd_apply(args) -> int:
             name=theme.name
         )
     )
+    return 0
+
+
+def cmd_status(args) -> int:
+    theme = _load_theme(args.file)
+    if theme is None:
+        return 1
+    labels = {
+        "change": translate("core", "Would change"),
+        "same": translate("core", "Already so"),
+        "leave": translate("core", "Left alone"),
+        "blocked": translate("core", "Refused"),
+    }
+    rows = [
+        (
+            translate("core", "Part"),
+            translate("core", "Desktop now"),
+            translate("core", "Theme"),
+            translate("core", "Apply"),
+        )
+    ]
+    for part in engine.parts_status(theme, SystemRunner()):
+        rows.append((part.title, part.desktop, part.theme, str(labels[part.state])))
+    rows = [tuple(str(cell) for cell in row) for row in rows]
+    widths = [max(len(row[column]) for row in rows) for column in range(4)]
+    for row in rows:
+        print("  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip())
     return 0
 
 
@@ -248,6 +275,10 @@ def _command_parser() -> argparse.ArgumentParser:
     )
     apply.set_defaults(run=cmd_apply)
 
+    status = commands.add_parser("status", help="show what an apply would change, part by part")
+    status.add_argument("file")
+    status.set_defaults(run=cmd_status)
+
     export = commands.add_parser("export", help="write a theme file as one shareable archive")
     export.add_argument("file")
     export.add_argument("archive", nargs="?", help="where to write it (default: next to the theme file)")
@@ -276,6 +307,7 @@ USAGE = f"""{APP_NAME} {__version__}
 usage: plasma-theme-studio [FILE]             open the editor
        plasma-theme-studio validate FILE      check a theme file
        plasma-theme-studio apply FILE         apply a theme file to the desktop
+       plasma-theme-studio status FILE        show what applying a theme file would change
        plasma-theme-studio export FILE [OUT]  write a theme file as one shareable archive (.ptstheme)
        plasma-theme-studio import FILE        save an archive or theme file as a new theme
        plasma-theme-studio export-global-theme FILE FOLDER

@@ -24,6 +24,7 @@ from pathlib import Path
 
 from ..messages import Msg, translate
 from .color import Color
+from .parts import BORDER_SIZES, FontSpec, parse_buttons
 
 SCHEMA_VERSION = 1
 MAX_NAME_LENGTH = 60
@@ -44,6 +45,9 @@ class Field:
     # An optional value that follows nothing: while it is unset (None) the
     # theme leaves that part of the desktop the way it is.
     optional: bool = False
+    # What a "str" field holds: "id" (the name of an installed thing), "font" (see
+    # `FontSpec.from_short`) or "buttons" (KWin's letters); "" for any text.
+    form: str = ""
 
     @property
     def id(self) -> tuple[str, str]:
@@ -57,11 +61,18 @@ class Field:
 PANEL_LOCATIONS = ("top", "bottom", "left", "right")
 PANEL_VISIBILITIES = ("none", "autohide", "dodgewindows", "windowsgobelow")
 PANEL_OPACITIES = ("adaptive", "opaque", "translucent")
+BORDER_SIZE_KEYS = tuple(key for key, _name in BORDER_SIZES)
+MAX_ID_LENGTH = 200
+# The fonts the theme can set: key -> what it is called on the desktop.
+FONT_KEYS = ("general", "fixed", "small", "toolbar", "menu", "window_title")
 
 FIELDS: tuple[Field, ...] = (
     Field("meta", "name", "str", "My Theme"),
     Field("meta", "author", "str", ""),
     Field("colors", "accent", "color", "#3daee9"),
+    # False: the theme's accent is the accent (an apply removes the accent override of System
+    # Settings). True: Plasma takes the accent from the wallpaper and keeps following it.
+    Field("colors", "accent_from_wallpaper", "bool", False),
     Field("colors", "window", "color", "#eff0f1"),
     Field("colors", "view", "color", "#ffffff"),
     Field("colors", "button", "color", "#fcfcfc"),
@@ -75,15 +86,27 @@ FIELDS: tuple[Field, ...] = (
     Field("colors", "positive", "color", "#27ae60"),
     Field("shape", "radius", "int", 5, 0, 24),
     Field("shape", "border_width", "int", 1, 0, 4),
-    Field("apps", "style", "choice", "unchanged", choices=("unchanged", "generated")),
+    Field("apps", "style", "choice", "unchanged", choices=("unchanged", "generated", "installed")),
+    Field("apps", "style_id", "str", None, optional=True, form="id"),
     Field("apps", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
     Field("apps", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
-    Field("window", "decoration", "choice", "unchanged", choices=("unchanged", "breeze", "generated")),
+    Field(
+        "window",
+        "decoration",
+        "choice",
+        "unchanged",
+        choices=("unchanged", "breeze", "generated", "installed"),
+    ),
+    Field("window", "decoration_id", "str", None, optional=True, form="id"),
     Field("window", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
     Field("window", "border_width", "int", None, 0, 12, inherits=("shape", "border_width")),
+    Field("window", "border_size", "choice", None, choices=BORDER_SIZE_KEYS, optional=True),
+    Field("window", "buttons_left", "str", None, optional=True, form="buttons"),
+    Field("window", "buttons_right", "str", None, optional=True, form="buttons"),
     Field("shadow", "size", "int", 24, 0, 64),
     Field("shadow", "strength", "float", 0.35, 0.0, 1.0),
-    Field("panel", "style", "choice", "unchanged", choices=("unchanged", "generated")),
+    Field("panel", "style", "choice", "unchanged", choices=("unchanged", "generated", "installed")),
+    Field("panel", "style_id", "str", None, optional=True, form="id"),
     Field("panel", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
     Field("panel", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
     Field("panel", "opacity", "float", 0.85, 0.2, 1.0),
@@ -97,6 +120,12 @@ FIELDS: tuple[Field, ...] = (
     Field("panel_layout", "floating", "bool", None, optional=True),
     Field("panel_layout", "visibility", "choice", None, choices=PANEL_VISIBILITIES, optional=True),
     Field("panel_layout", "opacity_mode", "choice", None, choices=PANEL_OPACITIES, optional=True),
+    Field("desktop", "icons", "str", None, optional=True, form="id"),
+    Field("desktop", "cursors", "str", None, optional=True, form="id"),
+    Field("desktop", "cursor_size", "int", None, 8, 256, optional=True),
+    Field("desktop", "splash", "str", None, optional=True, form="id"),
+    Field("desktop", "sounds", "str", None, optional=True, form="id"),
+    *(Field("fonts", key, "str", None, optional=True, form="font") for key in FONT_KEYS),
     Field("gtk", "style", "choice", "unchanged", choices=("unchanged", "generated")),
     Field("gtk", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
     Field("gtk", "border_width", "int", None, 0, 4, inherits=("shape", "border_width")),
@@ -168,6 +197,8 @@ def check_value(field: Field, value) -> tuple[object, Msg | None]:
             return value, translate(
                 "core", "{key} must not contain line breaks, control characters or backslashes."
             ).format(key=field.path)
+        if field.form:
+            return _check_form(field, value)
         return value, None
     # TOML also has inf and nan, which are no size or strength of anything.
     is_number = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
@@ -184,6 +215,31 @@ def check_value(field: Field, value) -> tuple[object, Msg | None]:
             key=field.path, minimum=field.minimum, maximum=field.maximum
         )
     return value, None
+
+
+def _check_form(field: Field, value: str) -> tuple[object, Msg | None]:
+    """The checks of a "str" field that holds a name, a font or a button string."""
+    text = value.strip()
+    if any(unicodedata.category(c) == "Cc" for c in value):
+        return value, translate("core", "{key} must not contain control characters.").format(key=field.path)
+    if field.form == "font":
+        spec = FontSpec.from_short(text)
+        if spec is None:
+            return value, translate("core", "{key} must be a font such as “Noto Sans, 10”.").format(
+                key=field.path
+            )
+        return spec.short(), None
+    if field.form == "buttons":
+        if parse_buttons(text) is None:
+            return value, translate(
+                "core", "{key} must be KWin's button letters, each at most once (a spacer is _)."
+            ).format(key=field.path)
+        return text, None
+    if not text or len(text) > MAX_ID_LENGTH:
+        return value, translate("core", "{key} must be a name of at most {count} characters.").format(
+            key=field.path, count=MAX_ID_LENGTH
+        )
+    return text, None
 
 
 class Theme:
@@ -216,6 +272,23 @@ class Theme:
         if value is None and field.inherits:
             return self.resolved(*field.inherits)
         return value
+
+    def part_state(self, section: str, key: str) -> str:
+        """The state of a part that is left as it is, installed or generated: the value of the
+        choice `section.key`, except that "installed" without the name of one (`<key>_id`) is
+        "unchanged"."""
+        state = self._values[(section, key)]
+        if state == "installed" and not self._values.get((section, f"{key}_id")):
+            return "unchanged"
+        return state
+
+    def unnamed_parts(self) -> list[tuple[str, str]]:
+        """The parts that are set to "installed" without the name of the installed thing."""
+        return [
+            (section, key)
+            for (section, key), value in self._values.items()
+            if value == "installed" and not self._values.get((section, f"{key}_id"))
+        ]
 
     def color(self, key: str) -> Color:
         return Color.parse(self._values[("colors", key)])
@@ -257,7 +330,9 @@ class Theme:
             values = [
                 f"{field.key} = {_toml_value(self._values[field.id])}"
                 for field in FIELDS
-                if field.section == section and self._values[field.id] is not None
+                if field.section == section
+                and self._values[field.id] is not None
+                and not (field.id == ("colors", "accent_from_wallpaper") and self._values[field.id] is False)
             ]
             if values:  # a section where everything is left unset is not written
                 lines += ["", f"[{section}]", *values]
@@ -304,8 +379,17 @@ class Theme:
     def load(cls, path: Path) -> Theme:
         """Read a theme file. Files in an older format are upgraded in place,
         and the original is kept next to it as a backup."""
+        from ..safefile import MAX_FILE, read_regular  # safefile needs kconfig, which needs this module
+
         try:
-            text = path.read_text(encoding="utf-8")
+            raw = read_regular(path)
+            if raw is None:
+                if not path.exists():
+                    raise OSError(translate("core", "The file does not exist."))
+                if path.is_file() and path.stat().st_size > MAX_FILE:
+                    raise OSError(translate("core", "The file is too large."))
+                raise OSError(translate("core", "It is not a regular file that can be read."))
+            text = raw.decode("utf-8")
         except (OSError, UnicodeDecodeError) as error:
             raise ThemeError(
                 [

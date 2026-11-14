@@ -5,6 +5,20 @@
 from .base import CSS_MARKER, JSON_MARKER, MARKER, XML_MARKER, ApplyError, Generator, PlannedFile, made_here
 from .colorscheme import ColorSchemeGenerator
 from .gtk import GtkGenerator
+from .installed import (
+    AccentTarget,
+    BorderSizeTarget,
+    CursorSizeTarget,
+    CursorThemeTarget,
+    FontsTarget,
+    IconsTarget,
+    InstalledAppStyle,
+    InstalledDecoration,
+    InstalledPlasmaStyle,
+    SoundsTarget,
+    SplashTarget,
+    TitlebarButtonsTarget,
+)
 from .kvantum import KvantumGenerator
 from .panellayout import PanelLayoutGenerator
 from .plasmastyle import PlasmaStyleGenerator
@@ -12,16 +26,32 @@ from .rofi import RofiGenerator
 from .windowframe import WindowFrameGenerator
 
 # The colors come first: Kvantum and GTK take their palette from the scheme that is in use.
-# Rofi is last: it only reads its theme when it starts, so nothing waits for it.
+# The accent follows the colors, because it is put into the scheme that is in use.
+# An installed variant comes right after the generated one it replaces (the two are never
+# wanted together), and the window settings (border size, buttons) after the frame they apply to.
 # The panel style comes before the panel position: a style can raise the panel's
 # smallest thickness, and the thickness the theme asks for is set after that.
+# Undo walks the list the same way, so what was set last is put back last.
+# Rofi is last: it only reads its theme when it starts, so nothing waits for it.
 GENERATORS: tuple[Generator, ...] = (
     ColorSchemeGenerator(),
+    AccentTarget(),
     KvantumGenerator(),
+    InstalledAppStyle(),
     GtkGenerator(),
     WindowFrameGenerator(),
+    InstalledDecoration(),
+    BorderSizeTarget(),
+    TitlebarButtonsTarget(),
     PlasmaStyleGenerator(),
+    InstalledPlasmaStyle(),
     PanelLayoutGenerator(),
+    IconsTarget(),
+    CursorThemeTarget(),
+    CursorSizeTarget(),
+    FontsTarget(),
+    SplashTarget(),
+    SoundsTarget(),
     RofiGenerator(),
 )
 

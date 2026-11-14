@@ -238,3 +238,73 @@ def test_new_fields_round_trip_and_limits():
 def test_a_theme_from_before_the_new_sections_loads_unchanged():
     theme = Theme.from_toml('schema_version = 1\n\n[panel]\nstyle = "generated"\n')
     assert theme.get("rofi", "style") == "unchanged"
+
+
+NAMED_PARTS = {
+    ("apps", "style"): "installed",
+    ("apps", "style_id"): "Fusion",
+    ("panel", "style"): "installed",
+    ("panel", "style_id"): "breeze-dark",
+    ("window", "decoration"): "installed",
+    ("window", "decoration_id"): "org.kde.kwin.aurorae:kwin4_decoration_qml_plastik",
+    ("window", "border_size"): "Large",
+    ("window", "buttons_left"): "MN",
+    ("window", "buttons_right"): "IAX",
+    ("desktop", "icons"): "Papirus",
+    ("desktop", "cursors"): "Pop",
+    ("desktop", "cursor_size"): 32,
+    ("desktop", "splash"): "None",
+    ("desktop", "sounds"): "oxygen",
+    ("fonts", "general"): "Noto Sans, 11",
+    ("fonts", "window_title"): "Noto Sans, 10, 700",
+    ("colors", "accent_from_wallpaper"): True,
+}
+
+
+def test_the_installed_parts_round_trip_and_default_to_nothing():
+    assert Theme.from_toml(Theme(NAMED_PARTS).to_toml()) == Theme(NAMED_PARTS)
+    plain = Theme()
+    for section, key in NAMED_PARTS:
+        assert plain.get(section, key) in (None, "unchanged", False), (section, key)
+    assert "[desktop]" not in plain.to_toml() and "[fonts]" not in plain.to_toml()
+    assert (
+        Theme.from_toml('schema_version = 1\n[window]\ndecoration = "breeze"\n').get("desktop", "icons")
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "value"),
+    [
+        ("window", "decoration", "fancy"),
+        ("window", "border_size", "Gigantic"),
+        ("window", "buttons_left", "MM"),
+        ("window", "buttons_right", "Q"),
+        ("desktop", "cursor_size", 7),
+        ("desktop", "cursor_size", 257),
+        ("desktop", "icons", ""),
+        ("fonts", "general", "no size"),
+        ("panel", "style", "breeze"),
+        ("apps", "style", "fancy"),
+        ("colors", "accent_from_wallpaper", "yes"),
+    ],
+)
+def test_the_installed_parts_refuse_values_outside_what_they_offer(section, key, value):
+    with pytest.raises(ThemeError):
+        Theme().set(section, key, value)
+
+
+def test_installed_without_an_id_is_unchanged_and_is_said():
+    theme = Theme({("apps", "style"): "installed", ("window", "decoration"): "installed"})
+    assert theme.part_state("apps", "style") == theme.part_state("window", "decoration") == "unchanged"
+    assert theme.unnamed_parts() == [("apps", "style"), ("window", "decoration")]
+    assert theme.part_state("window", "decoration") == "unchanged"
+    named = Theme({("apps", "style"): "installed", ("apps", "style_id"): "Fusion"})
+    assert named.part_state("apps", "style") == "installed" and named.unnamed_parts() == []
+
+
+def test_an_old_file_loads_unchanged_and_a_new_one_is_still_schema_one():
+    old = Theme.from_toml('schema_version = 1\n\n[window]\ndecoration = "generated"\n')
+    assert old.get("window", "border_size") is None and old.get("fonts", "general") is None
+    assert old.part_state("window", "decoration") == "generated"
+    assert "schema_version = 1" in Theme(NAMED_PARTS).to_toml()

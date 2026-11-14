@@ -339,6 +339,21 @@ def _use_style(name: str, runner) -> None:
         )
 
 
+def stale_packages(keep: str | None) -> list[Path]:
+    """The styles made here, with their files, except the package `keep`."""
+    root = paths.data_home() / "plasma" / "desktoptheme"
+    stale: list[Path] = []
+    if not root.is_dir():
+        return stale
+    for package in sorted(root.glob(f"{ID_PREFIX}*")):
+        if package.name == keep or not made_here(package / "metadata.json"):
+            continue
+        stale += [item for item in sorted(package.rglob("*")) if item.is_file() and made_here(item)]
+        stale += [item for item in sorted(package.rglob("*")) if item.is_dir()]
+        stale.append(package)
+    return stale
+
+
 class PlasmaStyleGenerator(Generator):
     id = "panel"
     title = translate("core", "Panel style")
@@ -348,6 +363,8 @@ class PlasmaStyleGenerator(Generator):
         return theme.get("panel", "style") == "generated"
 
     def notes(self, theme: Theme) -> list[Msg]:
+        if theme.part_state("panel", "style") == "installed":
+            return []
         if not self.wanted(theme):
             return [
                 translate(
@@ -379,6 +396,8 @@ class PlasmaStyleGenerator(Generator):
             return self.notes(theme)
         if self.wanted(theme):
             return []
+        if theme.part_state("panel", "style") == "installed":
+            return [translate("core", "The installed Plasma style has its own popups and tooltips.")]
         return [
             translate(
                 "core",
@@ -461,18 +480,7 @@ class PlasmaStyleGenerator(Generator):
         return problems
 
     def stale_files(self, theme: Theme) -> list[Path]:
-        keep = style_id(theme)
-        root = paths.data_home() / "plasma" / "desktoptheme"
-        stale: list[Path] = []
-        if not root.is_dir():
-            return stale
-        for package in sorted(root.glob(f"{ID_PREFIX}*")):
-            if package.name == keep or not made_here(package / "metadata.json"):
-                continue
-            stale += [item for item in sorted(package.rglob("*")) if item.is_file() and made_here(item)]
-            stale += [item for item in sorted(package.rglob("*")) if item.is_dir()]
-            stale.append(package)
-        return stale
+        return stale_packages(style_id(theme))
 
     def warnings(self, theme: Theme, runner) -> list[Msg]:
         current = _current_style(runner)

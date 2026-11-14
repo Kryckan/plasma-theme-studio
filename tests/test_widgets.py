@@ -397,7 +397,6 @@ def test_desktop_bar(app):
     bar.show()
     bar.set_status("6 parts will change when you apply.", pending=True)
     assert bar.pending() and "6 parts" in bar.status.text()
-    assert bar.apply_button.isDefault()
     assert bar.snapshots_button.text() == "Snapshots…"
     assert bar.undo_button.text() == "Undo last apply"
     assert bar.apply_button.text() == "Apply to Desktop"

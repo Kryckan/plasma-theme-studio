@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Switching themes on the Themes tab and then editing.
+"""Switching themes on the Themes page and then editing.
 
 The rule these tests state: the editor always holds the theme the user last put
-on the desktop from the Themes tab, so an edit followed by apply changes that
+on the desktop from the Themes page, so an edit followed by apply changes that
 theme and never brings an earlier one back. Unsaved edits are not lost silently.
 """
 
@@ -54,6 +54,7 @@ def desk(app, home, runner, monkeypatch):
         paths.themes_dir() / "other.toml"
     )
     window = MainWindow(runner)
+    window.build_pages()
     window.show()
     window.shell = shell
     window.paths = paths
@@ -63,30 +64,27 @@ def desk(app, home, runner, monkeypatch):
 
 
 def use(window, title, how="apply"):
-    """Select an entry on the Themes tab and put it on the desktop."""
-    window.tabs.setCurrentWidget(window.library)
+    """Select an entry on the Themes page and put it on the desktop, either with the
+    button alone ("apply") or by clicking the card and then the button ("click")."""
+    window.show_page("themes")
     entry = window.library.select(title)
     assert entry is not None, title
-    if how == "apply":
-        window.apply_button.click()
-        return entry
-    listed = window.library.list
-    QCoreApplication.processEvents()  # let the icon grid lay itself out
-    listed.scrollToItem(listed.currentItem())
-    QCoreApplication.processEvents()
-    spot = listed.visualItemRect(listed.currentItem()).center()
-    QTest.mouseClick(listed.viewport(), Qt.MouseButton.LeftButton, pos=spot)
-    if how == "double":
-        QTest.mouseDClick(listed.viewport(), Qt.MouseButton.LeftButton, pos=spot)
+    if how == "click":
+        grid = window.library.grid
+        QCoreApplication.processEvents()  # let the grid lay itself out
+        card = grid.card(grid.selected_id())
+        grid.scroll.ensureWidgetVisible(card)
+        QCoreApplication.processEvents()
+        QTest.mouseClick(card, Qt.MouseButton.LeftButton)
+        QTest.mouseClick(window.apply_button, Qt.MouseButton.LeftButton)
     else:
-        listed.setFocus()
-        QTest.keyClick(listed, Qt.Key.Key_Return)
+        window.apply_button.click()
     QCoreApplication.processEvents()
     return entry
 
 
 def press_apply_on_editor_tab(window):
-    window.tabs.setCurrentWidget(window.preview)
+    window.show_page("overview")
     window.apply_button.click()
 
 
@@ -95,13 +93,8 @@ def scheme_file(window, runner):
 
 
 def in_use(window):
-    """The titles of the entries the Themes tab marks as in use."""
-    listed = window.library.list
-    return [
-        listed.item(row).text().split("\n")[0]
-        for row in range(listed.count())
-        if "In use" in listed.item(row).text()
-    ]
+    """The titles of the entries the Themes page marks as in use."""
+    return [card.title() for card in window.library.grid.cards if card.in_use]
 
 
 def last_file():
@@ -111,7 +104,7 @@ def last_file():
 # ---- the reported bug: a panel edit after a switch brings the old theme back --------------------
 
 
-@pytest.mark.parametrize("how", ["apply", "double", "enter"])
+@pytest.mark.parametrize("how", ["apply", "click"])
 def test_saved_theme_then_panel_edit_keeps_the_switched_theme(desk, runner, how):
     use(desk, "Other", how)
     assert runner.settings["ColorScheme"] == "Other"
@@ -123,7 +116,7 @@ def test_saved_theme_then_panel_edit_keeps_the_switched_theme(desk, runner, how)
     assert "0,255,0" in scheme_file(desk, runner).read_text()
 
 
-@pytest.mark.parametrize("how", ["apply", "double", "enter"])
+@pytest.mark.parametrize("how", ["apply", "click"])
 def test_scheme_then_panel_edit_keeps_the_switched_colors(desk, runner, how):
     use(desk, "Nordic", how)
     assert runner.settings["ColorScheme"] == "Nordic"
@@ -199,7 +192,7 @@ def test_the_editor_holds_the_scheme_that_was_switched_to(desk):
 
 def test_stays_on_the_themes_tab_after_a_switch(desk):
     use(desk, "Other")
-    assert desk.tabs.currentWidget() is desk.library
+    assert desk.current_key == "themes"
 
 
 def test_scheme_then_apply_without_any_edit_leaves_the_desktop_on_that_scheme(desk, runner):
@@ -223,20 +216,20 @@ def test_saved_theme_then_apply_without_any_edit_changes_nothing(desk, runner):
 
 def test_apply_button_names_the_switched_saved_theme_on_every_tab(desk):
     use(desk, "Other")
-    assert desk.apply_button.text() == "Apply “Other” to desktop"
-    for tab in (desk.preview, desk.tabs.widget(2)):
-        desk.tabs.setCurrentWidget(tab)
-        assert desk.apply_button.text() == "Apply “Other” to desktop"
-    desk.tabs.setCurrentWidget(desk.library)
-    assert desk.apply_button.text() == "Apply “Other” to desktop"
+    assert desk.apply_button.toolTip() == "Apply “Other” to the desktop"
+    for key in ("overview", "colors", "panel"):
+        desk.show_page(key)
+        assert desk.apply_button.toolTip() == "Apply “Other” to the desktop"
+    desk.show_page("themes")
+    assert desk.apply_button.toolTip() == "Apply “Other” to the desktop"
 
 
 def test_apply_button_names_the_switched_scheme_on_the_editor_tabs(desk):
     use(desk, "Nordic")
-    assert desk.apply_button.text() == "Apply “Nordic” to desktop"  # the library tab: the selection
-    desk.tabs.setCurrentWidget(desk.preview)
-    assert "Nordic" in desk.apply_button.text()
-    assert "Breeze Light Copy" not in desk.apply_button.text()
+    assert desk.apply_button.toolTip() == "Apply “Nordic” to the desktop"  # the Themes page: the selection
+    desk.show_page("overview")
+    assert "Nordic" in desk.apply_button.toolTip()
+    assert "Breeze Light Copy" not in desk.apply_button.toolTip()
 
 
 def test_window_title_names_the_switched_theme(desk):

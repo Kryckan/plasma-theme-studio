@@ -179,6 +179,38 @@
       <translation>Verkställde {name}. Gå tillbaka genom att köra: plasma-theme-studio restore</translation>
     </message>
     <message>
+      <source>Would change</source>
+      <translation>Skulle ändras</translation>
+    </message>
+    <message>
+      <source>Already so</source>
+      <translation>Redan så</translation>
+    </message>
+    <message>
+      <source>Left alone</source>
+      <translation>Lämnas orörd</translation>
+    </message>
+    <message>
+      <source>Refused</source>
+      <translation>Vägras</translation>
+    </message>
+    <message>
+      <source>Part</source>
+      <translation>Del</translation>
+    </message>
+    <message>
+      <source>Desktop now</source>
+      <translation>Skrivbordet nu</translation>
+    </message>
+    <message>
+      <source>Theme</source>
+      <translation>Tema</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>Verkställ</translation>
+    </message>
+    <message>
       <source>Could not write {path}: {detail}</source>
       <translation>Kunde inte skriva {path}: {detail}</translation>
     </message>
@@ -257,6 +289,98 @@
     <message>
       <source>Plasma style</source>
       <translation>Plasmastil</translation>
+    </message>
+    <message>
+      <source>Panel</source>
+      <translation>Panel</translation>
+    </message>
+    <message>
+      <source>Window borders and buttons</source>
+      <translation>Fönsterkanter och knappar</translation>
+    </message>
+    <message>
+      <source>Pointers</source>
+      <translation>Pekare</translation>
+    </message>
+    <message>
+      <source>General</source>
+      <translation>Allmänt</translation>
+    </message>
+    <message>
+      <source>Fixed width</source>
+      <translation>Fast bredd</translation>
+    </message>
+    <message>
+      <source>Small</source>
+      <translation>Liten</translation>
+    </message>
+    <message>
+      <source>Toolbar</source>
+      <translation>Verktygsrad</translation>
+    </message>
+    <message>
+      <source>Menu</source>
+      <translation>Meny</translation>
+    </message>
+    <message>
+      <source>Left as it is</source>
+      <translation>Lämna som det är</translation>
+    </message>
+    <message>
+      <source>Not checked</source>
+      <translation>Inte kontrollerad</translation>
+    </message>
+    <message>
+      <source>{name} (made by this app)</source>
+      <translation>{name} (gjord av det här programmet)</translation>
+    </message>
+    <message>
+      <source>Breeze</source>
+      <translation>Breeze</translation>
+    </message>
+    <message>
+      <source>{name}, accent from the wallpaper</source>
+      <translation>{name}, accent från bakgrunden</translation>
+    </message>
+    <message>
+      <source>The frame in use, in the colors of the theme</source>
+      <translation>Ramen som används, i temats färger</translation>
+    </message>
+    <message>
+      <source>The decoration's own</source>
+      <translation>Dekorationens egen</translation>
+    </message>
+    <message>
+      <source>{name}, {size} px</source>
+      <translation>{name}, {size} px</translation>
+    </message>
+    <message>
+      <source>Default</source>
+      <translation>Standard</translation>
+    </message>
+    <message>
+      <source>This theme's</source>
+      <translation>Det här temats</translation>
+    </message>
+    <message>
+      <source>Something else</source>
+      <translation>Något annat</translation>
+    </message>
+    <message>
+      <source>{place}, {size} px</source>
+      <translation>{place}, {size} px</translation>
+    </message>
+    <message>
+      <source>No panel was found</source>
+      <translation>Ingen panel hittades</translation>
+    </message>
+    <message>
+      <source>buttons {left} | {right}</source>
+      <translation>knappar {left} | {right}</translation>
+    </message>
+    <message>
+      <source>Could not be read</source>
+      <translation>Kunde inte läsas</translation>
     </message>
     <message>
       <source>The Plasma style</source>
@@ -555,10 +679,6 @@
       <translation>Ett färgschema som heter {name} är redan installerat med systemet. Ge temat ett annat namn.</translation>
     </message>
     <message>
-      <source>A custom accent color is set in System Settings. It overrides the theme's accent color until you choose "Accent color from color scheme" there.</source>
-      <translation>En egen accentfärg är vald i Systeminställningar. Den går före temats accentfärg tills du väljer ”Accentfärg från färgschema” där.</translation>
-    </message>
-    <message>
       <source>Plasma did not accept the color scheme {name}. {detail}</source>
       <translation>Plasma godtog inte färgschemat {name}. {detail}</translation>
     </message>
@@ -595,8 +715,36 @@
       <translation>{key} måste ligga mellan {minimum} och {maximum}.</translation>
     </message>
     <message>
+      <source>{key} must not contain control characters.</source>
+      <translation>{key} får inte innehålla styrtecken.</translation>
+    </message>
+    <message>
+      <source>{key} must be a font such as “Noto Sans, 10”.</source>
+      <translation>{key} måste vara ett teckensnitt, till exempel ”Noto Sans, 10”.</translation>
+    </message>
+    <message>
+      <source>{key} must be KWin's button letters, each at most once (a spacer is _).</source>
+      <translation>{key} måste vara KWins knappbokstäver, var och en högst en gång (ett mellanrum är _).</translation>
+    </message>
+    <message>
+      <source>{key} must be a name of at most {count} characters.</source>
+      <translation>{key} måste vara ett namn på högst {count} tecken.</translation>
+    </message>
+    <message>
       <source>Unknown key {key}.</source>
       <translation>Okänd nyckel {key}.</translation>
+    </message>
+    <message>
+      <source>The file does not exist.</source>
+      <translation>Filen finns inte.</translation>
+    </message>
+    <message>
+      <source>The file is too large.</source>
+      <translation>Filen är för stor.</translation>
+    </message>
+    <message>
+      <source>It is not a regular file that can be read.</source>
+      <translation>Det är ingen vanlig fil som går att läsa.</translation>
     </message>
     <message>
       <source>The theme needs a name that contains letters or digits.</source>
@@ -763,6 +911,10 @@
       <translation>Med den här hörnradien kan panelen inte vara tunnare än {pixels} bildpunkter.</translation>
     </message>
     <message>
+      <source>The installed Plasma style has its own popups and tooltips.</source>
+      <translation>Den installerade Plasmastilen har egna popup-fönster och verktygstips.</translation>
+    </message>
+    <message>
       <source>These values take effect when the panel background is "Made from this theme". Otherwise the Plasma style in use keeps its own popups.</source>
       <translation>Värdena gäller när panelbakgrunden är ”Gjord från det här temat”. Annars behåller Plasma-stilen som används sina egna popupfönster.</translation>
     </message>
@@ -831,6 +983,10 @@
       <translation>Breeze bestämmer hörnradien. Välj den genererade ramen för en exakt radie.</translation>
     </message>
     <message>
+      <source>The border size you chose on the Windows page is used instead of the one that follows the border width.</source>
+      <translation>Kantstorleken du valde på sidan Fönster används i stället för den som följer kantbredden.</translation>
+    </message>
+    <message>
       <source>Breeze will draw no border.</source>
       <translation>Breeze ritar ingen kant.</translation>
     </message>
@@ -853,6 +1009,10 @@
     <message>
       <source>The frame colors are fixed in the frame. Apply the theme again after you change them.</source>
       <translation>Ramens färger ligger fast i ramen. Verkställ temat igen när du har ändrat dem.</translation>
+    </message>
+    <message>
+      <source>The frame draws its own border, but KWin's border size is the one you chose, so the border may be narrower or wider than {border} px.</source>
+      <translation>Ramen ritar sin egen kant, men KWins kantstorlek är den du valde, så kanten kan vara smalare eller bredare än {border} px.</translation>
     </message>
     <message>
       <source>KWin's border size is set to {size} so that the border is exactly {border} px wide.</source>
@@ -1218,6 +1378,110 @@
       <source>This kind of wallpaper has no image.</source>
       <translation>Den här typen av skrivbordsunderlägg har ingen bild.</translation>
     </message>
+    <message>
+      <source>The color scheme</source>
+      <translation>Färgschemat</translation>
+    </message>
+    <message>
+      <source>The icons</source>
+      <translation>Ikonerna</translation>
+    </message>
+    <message>
+      <source>The pointers</source>
+      <translation>Pekarna</translation>
+    </message>
+    <message>
+      <source>The fonts</source>
+      <translation>Teckensnitten</translation>
+    </message>
+    <message>
+      <source>{scheme} has no value for {count} of the colors, so those were left as they are.</source>
+      <translation>{scheme} saknar värde för {count} av färgerna, så de lämnades som de är.</translation>
+    </message>
+    <message>
+      <source>{part} of {name}: {value} is not installed, so it was left as it is.</source>
+      <translation>{part} i {name}: {value} är inte installerat, så det lämnades som det var.</translation>
+    </message>
+    <message>
+      <source>{part} of {name}: {value} is not a size it can have.</source>
+      <translation>{part} i {name}: {value} är ingen storlek det kan ha.</translation>
+    </message>
+    <message>
+      <source>{part} is set to an installed one, but none is chosen. It is left as it is.</source>
+      <translation>{part} är inställd på en installerad, men ingen är vald. Den lämnas som den är.</translation>
+    </message>
+    <message>
+      <source>{part} cannot be changed. {reason}</source>
+      <translation>{part} kan inte ändras. {reason}</translation>
+    </message>
+    <message>
+      <source>the Plasma style: {name} (plasmarc)</source>
+      <translation>Plasmastilen: {name} (plasmarc)</translation>
+    </message>
+    <message>
+      <source>the application style: {name} (kdeglobals)</source>
+      <translation>programstilen: {name} (kdeglobals)</translation>
+    </message>
+    <message>
+      <source>the window decoration: {name} (kwinrc)</source>
+      <translation>fönsterdekorationen: {name} (kwinrc)</translation>
+    </message>
+    <message>
+      <source>The border size chosen here is used instead of the one the window frame of this theme would set.</source>
+      <translation>Kantstorleken som väljs här används i stället för den som fönsterramen i det här temat skulle ställa in.</translation>
+    </message>
+    <message>
+      <source>KWin uses this border size with whichever window decoration is in use.</source>
+      <translation>KWin använder den här kantstorleken med vilken fönsterdekoration som än används.</translation>
+    </message>
+    <message>
+      <source>the border size of windows: {name} (kwinrc)</source>
+      <translation>kantstorleken på fönster: {name} (kwinrc)</translation>
+    </message>
+    <message>
+      <source>the buttons in the title bar of windows (kwinrc)</source>
+      <translation>knapparna i fönstrens namnlist (kwinrc)</translation>
+    </message>
+    <message>
+      <source>the icon theme: {name} (kdeglobals)</source>
+      <translation>ikontemat: {name} (kdeglobals)</translation>
+    </message>
+    <message>
+      <source>the pointer theme: {name} (kcminputrc)</source>
+      <translation>pekartemat: {name} (kcminputrc)</translation>
+    </message>
+    <message>
+      <source>the pointer size: {size} px (kcminputrc)</source>
+      <translation>pekarstorleken: {size} px (kcminputrc)</translation>
+    </message>
+    <message>
+      <source>the fonts of the desktop (kdeglobals)</source>
+      <translation>skrivbordets teckensnitt (kdeglobals)</translation>
+    </message>
+    <message>
+      <source>the splash screen: {name} (ksplashrc)</source>
+      <translation>startskärmen: {name} (ksplashrc)</translation>
+    </message>
+    <message>
+      <source>the sound theme: {name} (kdeglobals)</source>
+      <translation>ljudtemat: {name} (kdeglobals)</translation>
+    </message>
+    <message>
+      <source>Plasma takes the accent color from the wallpaper and keeps following it. The accent color of this theme is not used while it does.</source>
+      <translation>Plasma tar accentfärgen från bakgrunden och fortsätter följa den. Det här temats accentfärg används inte medan den gör det.</translation>
+    </message>
+    <message>
+      <source>The accent color chosen in System Settings overrides the one of the theme. Applying the theme removes it, so that the accent color of the theme shows.</source>
+      <translation>Accentfärgen som valts i Systeminställningar går före temats. Att verkställa temat tar bort den, så att temats accentfärg syns.</translation>
+    </message>
+    <message>
+      <source>the accent color: it follows the wallpaper (kdeglobals)</source>
+      <translation>accentfärgen: den följer bakgrunden (kdeglobals)</translation>
+    </message>
+    <message>
+      <source>the accent color chosen in System Settings, which is removed (kdeglobals)</source>
+      <translation>accentfärgen som valts i Systeminställningar, som tas bort (kdeglobals)</translation>
+    </message>
   </context>
   <context>
     <name>fields</name>
@@ -1258,6 +1522,14 @@
       <translation>Panelens placering</translation>
     </message>
     <message>
+      <source>Icons, pointers and sounds</source>
+      <translation>Ikoner, pekare och ljud</translation>
+    </message>
+    <message>
+      <source>Fonts</source>
+      <translation>Teckensnitt</translation>
+    </message>
+    <message>
       <source>GTK applications</source>
       <translation>GTK-program</translation>
     </message>
@@ -1280,6 +1552,10 @@
     <message>
       <source>Accent</source>
       <translation>Accent</translation>
+    </message>
+    <message>
+      <source>Accent color from the wallpaper</source>
+      <translation>Accentfärg från bakgrunden</translation>
     </message>
     <message>
       <source>Window background</source>
@@ -1338,8 +1614,28 @@
       <translation>Programstil</translation>
     </message>
     <message>
+      <source>Installed application style</source>
+      <translation>Installerad programstil</translation>
+    </message>
+    <message>
       <source>Window frame</source>
       <translation>Fönsterram</translation>
+    </message>
+    <message>
+      <source>Installed window decoration</source>
+      <translation>Installerad fönsterdekoration</translation>
+    </message>
+    <message>
+      <source>Border size</source>
+      <translation>Kantstorlek</translation>
+    </message>
+    <message>
+      <source>Title bar buttons on the left</source>
+      <translation>Namnlistknappar till vänster</translation>
+    </message>
+    <message>
+      <source>Title bar buttons on the right</source>
+      <translation>Namnlistknappar till höger</translation>
     </message>
     <message>
       <source>Size</source>
@@ -1352,6 +1648,10 @@
     <message>
       <source>Panel background</source>
       <translation>Panelbakgrund</translation>
+    </message>
+    <message>
+      <source>Installed Plasma style</source>
+      <translation>Installerad Plasmastil</translation>
     </message>
     <message>
       <source>Opacity</source>
@@ -1372,6 +1672,50 @@
     <message>
       <source>Font</source>
       <translation>Teckensnitt</translation>
+    </message>
+    <message>
+      <source>Icons</source>
+      <translation>Ikoner</translation>
+    </message>
+    <message>
+      <source>Pointers</source>
+      <translation>Pekare</translation>
+    </message>
+    <message>
+      <source>Pointer size</source>
+      <translation>Pekarstorlek</translation>
+    </message>
+    <message>
+      <source>Splash screen</source>
+      <translation>Startskärm</translation>
+    </message>
+    <message>
+      <source>System sounds</source>
+      <translation>Systemljud</translation>
+    </message>
+    <message>
+      <source>General font</source>
+      <translation>Allmänt teckensnitt</translation>
+    </message>
+    <message>
+      <source>Fixed width font</source>
+      <translation>Teckensnitt med fast bredd</translation>
+    </message>
+    <message>
+      <source>Small font</source>
+      <translation>Litet teckensnitt</translation>
+    </message>
+    <message>
+      <source>Toolbar font</source>
+      <translation>Verktygsradens teckensnitt</translation>
+    </message>
+    <message>
+      <source>Menu font</source>
+      <translation>Menyteckensnitt</translation>
+    </message>
+    <message>
+      <source>Window title font</source>
+      <translation>Fönstertitelns teckensnitt</translation>
     </message>
     <message>
       <source>Screen edge</source>
@@ -1402,12 +1746,12 @@
       <translation>Lämna som det är</translation>
     </message>
     <message>
-      <source>Breeze, adjusted</source>
-      <translation>Breeze, anpassad</translation>
-    </message>
-    <message>
       <source>Made from this theme</source>
       <translation>Skapad från det här temat</translation>
+    </message>
+    <message>
+      <source>An installed one</source>
+      <translation>En installerad</translation>
     </message>
     <message>
       <source>Top</source>
@@ -1448,6 +1792,10 @@
     <message>
       <source>Yes</source>
       <translation>Ja</translation>
+    </message>
+    <message>
+      <source>Breeze with your changes</source>
+      <translation>Breeze med dina ändringar</translation>
     </message>
     <message>
       <source>No</source>
@@ -1535,6 +1883,10 @@
   </context>
   <context>
     <name>preview</name>
+    <message>
+      <source>Preview of the theme</source>
+      <translation>Förhandsvisning av temat</translation>
+    </message>
     <message>
       <source>Home</source>
       <translation>Hem</translation>
@@ -1655,6 +2007,18 @@
       <translation>finns och skapades inte av det här programmet</translation>
     </message>
     <message>
+      <source>Files</source>
+      <translation>Filer</translation>
+    </message>
+    <message>
+      <source>Content of the file</source>
+      <translation>Filens innehåll</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>Stäng</translation>
+    </message>
+    <message>
       <source>Snapshots</source>
       <translation>Ögonblicksbilder</translation>
     </message>
@@ -1667,28 +2031,68 @@
       <translation>Återställ</translation>
     </message>
     <message>
-      <source>Sections</source>
-      <translation>Sektioner</translation>
+      <source>Desktop</source>
+      <translation>Skrivbord</translation>
+    </message>
+    <message>
+      <source>Window</source>
+      <translation>Fönster</translation>
+    </message>
+    <message>
+      <source>Panel</source>
+      <translation>Panel</translation>
+    </message>
+    <message>
+      <source>Menu</source>
+      <translation>Meny</translation>
+    </message>
+    <message>
+      <source>What the preview shows</source>
+      <translation>Vad förhandsvisningen visar</translation>
     </message>
     <message>
       <source>Preview</source>
       <translation>Förhandsgranskning</translation>
     </message>
     <message>
-      <source>Application style</source>
-      <translation>Programstil</translation>
+      <source>Nothing reaches the desktop until you choose Apply.</source>
+      <translation>Inget når skrivbordet förrän du väljer Verkställ.</translation>
+    </message>
+    <message>
+      <source>This theme’s values</source>
+      <translation>Det här temats värden</translation>
+    </message>
+    <message>
+      <source>This theme</source>
+      <translation>Det här temat</translation>
+    </message>
+    <message>
+      <source>Generated from this theme</source>
+      <translation>Skapad från det här temat</translation>
+    </message>
+    <message>
+      <source>Breeze with your changes</source>
+      <translation>Breeze med dina ändringar</translation>
+    </message>
+    <message>
+      <source>Set by this theme</source>
+      <translation>Styrs av det här temat</translation>
+    </message>
+    <message>
+      <source>Nothing matches your search.</source>
+      <translation>Inget matchar din sökning.</translation>
+    </message>
+    <message>
+      <source>Nothing of this kind is installed.</source>
+      <translation>Inget av detta slag är installerat.</translation>
+    </message>
+    <message>
+      <source>Choose {part}</source>
+      <translation>Välj {part}</translation>
     </message>
     <message>
       <source>Files written</source>
       <translation>Filer som skrivs</translation>
-    </message>
-    <message>
-      <source>Undo last apply</source>
-      <translation>Ångra senaste verkställande</translation>
-    </message>
-    <message>
-      <source>Apply to desktop</source>
-      <translation>Verkställ på skrivbordet</translation>
     </message>
     <message>
       <source>:</source>
@@ -1759,10 +2163,6 @@
       <translation>&amp;Skrivbord</translation>
     </message>
     <message>
-      <source>&amp;Apply to desktop</source>
-      <translation>&amp;Verkställ på skrivbordet</translation>
-    </message>
-    <message>
       <source>&amp;Undo last apply</source>
       <translation>&amp;Ångra senaste verkställande</translation>
     </message>
@@ -1793,6 +2193,10 @@
     <message>
       <source>Apply writes these files and then runs: {commands}. Nothing else on the system is changed.</source>
       <translation>Verkställ skriver de här filerna och kör sedan: {commands}. Ingenting annat i systemet ändras.</translation>
+    </message>
+    <message>
+      <source>Apply “{name}” to the desktop</source>
+      <translation>Verkställ ”{name}” på skrivbordet</translation>
     </message>
     <message>
       <source>Import theme</source>
@@ -1835,6 +2239,10 @@
       <translation>Det globala temat kunde inte exporteras.</translation>
     </message>
     <message>
+      <source>This is a new theme that starts with the colors of {name}. Change it on the pages, then choose Apply to Desktop.</source>
+      <translation>Det här är ett nytt tema som börjar med färgerna från {name}. Ändra det på sidorna och välj sedan Verkställ på skrivbordet.</translation>
+    </message>
+    <message>
       <source>The desktop already uses {name} exactly as it is here, so nothing changed. Change something and apply again.</source>
       <translation>Skrivbordet använder redan {name} precis som det är här, så ingenting ändrades. Ändra något och verkställ igen.</translation>
     </message>
@@ -1855,12 +2263,44 @@
       <translation>En ögonblicksbild tas före varje verkställande. När du återställer en läggs filerna och inställningarna tillbaka som de var precis innan. Det som verkställts efter den ångras också.</translation>
     </message>
     <message>
-      <source>Select a theme first.</source>
-      <translation>Markera ett tema först.</translation>
+      <source>Pages</source>
+      <translation>Sidor</translation>
     </message>
     <message>
-      <source>Apply “{name}” to desktop</source>
-      <translation>Verkställ ”{name}” på skrivbordet</translation>
+      <source>Theme menu</source>
+      <translation>Temameny</translation>
+    </message>
+    <message>
+      <source>&amp;Apply to Desktop</source>
+      <translation>&amp;Verkställ på skrivbordet</translation>
+    </message>
+    <message>
+      <source>Show &amp;files…</source>
+      <translation>Visa &amp;filer …</translation>
+    </message>
+    <message>
+      <source>…and {count} more.</source>
+      <translation>… och {count} till.</translation>
+    </message>
+    <message>
+      <source>Applying is refused: {problem}</source>
+      <translation>Det går inte att verkställa: {problem}</translation>
+    </message>
+    <message>
+      <source>Nothing will change when you apply.</source>
+      <translation>Inget ändras när du verkställer.</translation>
+    </message>
+    <message>
+      <source>One part will change when you apply.</source>
+      <translation>En del ändras när du verkställer.</translation>
+    </message>
+    <message>
+      <source>{count} parts will change when you apply.</source>
+      <translation>{count} delar ändras när du verkställer.</translation>
+    </message>
+    <message>
+      <source>Select a theme first.</source>
+      <translation>Markera ett tema först.</translation>
     </message>
     <message>
       <source>Unsaved theme</source>
@@ -1907,6 +2347,10 @@
       <translation>Exporterade {name} som ett globalt tema ({count} filer) i {folder}. Kör install.sh där för att installera det. Det innehåller färgschemat, fönsterramen och Plasma-stilen; programstilen, GTK och Rofi ingår inte. När ett globalt tema tillämpas stängs även startskärmen av.</translation>
     </message>
     <message>
+      <source>Applying “{name}” replaces the theme in the editor, and its changes are not saved. Save them first, or discard them and apply?</source>
+      <translation>Att verkställa ”{name}” ersätter temat i redigeraren, och ändringarna är inte sparade. Spara dem först, eller kasta dem och verkställ?</translation>
+    </message>
+    <message>
       <source>The desktop already uses {name}.</source>
       <translation>Skrivbordet använder redan {name}.</translation>
     </message>
@@ -1917,10 +2361,6 @@
     <message>
       <source>The desktop now uses {name}. Undo last apply takes you back. Changes you make in the editor go into {theme}, a new theme that is not saved yet.</source>
       <translation>Skrivbordet använder nu {name}. Med Ångra senaste verkställande kommer du tillbaka. Ändringar du gör i redigeraren hamnar i {theme}, ett nytt tema som inte är sparat än.</translation>
-    </message>
-    <message>
-      <source>This is a new theme that starts with the colors of {name}. Change it on the right, then choose Apply to desktop.</source>
-      <translation>Det här är ett nytt tema som utgår från färgerna i {name}. Ändra det till höger och välj sedan Verkställ på skrivbordet.</translation>
     </message>
     <message>
       <source>The theme cannot be applied. Nothing was changed.</source>
@@ -1983,28 +2423,32 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
       <translation>Stäng meddelandet</translation>
     </message>
     <message>
-      <source>Search…</source>
-      <translation>Sök…</translation>
-    </message>
-    <message>
-      <source>Search themes</source>
-      <translation>Sök teman</translation>
-    </message>
-    <message>
       <source>Themes</source>
       <translation>Teman</translation>
     </message>
     <message>
-      <source>Your saved themes and the color schemes installed on this computer. Select one and choose Apply, or double-click it, to switch the desktop to it. Edit opens it in the editor.</source>
-      <translation>Dina sparade teman och färgscheman som är installerade på den här datorn. Markera ett och välj Verkställ, eller dubbelklicka på det, för att byta skrivbordet till det. Redigera öppnar det i redigeraren.</translation>
+      <source>No theme is saved and no color scheme is installed yet.</source>
+      <translation>Inget tema är sparat och inget färgschema är installerat än.</translation>
     </message>
     <message>
       <source>Saved theme</source>
       <translation>Sparat tema</translation>
     </message>
     <message>
-      <source>In use</source>
-      <translation>Används</translation>
+      <source>My themes</source>
+      <translation>Mina teman</translation>
+    </message>
+    <message>
+      <source>Color schemes</source>
+      <translation>Färgscheman</translation>
+    </message>
+    <message>
+      <source>You have no saved themes yet.</source>
+      <translation>Du har inga sparade teman än.</translation>
+    </message>
+    <message>
+      <source>No color schemes are installed.</source>
+      <translation>Inga färgscheman är installerade.</translation>
     </message>
     <message>
       <source>Edit</source>
@@ -2022,6 +2466,230 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
       <source>Icons</source>
       <translation>Ikoner</translation>
     </message>
+    <message>
+      <source>Writes a Kvantum style and switches to it.</source>
+      <translation>Skriver en Kvantum-stil och byter till den.</translation>
+    </message>
+    <message>
+      <source>How buttons, fields and menus look in applications.</source>
+      <translation>Hur knappar, fält och menyer ser ut i program.</translation>
+    </message>
+    <message>
+      <source>Values of “This theme”</source>
+      <translation>Värden för ”Det här temat”</translation>
+    </message>
+    <message>
+      <source>Sample</source>
+      <translation>Exempel</translation>
+    </message>
+    <message>
+      <source>The color scheme and the accent color. Every part follows these.</source>
+      <translation>Färgschemat och accentfärgen. Alla delar följer dessa.</translation>
+    </message>
+    <message>
+      <source>Accent</source>
+      <translation>Accent</translation>
+    </message>
+    <message>
+      <source>Surfaces</source>
+      <translation>Ytor</translation>
+    </message>
+    <message>
+      <source>Text and status</source>
+      <translation>Text och status</translation>
+    </message>
+    <message>
+      <source>Writes a window decoration and switches to it.</source>
+      <translation>Skriver en fönsterdekoration och byter till den.</translation>
+    </message>
+    <message>
+      <source>The frame and title bar of windows.</source>
+      <translation>Fönstrens ram och namnlist.</translation>
+    </message>
+    <message>
+      <source>Frame, shadow and title bar buttons</source>
+      <translation>Ram, skugga och knappar i namnlisten</translation>
+    </message>
+    <message>
+      <source>A font that is not set here stays as it is on the desktop.</source>
+      <translation>Ett typsnitt som inte ställs in här förblir som det är på skrivbordet.</translation>
+    </message>
+    <message>
+      <source>Choose…</source>
+      <translation>Välj …</translation>
+    </message>
+    <message>
+      <source>Choose {font}</source>
+      <translation>Välj {font}</translation>
+    </message>
+    <message>
+      <source>Writes a style sheet for GTK 3 and 4 applications.</source>
+      <translation>Skriver en formatmall för GTK 3- och GTK 4-program.</translation>
+    </message>
+    <message>
+      <source>GTK applications get this theme's colors and shapes through a style sheet.</source>
+      <translation>GTK-program får det här temats färger och former genom en formatmall.</translation>
+    </message>
+    <message>
+      <source>Shapes for GTK applications</source>
+      <translation>Former för GTK-program</translation>
+    </message>
+    <message>
+      <source>Switches the icon theme.</source>
+      <translation>Byter ikontema.</translation>
+    </message>
+    <message>
+      <source>The icons of applications and the desktop.</source>
+      <translation>Ikonerna för program och skrivbordet.</translation>
+    </message>
+    <message>
+      <source>Overview</source>
+      <translation>Översikt</translation>
+    </message>
+    <message>
+      <source>Colors</source>
+      <translation>Färger</translation>
+    </message>
+    <message>
+      <source>Shapes</source>
+      <translation>Former</translation>
+    </message>
+    <message>
+      <source>Fonts</source>
+      <translation>Typsnitt</translation>
+    </message>
+    <message>
+      <source>Plasma Style</source>
+      <translation>Plasma-stil</translation>
+    </message>
+    <message>
+      <source>Window Decorations</source>
+      <translation>Fönsterdekorationer</translation>
+    </message>
+    <message>
+      <source>Splash Screen</source>
+      <translation>Startskärm</translation>
+    </message>
+    <message>
+      <source>System Sounds</source>
+      <translation>Systemljud</translation>
+    </message>
+    <message>
+      <source>Application Style</source>
+      <translation>Programstil</translation>
+    </message>
+    <message>
+      <source>GTK Apps</source>
+      <translation>GTK-program</translation>
+    </message>
+    <message>
+      <source>Rofi</source>
+      <translation>Rofi</translation>
+    </message>
+    <message>
+      <source>Library</source>
+      <translation>Bibliotek</translation>
+    </message>
+    <message>
+      <source>Basics</source>
+      <translation>Grunder</translation>
+    </message>
+    <message>
+      <source>Apps</source>
+      <translation>Program</translation>
+    </message>
+    <message>
+      <source>What this theme does to the desktop when you apply it.</source>
+      <translation>Vad det här temat gör med skrivbordet när du verkställer det.</translation>
+    </message>
+    <message>
+      <source>Parts of the desktop</source>
+      <translation>Delar av skrivbordet</translation>
+    </message>
+    <message>
+      <source>Part</source>
+      <translation>Del</translation>
+    </message>
+    <message>
+      <source>On the desktop now</source>
+      <translation>På skrivbordet nu</translation>
+    </message>
+    <message>
+      <source>When you apply</source>
+      <translation>När du verkställer</translation>
+    </message>
+    <message>
+      <source>Will change</source>
+      <translation>Ändras</translation>
+    </message>
+    <message>
+      <source>Refused</source>
+      <translation>Vägras</translation>
+    </message>
+    <message>
+      <source>Same</source>
+      <translation>Samma</translation>
+    </message>
+    <message>
+      <source>Position and behavior of the main panel. A value left as it is is not touched on the desktop.</source>
+      <translation>Huvudpanelens placering och beteende. Ett värde som lämnas som det är rörs inte på skrivbordet.</translation>
+    </message>
+    <message>
+      <source>Installs a Plasma style and switches to it.</source>
+      <translation>Installerar en Plasma-stil och byter till den.</translation>
+    </message>
+    <message>
+      <source>How the panel, menus, popups and tooltips are drawn.</source>
+      <translation>Hur panelen, menyer, popuprutor och verktygstips ritas.</translation>
+    </message>
+    <message>
+      <source>Switches the pointer theme.</source>
+      <translation>Byter pekartema.</translation>
+    </message>
+    <message>
+      <source>The mouse pointer.</source>
+      <translation>Muspekaren.</translation>
+    </message>
+    <message>
+      <source>Size</source>
+      <translation>Storlek</translation>
+    </message>
+    <message>
+      <source>Writes a Rofi theme file.</source>
+      <translation>Skriver en Rofi-temafil.</translation>
+    </message>
+    <message>
+      <source>The Rofi launcher gets this theme's colors and shapes.</source>
+      <translation>Rofi-startaren får det här temats färger och former.</translation>
+    </message>
+    <message>
+      <source>Shapes and font for Rofi</source>
+      <translation>Former och typsnitt för Rofi</translation>
+    </message>
+    <message>
+      <source>Corners and borders. Applications, windows, panels and popups follow these.</source>
+      <translation>Hörn och kanter. Program, fönster, paneler och popuprutor följer dessa.</translation>
+    </message>
+    <message>
+      <source>Switches the sound theme.</source>
+      <translation>Byter ljudtema.</translation>
+    </message>
+    <message>
+      <source>The sounds of notifications and events.</source>
+      <translation>Ljuden för aviseringar och händelser.</translation>
+    </message>
+    <message>
+      <source>Switches the splash screen.</source>
+      <translation>Byter startskärm.</translation>
+    </message>
+    <message>
+      <source>What is shown while Plasma starts.</source>
+      <translation>Vad som visas medan Plasma startar.</translation>
+    </message>
+    <message>
+      <source>Your saved themes and the installed color schemes. Apply puts the selected one on the desktop.</source>
+      <translation>Dina sparade teman och de installerade färgschemana. Verkställ lägger det valda på skrivbordet.</translation>
+    </message>
   </context>
   <context>
     <name>widgets</name>
@@ -2032,6 +2700,10 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
       <source>Selected</source>
       <translation>Vald</translation>
+    </message>
+    <message>
+      <source>No preview</source>
+      <translation>Ingen förhandsvisning</translation>
     </message>
     <message>
       <source>Nothing to show here.</source>
@@ -2056,6 +2728,10 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
       <source>All</source>
       <translation>Alla</translation>
+    </message>
+    <message>
+      <source>Nothing is in this group.</source>
+      <translation>Inget finns i den här gruppen.</translation>
     </message>
     <message>
       <source>Nothing matches your search.</source>
@@ -2084,6 +2760,10 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
       <source>left as it is</source>
       <translation>lämnas som det är</translation>
+    </message>
+    <message>
+      <source>Show files…</source>
+      <translation>Visa filer …</translation>
     </message>
     <message>
       <source>Snapshots…</source>

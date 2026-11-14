@@ -14,9 +14,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
-import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
 from . import kconfig, paths
@@ -34,6 +31,17 @@ from .generators.windowframe import (
     _reconfigure,
 )
 from .messages import Msg, translate
+from .model.parts import (  # noqa: F401 - the names are part of this module's interface
+    BORDER_SIZES,
+    BUTTONS,
+    DEFAULT_BUTTONS,
+    FONT_WEIGHTS,
+    FontSpec,
+    button_names,
+    describe_buttons,
+    parse_buttons,
+    weight_name,
+)
 
 Setting = tuple[str, list[str], str]  # file, groups, key
 
@@ -43,9 +51,11 @@ def _error(template: str, **args) -> ApplyError:
 
 
 def _check_text(value, what: str) -> str:
-    """A name or value that is safe to hand to a tool: one line of text."""
+    """A name or value that is safe to hand to a tool: one line of text that no tool can read as an
+    option."""
     if (
         not isinstance(value, str)
+        or value.lstrip().startswith("-")
         or not value.strip()
         or len(value) > 300
         or re.search(r"[\x00-\x1f]", value)
@@ -140,6 +150,10 @@ class Part:
     def current(self, runner):
         raise NotImplementedError
 
+    def validate(self, value) -> None:
+        """Raise an `ApplyError` that names the thing when `value` cannot be applied: it is not a
+        proper name or it is not installed. Reads the installed things, changes nothing."""
+
     def apply(self, value, runner) -> None:
         raise NotImplementedError
 
@@ -161,7 +175,8 @@ class Part:
             if name not in values:
                 continue
             try:
-                kconfig.write_value(runner, *setting, values[name], masked=name in masked)
+                # Notified, so that programs that keep the file open (the GTK sync of KDE) see it go back.
+                kconfig.write_value(runner, *setting, values[name], masked=name in masked, notify=True)
             except ApplyError as error:
                 failure = failure or error
         for file in captured.get("absent") or ():
@@ -216,6 +231,9 @@ class _ByTool(Part):
         if value not in self.installed():
             raise _error("{what} {name} is not installed.", what=str(self.what), name=value)
         return value
+
+    def validate(self, value) -> None:
+        self._name(value)
 
     def _restore_live(self, effective, runner) -> None:
         if effective and effective != self.current(runner):
@@ -327,6 +345,9 @@ class AppStyle(Part):
             raise _error("The application style {name} is not installed.", name=value)
         return known[style.lower()], union or None
 
+    def validate(self, value) -> None:
+        self._split(value)
+
     def apply(self, value, runner) -> None:
         style, union = self._split(value)
         self._put(runner, "style", style)
@@ -377,11 +398,48 @@ class Decoration(Part):
         library = self._get(runner, "library", BREEZE_LIBRARY) or BREEZE_LIBRARY
         return f"{library}:{self._get(runner, 'theme', BREEZE_THEME) or BREEZE_THEME}"
 
-    def apply(self, value, runner) -> None:
-        _check_text(value, str(translate("core", "The window decoration")))
+    @staticmethod
+    def _items() -> list:
+        """The decorations System Settings lists, as the picker has them."""
+        try:
+            from .pickers import kind
+        except ImportError:  # no Qt: nothing is known to be installed
+            return []
+        picker = kind("decoration")
+        return picker.items() if picker else []
+
+    def installed(self) -> list[str]:
+        return [item.id for item in self._items()]
+
+    def _split(self, value) -> tuple[str, str]:
+        what = str(translate("core", "The window decoration"))
+        _check_text(value, what)
         library, _, theme = value.partition(":")
         if not library.strip() or not theme.strip() or re.search(r"\s", library):
-            raise _error("{what} is not a valid name.", what=str(translate("core", "The window decoration")))
+            raise _error("{what} is not a valid name.", what=what)
+        return library, theme
+
+    def validate(self, value) -> None:
+        self._split(value)
+        from .pickers.globalthemes import resolve
+
+        if resolve(value, self._items()) is None:
+            raise _error(
+                "{what} {name} is not installed.",
+                what=str(translate("core", "The window decoration")),
+                name=value,
+            )
+
+    def _canonical(self, value) -> str:
+        """The id as the installed decoration spells it: validation is lenient about case and the
+        old Aurorae library, but what is written must be exactly what KWin looks up."""
+        from .pickers.globalthemes import resolve
+
+        found = resolve(value, self._items()) if isinstance(value, str) else None
+        return found.id if found is not None else value
+
+    def apply(self, value, runner) -> None:
+        library, theme = self._split(self._canonical(value))
         self._put(runner, "library", library)
         self._put(runner, "theme", theme)
         _kwin_reload(runner)
@@ -390,20 +448,6 @@ class Decoration(Part):
 
     def _refresh(self, runner, restoring: bool = False) -> None:
         _kwin_reload(runner, restoring)
-
-
-# What System Settings offers for the border size: key in kwinrc and the name shown.
-BORDER_SIZES = (
-    ("None", translate("core", "No borders")),
-    ("NoSides", translate("core", "No side borders")),
-    ("Tiny", translate("core", "Tiny")),
-    ("Normal", translate("core", "Normal")),
-    ("Large", translate("core", "Large")),
-    ("VeryLarge", translate("core", "Very large")),
-    ("Huge", translate("core", "Huge")),
-    ("VeryHuge", translate("core", "Very huge")),
-    ("Oversized", translate("core", "Oversized")),
-)
 
 
 class BorderSize(Part):
@@ -435,46 +479,6 @@ class BorderSize(Part):
 
     def _refresh(self, runner, restoring: bool = False) -> None:
         _kwin_reload(runner, restoring)
-
-
-# The letters of KWin's title bar button strings: letter, number in KWin's report, name.
-# KWin 6 keeps no number for L, which it still accepts and ignores.
-BUTTONS = (
-    ("M", 0, translate("core", "Window menu")),
-    ("N", 1, translate("core", "Application menu")),
-    ("S", 2, translate("core", "On all desktops")),
-    ("H", 6, translate("core", "Help")),
-    ("I", 3, translate("core", "Minimize")),
-    ("A", 4, translate("core", "Maximize")),
-    ("X", 5, translate("core", "Close")),
-    ("F", 9, translate("core", "Keep above others")),
-    ("B", 8, translate("core", "Keep below others")),
-    ("L", None, translate("core", "Shade (not used by KWin 6)")),
-    ("E", 12, translate("core", "Hide from screenshots")),
-    ("_", 11, translate("core", "Spacer")),
-)
-DEFAULT_BUTTONS = {"left": "MSE", "right": "HIAX"}
-
-
-def button_names() -> dict[str, Msg]:
-    """Letter -> plain name, for a button editor."""
-    return {letter: name for letter, _number, name in BUTTONS}
-
-
-def parse_buttons(text: str) -> list[str] | None:
-    """The letters of a button string in order, or None when it has a letter KWin does not know
-    or a button twice (a spacer may come as often as wanted)."""
-    letters = list(text.strip())
-    known = button_names()
-    if any(letter not in known for letter in letters):
-        return None
-    real = [letter for letter in letters if letter != "_"]
-    return letters if len(set(real)) == len(real) else None
-
-
-def describe_buttons(text: str) -> list[Msg]:
-    """The names of the buttons of a string, in order. A letter KWin does not know is left out."""
-    return [button_names()[letter] for letter in text if letter in button_names()]
 
 
 def _kwin_numbers(text: str) -> str:
@@ -613,65 +617,6 @@ class CursorSize(Part):
         desktop.notify_change(runner, 5)
 
 
-# Qt's font weights and the names a chooser shows for them.
-FONT_WEIGHTS = (
-    (100, translate("core", "Thin")),
-    (200, translate("core", "Extra light")),
-    (300, translate("core", "Light")),
-    (400, translate("core", "Regular")),
-    (500, translate("core", "Medium")),
-    (600, translate("core", "Demi bold")),
-    (700, translate("core", "Bold")),
-    (800, translate("core", "Extra bold")),
-    (900, translate("core", "Black")),
-)
-_QT5_WEIGHTS = {0: 100, 12: 200, 25: 300, 50: 400, 57: 500, 63: 600, 75: 700, 81: 800, 87: 900}
-
-
-@dataclass(frozen=True)
-class FontSpec:
-    """A font as KDE stores it: Qt's description, `Family,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1`."""
-
-    family: str
-    size: float
-    weight: int = 400
-    italic: bool = False
-
-    @classmethod
-    def parse(cls, text: str) -> FontSpec | None:
-        """The family, point size, weight and slant of a Qt font description, or None when it is
-        not one. Both Qt 6 and the shorter Qt 5 form are read. Needs no QApplication."""
-        fields = [part.strip() for part in text.split(",")]
-        try:
-            size = float(fields[1])
-            weight = int(fields[4]) if len(fields) > 4 else 400
-            slant = int(fields[5]) if len(fields) > 5 else 0
-        except (ValueError, IndexError):
-            return None
-        if not fields[0] or not 0 < size < 1000 or slant not in (0, 1, 2) or not 0 <= weight <= 1000:
-            return None
-        if len(fields) == 10:  # Qt 5 counted weights from 0 to 99
-            weight = _QT5_WEIGHTS[min(_QT5_WEIGHTS, key=lambda old: abs(old - weight))]
-        return cls(fields[0], size, weight, slant != 0)
-
-    def text(self) -> str:
-        size = f"{self.size:g}"
-        return f"{self.family},{size},-1,5,{self.weight},{int(self.italic)},0,0,0,0,0,0,0,0,0,1"
-
-    def label(self) -> str:
-        """`Family, 10 pt` with the weight and slant when they are not the usual."""
-        parts = [self.family, f"{self.size:g} pt"]
-        if self.weight != 400:
-            parts.append(str(weight_name(self.weight)))
-        if self.italic:
-            parts.append(str(translate("core", "Italic")))
-        return ", ".join(parts)
-
-
-def weight_name(weight: int) -> Msg:
-    return min(FONT_WEIGHTS, key=lambda item: abs(item[0] - weight))[1]
-
-
 FONT_ROLES = {
     "font": ("kdeglobals", ["General"], "font"),
     "fixed": ("kdeglobals", ["General"], "fixed"),
@@ -728,6 +673,13 @@ class Sounds(Part):
         enabled = self._get(runner, "enabled", "true").lower() != "false"
         return {"theme": self._get(runner, "theme", "ocean") or "ocean", "enabled": enabled}
 
+    def validate(self, value) -> None:
+        what = str(translate("core", "The sound theme"))
+        if isinstance(value, dict) and "theme" in value:
+            _check_text(value["theme"], what)
+            if value["theme"] not in self.installed():
+                raise _error("{what} {name} is not installed.", what=what, name=value["theme"])
+
     def apply(self, value, runner) -> None:
         what = str(translate("core", "The sound theme"))
         if not isinstance(value, dict) or not value or not set(value) <= {"theme", "enabled"}:
@@ -764,11 +716,14 @@ class Splash(Part):
             return self.NONE
         return self._get(runner, "theme", "org.kde.breeze.desktop") or None
 
-    def apply(self, value, runner) -> None:
+    def validate(self, value) -> None:
         what = str(translate("core", "The splash screen"))
         _check_text(value, what)
         if value not in self.installed():
             raise _error("{what} {name} is not installed.", what=what, name=value)
+
+    def apply(self, value, runner) -> None:
+        self.validate(value)
         self._put(runner, "theme", value)
         self._put(runner, "engine", "none" if value == self.NONE else "KSplashQML")
 
@@ -908,18 +863,6 @@ MODULES = {
 }
 
 
-def _launch(argv: list[str]) -> None:
-    """Start a program that stays open, apart from this one."""
-    prlimit = shutil.which("prlimit")  # no core dump, and no preexec_fn: the loader's threads run
-    subprocess.Popen(  # noqa: S603
-        [prlimit, "--core=0:0", "--", *argv] if prlimit else argv,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-
-
 def open_system_settings(module_id: str, runner) -> Msg | None:
     """Open a page of System Settings. None when it was started, else the reason why not."""
     if module_id not in MODULES:
@@ -927,7 +870,7 @@ def open_system_settings(module_id: str, runner) -> Msg | None:
     for program in ("systemsettings", "kcmshell6"):
         if runner.which(program):
             try:
-                _launch([program, module_id])
+                runner.launch([program, module_id])
             except OSError as error:
                 return translate("core", "{tool} could not be started. {detail}").format(
                     tool=program, detail=str(error)

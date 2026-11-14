@@ -17,6 +17,7 @@ from plasma_theme_studio.ui.main_window import MainWindow  # noqa: E402
 @pytest.fixture
 def window(app, home, runner, monkeypatch):
     window = MainWindow(runner)
+    window.build_pages()
     window.problems = []
     monkeypatch.setattr(window, "_show_problems", lambda title, problems: window.problems.append(title))
     window.show()
@@ -38,7 +39,7 @@ def nordic(home, runner):
 
 def test_a_scheme_is_not_called_in_use_after_the_desktop_changed_elsewhere(nordic, window, runner):
     """What the desktop uses is asked for at the switch, not remembered from before."""
-    window.tabs.setCurrentWidget(window.library)
+    window.show_page("themes")
     window.library.select("Nordic")
     window.apply_button.click()
     assert runner.settings["ColorScheme"] == "Nordic"
@@ -91,7 +92,7 @@ def test_the_scheme_written_from_the_editor_theme_is_applied_with_the_edits(wind
     held = window.theme
     window.apply_theme()
     window.edit(FIELD_BY_ID[("colors", "accent")], "#ff0000")
-    window.tabs.setCurrentWidget(window.library)
+    window.show_page("themes")
     assert window.library.select("BreezeLightCopy").title == "Breeze Light Copy"
 
     window.apply_button.click()
@@ -102,13 +103,13 @@ def test_the_scheme_written_from_the_editor_theme_is_applied_with_the_edits(wind
 
 
 def test_undo_of_a_scheme_switch_marks_the_right_theme_in_use(nordic, window, runner):
-    window.tabs.setCurrentWidget(window.library)
+    window.show_page("themes")
     window.library.select("Nordic")
     window.apply_button.click()
     window.undo_last_apply()
     assert runner.settings["ColorScheme"] == "BreezeLight"
     assert window.library.active == "BreezeLight"
-    assert "In use" not in window.library.list.currentItem().text()
+    assert not window.library.grid.card(window.library.grid.selected_id()).in_use
 
 
 def test_failed_apply_rolls_back_and_leaves_editor_and_desktop_in_step(window, runner, home):

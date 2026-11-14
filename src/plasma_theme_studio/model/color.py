@@ -75,3 +75,10 @@ def contrast(a: Color, b: Color) -> float:
 def readable_on(background: Color, dark: Color = Color(35, 38, 41), light: Color = WHITE) -> Color:
     """Pick whichever of `dark` and `light` reads better on `background`."""
     return light if contrast(light, background) >= contrast(dark, background) else dark
+
+
+def on_accent(accent: Color, text: Color, window: Color) -> Color:
+    """The color of text on the accent: white, or the darkest of the theme's text and window colors,
+    whichever reads better. The color scheme and every preview use this one rule."""
+    dark = text if text.luminance <= window.luminance else window
+    return readable_on(accent, dark=dark)

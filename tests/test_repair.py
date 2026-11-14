@@ -232,10 +232,33 @@ def test_every_changed_setting_text_fits_the_sentence_that_lists_them():
             ("rofi", "style"): "generated",
             ("window", "decoration"): "generated",
             ("panel", "style"): "generated",
+            ("colors", "accent_from_wallpaper"): True,
+            ("window", "border_size"): "Large",
+            ("window", "buttons_left"): "M",
+            ("desktop", "icons"): "Papirus",
+            ("desktop", "cursors"): "Pop",
+            ("desktop", "cursor_size"): 32,
+            ("desktop", "splash"): "None",
+            ("desktop", "sounds"): "ocean",
+            ("fonts", "general"): "Noto Sans, 10",
         }
     )
-    texts = [str(t) for g in generators.GENERATORS for t in g.changed_settings(theme)]
-    assert len(texts) >= 5
+    installed = Theme(
+        {
+            ("apps", "style"): "installed",
+            ("apps", "style_id"): "Fusion",
+            ("window", "decoration"): "installed",
+            ("window", "decoration_id"): "org.kde.breeze:Breeze",
+            ("panel", "style"): "installed",
+            ("panel", "style_id"): "breeze-dark",
+        }
+    )
+    texts = [
+        str(t)
+        for g in generators.GENERATORS
+        for t in (*g.changed_settings(theme), *g.changed_settings(installed))
+    ]
+    assert len(texts) >= 16
     for text in texts:
         assert text[0].islower() and not text.endswith("."), text
 
@@ -263,3 +286,68 @@ def test_every_translate_call_has_a_swedish_entry():
                 if node.args[1].value not in sources:
                     missing.add(node.args[1].value)
     assert not missing
+
+
+# ---- text on a background, safe reads, parsing time
+
+
+@pytest.mark.parametrize("accent", ["#777777", "#808080", "#ffcc00", "#2060c0", "#00aa55", "#ff5533"])
+def test_the_text_on_the_accent_is_the_one_with_the_better_contrast(accent):
+    from plasma_theme_studio.generators.colorscheme import scheme_groups
+    from plasma_theme_studio.model.color import Color, contrast
+
+    theme = Theme({("colors", "accent"): accent})
+    selection = dict(dict(scheme_groups(theme))["Colors:Selection"])
+    chosen = Color.parse("#" + "".join(f"{int(n):02x}" for n in selection["ForegroundNormal"].split(",")))
+    background = theme.color("accent")
+    darkest = min((theme.color("text"), theme.color("window")), key=lambda c: c.luminance)
+    best = max(contrast(darkest, background), contrast(Color(255, 255, 255), background))
+    assert contrast(chosen, background) == pytest.approx(best)
+
+
+def test_the_other_text_colors_on_a_background_are_chosen_by_contrast():
+    from plasma_theme_studio.generators.kvantum import _on
+    from plasma_theme_studio.model.color import BLACK, Color, contrast
+
+    for background in ("#777777", "#808080", "#999999", "#ffcc00", "#2060c0"):
+        picked = Color.parse(_on(background))
+        other = Color(255, 255, 255) if picked == BLACK else BLACK
+        assert contrast(picked, Color.parse(background)) >= contrast(other, Color.parse(background))
+
+
+def test_a_long_run_of_open_brackets_is_parsed_in_linear_time():
+    import time
+
+    from plasma_theme_studio import kconfig
+
+    started = time.monotonic()
+    kconfig.parse("[" * 300_000 + "\nkey=value\n")
+    kconfig.parse("[a][" * 100_000 + "\n")
+    kconfig.parse("\n".join("[" * 1000 for _ in range(300)))
+    assert time.monotonic() - started < 1.0
+
+
+def test_a_color_scheme_that_is_no_regular_file_is_not_read(home):
+    import os
+
+    folder = home / "system/share/color-schemes"
+    folder.mkdir(parents=True)
+    fifo = folder / "Pipe.colors"
+    os.mkfifo(fifo)
+    assert library.read_scheme(fifo, False) is None  # would block for ever if it were opened
+    big = folder / "Big.colors"
+    big.write_text("[General]\nName=Big\n" + "#" * (2 * 1024 * 1024))
+    assert library.read_scheme(big, False) is None
+    assert library.installed_schemes() == []
+
+
+def test_a_theme_file_that_is_no_regular_file_is_refused(tmp_path):
+    import os
+
+    fifo = tmp_path / "pipe.toml"
+    os.mkfifo(fifo)
+    with pytest.raises(ThemeError):
+        Theme.load(fifo)
+    (tmp_path / "huge.toml").write_text("#" * (3 * 1024 * 1024))
+    with pytest.raises(ThemeError):
+        Theme.load(tmp_path / "huge.toml")

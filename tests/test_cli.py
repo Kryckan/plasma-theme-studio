@@ -155,3 +155,30 @@ def test_export_global_theme_writes_the_bundle_and_refuses_a_full_folder(home, f
     assert cli.main(["export-global-theme", str(path), str(folder)]) == 1
     assert "not empty" in capsys.readouterr().err
     assert fake_system.calls == []
+
+
+def test_status_prints_a_table_of_the_parts_and_changes_nothing(home, fake_system, capsys):
+    path = home / "theme.toml"
+    Theme({("desktop", "icons"): "Papirus"}).save(path)
+    before = sorted(str(p) for p in home.rglob("*"))
+    assert cli.main(["status", str(path)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].split()[:2] == ["Part", "Desktop"]
+    titles = [line[:20].strip() for line in lines[1:]]
+    for title in ("Colors", "Icons", "Fonts", "Splash screen", "System sounds", "Rofi"):
+        assert title in titles
+    assert next(line for line in lines if line.startswith("Fonts")).rstrip().endswith("Left alone")
+    assert sorted(str(p) for p in home.rglob("*")) == before
+    assert cli.main(["status", str(home / "missing.toml")]) == 1
+
+
+def test_apply_covers_the_installed_parts(home, desktop_runner, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "SystemRunner", lambda: desktop_runner)
+    monkeypatch.setattr(cli, "_load_translation", lambda: None)
+    path = home / "theme.toml"
+    Theme({("desktop", "icons"): "Papirus", ("desktop", "cursor_size"): 32}).save(path)
+    assert cli.main(["apply", str(path)]) == 0
+    assert desktop_runner.get("kdeglobals", ["Icons"], "Theme") == "Papirus"
+    assert desktop_runner.get("kcminputrc", ["Mouse"], "cursorSize") == "32"
+    assert cli.main(["restore"]) == 0
+    assert desktop_runner.get("kdeglobals", ["Icons"], "Theme") != "Papirus"

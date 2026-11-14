@@ -542,7 +542,7 @@ def frame_to_generate(theme: Theme) -> tuple[Look, str] | None:
     """The look and folder of the frame an apply of the theme generates, or None for
     none. A theme that asks for a generated frame gets its own. A theme that leaves
     the frame alone while one of ours is in use gets that frame's shape in its colors."""
-    mode = theme.get("window", "decoration")
+    mode = theme.part_state("window", "decoration")
     if mode == "generated":
         look = Look.of(theme)
         return look, _folder_name(theme, look)
@@ -662,6 +662,22 @@ def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+def stale_frames(keep: str | None) -> list[Path]:
+    """The frames made here, folder by folder with their files, except the folder `keep`."""
+    root = _themes_root()
+    if not root.is_dir():
+        return []
+    stale: list[Path] = []
+    for folder in sorted(root.glob(f"{FOLDER_PREFIX}*")):
+        if folder.is_symlink() or not folder.is_dir() or folder.name == keep:
+            continue
+        if not made_here(folder / "metadata.desktop"):
+            continue
+        stale += [f for f in sorted(folder.iterdir()) if f.is_file() and made_here(f)]
+        stale.append(folder)
+    return stale
+
+
 class WindowFrameGenerator(Generator):
     id = "window"
     title = translate("core", "Window frame")
@@ -671,13 +687,17 @@ class WindowFrameGenerator(Generator):
 
     @staticmethod
     def mode(theme: Theme) -> str:
-        return theme.get("window", "decoration")
+        return theme.part_state("window", "decoration")
 
     def wanted(self, theme: Theme) -> bool:
-        return self.mode(theme) != "unchanged" or frame_to_generate(theme) is not None
+        # An installed decoration is the business of its own target, which also removes the frames made here.
+        mode = self.mode(theme)
+        return mode in ("breeze", "generated") or frame_to_generate(theme) is not None
 
     def notes(self, theme: Theme) -> list[Msg]:
         mode = self.mode(theme)
+        if mode == "installed":
+            return []
         if mode == "unchanged":
             if frame_to_generate(theme) is not None:
                 return [
@@ -700,6 +720,8 @@ class WindowFrameGenerator(Generator):
 
     def section_notes(self, theme: Theme, section: str) -> list[Msg]:
         mode = self.mode(theme)
+        if mode == "installed":
+            return []
         if section != "shadow":
             return self._breeze_frame_notes(theme) if mode == "breeze" else self.notes(theme)
         if mode == "unchanged":
@@ -735,7 +757,15 @@ class WindowFrameGenerator(Generator):
                 "Breeze fixes the corner radius. Choose the generated frame for an exact radius.",
             )
         ]
-        if border_name == "no border":
+        if theme.get("window", "border_size") is not None:
+            notes.append(
+                translate(
+                    "core",
+                    "The border size you chose on the Windows page is used instead of the one "
+                    "that follows the border width.",
+                )
+            )
+        elif border_name == "no border":
             notes.append(translate("core", "Breeze will draw no border."))
         else:
             notes.append(
@@ -778,12 +808,21 @@ class WindowFrameGenerator(Generator):
                 "The frame colors are fixed in the frame. Apply the theme again after you change them.",
             )
         )
-        notes.append(
-            translate(
-                "core",
-                "KWin's border size is set to {size} so that the border is exactly {border} px wide.",
-            ).format(size=aurorae_border_size(look.border), border=look.border)
-        )
+        if theme.get("window", "border_size") is not None:
+            notes.append(
+                translate(
+                    "core",
+                    "The frame draws its own border, but KWin's border size is the one you chose, so "
+                    "the border may be narrower or wider than {border} px.",
+                ).format(border=look.border)
+            )
+        else:
+            notes.append(
+                translate(
+                    "core",
+                    "KWin's border size is set to {size} so that the border is exactly {border} px wide.",
+                ).format(size=aurorae_border_size(look.border), border=look.border)
+            )
         return notes
 
     # ---- files ----------------------------------------------------------
@@ -801,20 +840,8 @@ class WindowFrameGenerator(Generator):
         return planned
 
     def stale_files(self, theme: Theme) -> list[Path]:
-        root = _themes_root()
-        if not root.is_dir():
-            return []
         target = frame_to_generate(theme)
-        keep = target[1] if target else None
-        stale: list[Path] = []
-        for folder in sorted(root.glob(f"{FOLDER_PREFIX}*")):
-            if folder.is_symlink() or not folder.is_dir() or folder.name == keep:
-                continue
-            if not made_here(folder / "metadata.desktop"):
-                continue
-            stale += [f for f in sorted(folder.iterdir()) if f.is_file() and made_here(f)]
-            stale.append(folder)
-        return stale
+        return stale_frames(target[1] if target else None)
 
     def check_output(self, file: PlannedFile) -> list[Msg]:
         name = file.path.name
@@ -918,20 +945,25 @@ class WindowFrameGenerator(Generator):
         target = frame_to_generate(theme)
         if target is not None:
             look, folder = target
-            return {
+            wanted = {
                 "library": AURORAE_LIBRARY,
                 "theme": AURORAE_THEME_PREFIX + folder,
                 "border_size_auto": "false",
                 "border_size": aurorae_border_size(look.border),
             }
-        return {
-            "library": BREEZE_LIBRARY,
-            "theme": BREEZE_THEME,
-            "border_size_auto": "false",
-            "border_size": breeze_border_size(width)[0],
-            "shadow_size": breeze_shadow_step(int(theme.get("shadow", "size")))[0],
-            "shadow_strength": str(breeze_strength(float(theme.get("shadow", "strength")))),
-        }
+        else:
+            wanted = {
+                "library": BREEZE_LIBRARY,
+                "theme": BREEZE_THEME,
+                "border_size_auto": "false",
+                "border_size": breeze_border_size(width)[0],
+                "shadow_size": breeze_shadow_step(int(theme.get("shadow", "size")))[0],
+                "shadow_strength": str(breeze_strength(float(theme.get("shadow", "strength")))),
+            }
+        if theme.get("window", "border_size") is not None:
+            # The border size the theme chose is set by its own target, whatever the frame is.
+            del wanted["border_size_auto"], wanted["border_size"]
+        return wanted
 
     def is_active(self, theme: Theme, runner) -> bool:
         wanted = self._wanted_settings(theme)

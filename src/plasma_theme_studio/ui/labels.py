@@ -3,6 +3,7 @@
 """The names shown for theme sections and fields."""
 
 from ..messages import translate
+from ..model.parts import BORDER_SIZES
 
 SECTION_TITLES = {
     "meta": translate("fields", "Theme"),
@@ -14,6 +15,8 @@ SECTION_TITLES = {
     "panel": translate("fields", "Panel"),
     "popup": translate("fields", "Popups and tooltips"),
     "panel_layout": translate("fields", "Panel position"),
+    "desktop": translate("fields", "Icons, pointers and sounds"),
+    "fonts": translate("fields", "Fonts"),
     "gtk": translate("fields", "GTK applications"),
     "rofi": translate("fields", "Rofi"),
 }
@@ -28,6 +31,8 @@ SECTION_ICONS = {
     "panel": "preferences-desktop-plasma",
     "popup": "preferences-desktop-notification-bell",
     "panel_layout": "align-vertical-bottom",
+    "desktop": "preferences-desktop-icons",
+    "fonts": "preferences-desktop-font",
     "gtk": "preferences-gtk-config",
     "rofi": "system-run",
 }
@@ -47,6 +52,7 @@ FIELD_LABELS = {
     ("meta", "name"): translate("fields", "Name"),
     ("meta", "author"): translate("fields", "Author"),
     ("colors", "accent"): translate("fields", "Accent"),
+    ("colors", "accent_from_wallpaper"): translate("fields", "Accent color from the wallpaper"),
     ("colors", "window"): translate("fields", "Window background"),
     ("colors", "view"): translate("fields", "View background"),
     ("colors", "button"): translate("fields", "Button background"),
@@ -61,14 +67,20 @@ FIELD_LABELS = {
     ("shape", "radius"): translate("fields", "Corner radius"),
     ("shape", "border_width"): translate("fields", "Border width"),
     ("apps", "style"): translate("fields", "Application style"),
+    ("apps", "style_id"): translate("fields", "Installed application style"),
     ("apps", "radius"): translate("fields", "Corner radius"),
     ("apps", "border_width"): translate("fields", "Border width"),
     ("window", "decoration"): translate("fields", "Window frame"),
     ("window", "radius"): translate("fields", "Corner radius"),
     ("window", "border_width"): translate("fields", "Border width"),
+    ("window", "decoration_id"): translate("fields", "Installed window decoration"),
+    ("window", "border_size"): translate("fields", "Border size"),
+    ("window", "buttons_left"): translate("fields", "Title bar buttons on the left"),
+    ("window", "buttons_right"): translate("fields", "Title bar buttons on the right"),
     ("shadow", "size"): translate("fields", "Size"),
     ("shadow", "strength"): translate("fields", "Strength"),
     ("panel", "style"): translate("fields", "Panel background"),
+    ("panel", "style_id"): translate("fields", "Installed Plasma style"),
     ("panel", "radius"): translate("fields", "Corner radius"),
     ("panel", "border_width"): translate("fields", "Border width"),
     ("panel", "opacity"): translate("fields", "Opacity"),
@@ -84,6 +96,17 @@ FIELD_LABELS = {
     ("rofi", "border_width"): translate("fields", "Border width"),
     ("rofi", "opacity"): translate("fields", "Opacity"),
     ("rofi", "font"): translate("fields", "Font"),
+    ("desktop", "icons"): translate("fields", "Icons"),
+    ("desktop", "cursors"): translate("fields", "Pointers"),
+    ("desktop", "cursor_size"): translate("fields", "Pointer size"),
+    ("desktop", "splash"): translate("fields", "Splash screen"),
+    ("desktop", "sounds"): translate("fields", "System sounds"),
+    ("fonts", "general"): translate("fields", "General font"),
+    ("fonts", "fixed"): translate("fields", "Fixed width font"),
+    ("fonts", "small"): translate("fields", "Small font"),
+    ("fonts", "toolbar"): translate("fields", "Toolbar font"),
+    ("fonts", "menu"): translate("fields", "Menu font"),
+    ("fonts", "window_title"): translate("fields", "Window title font"),
     ("panel_layout", "location"): translate("fields", "Screen edge"),
     ("panel_layout", "height"): translate("fields", "Thickness"),
     ("panel_layout", "alignment"): translate("fields", "Alignment"),
@@ -97,12 +120,14 @@ FIELD_LABELS = {
 CHOICE_LABELS = {
     ("window", "decoration"): {
         "unchanged": translate("fields", "Leave as it is"),
-        "breeze": translate("fields", "Breeze, adjusted"),
+        "breeze": translate("fields", "Breeze with your changes"),
         "generated": translate("fields", "Made from this theme"),
+        "installed": translate("fields", "An installed one"),
     },
     ("apps", "style"): {
         "unchanged": translate("fields", "Leave as it is"),
         "generated": translate("fields", "Made from this theme"),
+        "installed": translate("fields", "An installed one"),
     },
     ("gtk", "style"): {
         "unchanged": translate("fields", "Leave as it is"),
@@ -115,7 +140,13 @@ CHOICE_LABELS = {
     ("panel", "style"): {
         "unchanged": translate("fields", "Leave as it is"),
         "generated": translate("fields", "Made from this theme"),
+        "installed": translate("fields", "An installed one"),
     },
+    ("colors", "accent_from_wallpaper"): {
+        True: translate("fields", "Yes"),
+        False: translate("fields", "No"),
+    },
+    ("window", "border_size"): dict(BORDER_SIZES),
     ("panel_layout", "location"): {
         "top": translate("fields", "Top"),
         "bottom": translate("fields", "Bottom"),

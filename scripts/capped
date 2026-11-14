@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Run a command so that it cannot take the machine down with it:
+#   scripts/capped COMMAND [ARGUMENT...]
+#
+# - its memory (address space) is capped, 8 GB unless PTS_MEMORY_CAP gives
+#   another number of bytes: a runaway allocation fails inside the command
+#   instead of filling memory and swap;
+# - if the kernel still has to kill something, this command goes first;
+# - it leaves no core dump and so no crash notification on the desktop.
+#
+# Use it for every test run, throwaway script and helper, and always for
+# anything that builds or reads deliberately hostile or oversized input.
+exec choom -n 1000 -- prlimit --core=1:1 --as="${PTS_MEMORY_CAP:-8589934592}" -- "$@"

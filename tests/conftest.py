@@ -7,9 +7,35 @@ import pytest
 
 from plasma_theme_studio import kconfig, paths
 from plasma_theme_studio.apply.runner import Result
+from plasma_theme_studio.desktopparts import BORDER_SIZES, _kwin_numbers
+
+ICONS_TOOL = "/usr/lib/plasma-changeicons"
 
 # No test may ever open a window on the desktop of whoever runs the tests.
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
+
+def _cap_memory() -> None:
+    """No test may take the machine down either. Several tests feed the code hostile
+    files (a pointer that claims to be 100000 pixels wide, endless files); if the code
+    ever believes one, the allocation has to fail here and not fill memory and swap.
+    PTS_TEST_MEMORY_CAP gives another number of bytes, 0 turns the cap off."""
+    try:
+        import resource
+    except ImportError:  # not a Unix
+        return
+    wanted = int(os.environ.get("PTS_TEST_MEMORY_CAP", 8 * 1024**3))
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    if wanted > 0 and (hard == resource.RLIM_INFINITY or wanted <= hard):
+        if soft == resource.RLIM_INFINITY or wanted < soft:
+            resource.setrlimit(resource.RLIMIT_AS, (wanted, hard))
+    try:  # if the kernel must kill something for lack of memory, it is this test run
+        Path("/proc/self/oom_score_adj").write_text("1000")
+    except OSError:
+        pass
+
+
+_cap_memory()
 
 
 def _escaped(value: str) -> str:
@@ -99,9 +125,13 @@ class FakeRunner:
         self.calls = []
         self.missing = set()
         self.applied = []
+        self.launched = []
 
     def which(self, program):
         return program not in self.missing
+
+    def launch(self, argv):
+        self.launched.append(argv)
 
     def run(self, argv, timeout=20):
         self.calls.append(argv)
@@ -176,6 +206,127 @@ class FakeRunner:
         return Result(0)
 
 
+class DesktopRunner(FakeRunner):
+    """FakeRunner that keeps every configuration file, kdeglobals too, as a real file, and a
+    desktop behind the tools: KDE's own tools, KWin's report, the D-Bus senders."""
+
+    def __init__(self):
+        super().__init__()
+        self.signals = []
+        self.tool_effect = True  # False: the tools exit with 0 and change nothing
+        self.themes = {
+            "plasma-apply-desktoptheme": ("plasmarc", ["Theme"], "name"),
+            "plasma-apply-cursortheme": ("kcminputrc", ["Mouse"], "cursorTheme"),
+            ICONS_TOOL: ("kdeglobals", ["Icons"], "Theme"),
+        }
+        for tool in self.themes:
+            self.handlers[tool] = self._theme_tool
+        self.handlers["plasma-apply-colorscheme"] = self._colorscheme
+        self.handlers["dbus-send"] = self._signal
+        self.handlers["busctl"] = self._signal
+        self.handlers["qdbus6"] = self._kwin
+
+    def _config(self, argv):
+        file, key, default, delete, groups, values = "kdeglobals", "", "", False, [], []
+        arguments = iter(argv[1:])
+        for argument in arguments:
+            if argument == "--file":
+                file = next(arguments)
+            elif argument == "--group":
+                groups.append(next(arguments))
+            elif argument == "--key":
+                key = next(arguments)
+            elif argument == "--default":
+                default = next(arguments)
+            elif argument == "--delete":
+                delete = True
+            elif argument == "--":
+                values = list(arguments)
+            elif argument != "--notify":
+                values.append(argument)
+        location = tuple(groups)
+        path = paths.config_home() / file
+        stored = kconfig.parse(path.read_text()) if path.exists() else {}
+        hidden = key + kconfig.MASK
+        if argv[0] == "kreadconfig6":
+            value = stored.get(location, {}).get(key)
+            if value is None and hidden in stored.get(location, {}):
+                value = default
+            elif value is None:
+                value = self.defaults.get((file, location, key), default)
+            return Result(0, value + "\n")
+        if delete:
+            stored.get(location, {}).pop(key, None)
+            if (file, location, key) in self.defaults:
+                stored.setdefault(location, {})[hidden] = ""
+        else:
+            stored.setdefault(location, {}).pop(hidden, None)
+            stored.setdefault(location, {})[key] = values[0]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_config_text(stored))
+        return Result(0)
+
+    def set(self, file, groups, key, value):
+        self._config(
+            [
+                "kwriteconfig6",
+                "--file",
+                file,
+                *[a for g in groups for a in ("--group", g)],
+                "--key",
+                key,
+                "--",
+                value,
+            ]
+        )
+
+    def get(self, file, groups, key):
+        return self._config(
+            ["kreadconfig6", "--file", file, *[a for g in groups for a in ("--group", g)], "--key", key]
+        ).stdout.strip()
+
+    def _theme_tool(self, argv):
+        if self.tool_effect:
+            file, groups, key = self.themes[argv[0]]
+            self.set(file, groups, key, argv[1])
+        return Result(0, "done\n")
+
+    def _colorscheme(self, argv):
+        """Applies a scheme as KDE's tool does: the colors in use get the accent."""
+        if "--accent-color" in argv:
+            focus = ",".join(str(int(argv[-1][n : n + 2], 16)) for n in (1, 3, 5))
+        else:
+            focus = self.get("kdeglobals", ["General"], "AccentColor") or "61,174,233"
+            self.set("kdeglobals", ["General"], "ColorScheme", argv[1])
+        if self.tool_effect:
+            self.set("kdeglobals", ["Colors:Button"], "DecorationFocus", focus)
+        return Result(0)
+
+    def _signal(self, argv):
+        self.signals.append(argv)
+        return Result(0)
+
+    def _kwin(self, argv):
+        if argv[3:] == ["reconfigure"]:
+            return Result(0)
+        group = ["org.kde.kdecoration2"]
+        sizes = [key for key, _name in BORDER_SIZES]
+        size = self.get("kwinrc", group, "BorderSize") or "Normal"
+        left = self.get("kwinrc", group, "ButtonsOnLeft")
+        right = self.get("kwinrc", group, "ButtonsOnRight")
+        report = [
+            "Decoration",
+            "==========",
+            f"Plugin: {self.get('kwinrc', group, 'library') or 'org.kde.breeze'}",
+            f"Theme: {self.get('kwinrc', group, 'theme') or 'Breeze'}",
+            f"decorationButtonsLeft: {_kwin_numbers(left)}",
+            f"decorationButtonsRight: {_kwin_numbers(right)}",
+            f"borderSize: {sizes.index(size)}",
+            "",
+        ]
+        return Result(0, "\n".join(report))
+
+
 @pytest.fixture(scope="session")
 def app():
     """The one Qt application of the test run. It has to be a QApplication from
@@ -209,3 +360,35 @@ def use_generators(monkeypatch):
         monkeypatch.setattr("plasma_theme_studio.generators.GENERATORS", tuple(generators))
 
     return use
+
+
+@pytest.fixture
+def desktop_runner(home):
+    """A runner whose desktop keeps every file, with a few things installed to choose from."""
+    runner = DesktopRunner()
+    data = home / "system/share"
+    for name in ("breeze-dark", "My Theme"):
+        (data / "plasma/desktoptheme" / name).mkdir(parents=True)
+        (data / "plasma/desktoptheme" / name / "metadata.json").write_text("{}")
+    for name in ("Papirus", "breeze"):
+        (data / "icons" / name).mkdir(parents=True)
+        (data / "icons" / name / "index.theme").write_text("[Icon Theme]\nDirectories=16x16\n")
+    (data / "icons/Hidden").mkdir()
+    (data / "icons/Hidden/index.theme").write_text("[Icon Theme]\nDirectories=16x16\nHidden=true\n")
+    for name in ("Pop", "Qogir Dark"):
+        (data / "icons" / name / "cursors").mkdir(parents=True)
+    for name in ("oxygen", "ocean"):
+        (data / "sounds" / name).mkdir(parents=True)
+        (data / "sounds" / name / "index.theme").write_text("[Sound Theme]\n")
+    (data / "plasma/look-and-feel/org.kde.breeze.desktop/contents/splash").mkdir(parents=True)
+    (data / "plasma/look-and-feel/org.kde.nosplash/contents").mkdir(parents=True)
+    plastik = data / "kwin/decorations/kwin4_decoration_qml_plastik"
+    (plastik / "contents/ui").mkdir(parents=True)
+    (plastik / "contents/ui/main.qml").write_text("import QtQuick\nItem {}\n")
+    (plastik / "metadata.json").write_text(
+        '{"KPlugin": {"Id": "kwin4_decoration_qml_plastik", "Name": "Plastik"}}'
+    )
+    (data / "kstyle/themes").mkdir(parents=True)
+    (data / "kstyle/themes/union.themerc").write_text("[KDE]\nWidgetStyle=Union\n")
+    (data / "union/styles/breeze").mkdir(parents=True)
+    return runner

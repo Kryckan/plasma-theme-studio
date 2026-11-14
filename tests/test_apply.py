@@ -115,10 +115,15 @@ def test_paths_outside_home_are_refused(home, runner, monkeypatch, tmp_path_fact
         engine.apply(Theme(), runner)
 
 
-def test_custom_accent_gives_a_warning(home, runner):
-    assert engine.build_plan(Theme(), runner).warnings == []
-    runner.settings["AccentColor"] = "255,0,0"
-    assert len(engine.build_plan(Theme(), runner).warnings) == 1
+def test_custom_accent_is_removed_by_an_apply_and_said_so(home, desktop_runner):
+    runner = desktop_runner
+    plan = engine.build_plan(Theme(), runner)
+    assert not [t for t in plan.wanted_targets if t.generator.id == "accent"]
+    runner.set("kdeglobals", ["General"], "AccentColor", "255,0,0")
+    target = next(t for t in engine.build_plan(Theme(), runner).wanted_targets if t.generator.id == "accent")
+    assert target.notes and target.settings
+    engine.apply(Theme(), runner)
+    assert runner.get("kdeglobals", ["General"], "AccentColor") == ""
 
 
 def test_plan_reports_file_states(home, runner):

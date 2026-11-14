@@ -8,7 +8,7 @@ import configparser
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import paths
+from . import paths, safefile
 from .generators.base import MARKER
 from .messages import translate
 from .model.color import Color
@@ -61,10 +61,13 @@ def _parse_color(value: str) -> str | None:
 def read_scheme(path: Path, in_home: bool) -> InstalledScheme | None:
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str
+    data = safefile.read_regular(path)  # a pipe, a device or a huge file is no color scheme
+    if data is None:
+        return None
+    text = data.decode("utf-8", errors="replace")
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
         parser.read_string(text)
-    except (OSError, configparser.Error):
+    except configparser.Error:
         return None
     colors = {}
     for key, sources in _SOURCES.items():
@@ -127,9 +130,12 @@ def saved_themes() -> list[SavedTheme]:
         return []
     found = []
     for path in sorted(folder.glob("*.toml")):
+        data = safefile.read_regular(path)
+        if data is None:
+            continue
         try:
-            found.append(SavedTheme(path, Theme.from_toml(path.read_text(encoding="utf-8"))))
-        except (ThemeError, OSError, UnicodeDecodeError):
+            found.append(SavedTheme(path, Theme.from_toml(data.decode("utf-8"))))
+        except (ThemeError, UnicodeDecodeError):
             continue
     return sorted(found, key=lambda saved: saved.theme.name.casefold())
 

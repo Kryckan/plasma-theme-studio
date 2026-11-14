@@ -21,7 +21,7 @@ from pathlib import Path
 from .. import kconfig, paths
 from ..apply import desktop
 from ..messages import Msg, translate
-from ..model.color import Color
+from ..model.color import BLACK, Color, readable_on
 from ..model.theme import Theme, write_atomic
 from .base import MARKER, XML_MARKER, ApplyError, Generator, PlannedFile, made_here
 
@@ -55,7 +55,7 @@ def _mix(a: str, b: str, amount: float) -> str:
 
 def _on(background: str) -> str:
     """A readable text color for a background."""
-    return "#ffffff" if Color.parse(background).luminance < 0.4 else "#000000"
+    return readable_on(Color.parse(background), dark=BLACK).hex
 
 
 def look_of(theme: Theme) -> tuple[dict[str, str], int, int]:
@@ -812,6 +812,22 @@ def _switch_style(runner, name: str) -> None:
     desktop.notify_change(runner, desktop.CHANGE_STYLE)
 
 
+def stale_themes(keep: str | None) -> list[Path]:
+    """The Kvantum themes made here, with their files, except the folder `keep`."""
+    root = config_dir()
+    stale: list[Path] = []
+    if not root.is_dir():
+        return stale
+    for folder in sorted(root.glob(f"{ID_PREFIX}*")):
+        if folder.name == keep or folder.is_symlink() or not folder.is_dir():
+            continue
+        if not made_here(folder / f"{folder.name}.kvconfig"):
+            continue
+        stale += [f for f in sorted(folder.iterdir()) if f.is_file() and made_here(f)]
+        stale.append(folder)
+    return stale
+
+
 class KvantumGenerator(Generator):
     id = "apps"
     title = translate("core", "Application style")
@@ -821,6 +837,8 @@ class KvantumGenerator(Generator):
         return theme.get("apps", "style") == "generated"
 
     def notes(self, theme: Theme) -> list[Msg]:
+        if theme.part_state("apps", "style") == "installed":
+            return []
         if not self.wanted(theme):
             return [
                 translate(
@@ -886,19 +904,7 @@ class KvantumGenerator(Generator):
         ]
 
     def stale_files(self, theme: Theme) -> list[Path]:
-        keep = folder_name(theme)
-        root = config_dir()
-        stale: list[Path] = []
-        if not root.is_dir():
-            return stale
-        for folder in sorted(root.glob(f"{ID_PREFIX}*")):
-            if folder.name == keep or folder.is_symlink() or not folder.is_dir():
-                continue
-            if not made_here(folder / f"{folder.name}.kvconfig"):
-                continue
-            stale += [f for f in sorted(folder.iterdir()) if f.is_file() and made_here(f)]
-            stale.append(folder)
-        return stale
+        return stale_themes(folder_name(theme))
 
     def warnings(self, theme: Theme, runner) -> list[Msg]:
         warnings = []

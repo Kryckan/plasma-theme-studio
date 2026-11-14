@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -40,6 +41,21 @@ def _unescape(value: str) -> str:
     return _ESCAPE.sub(lambda match: _ESCAPED[match[1]], value)
 
 
+def _group_names(line: str) -> list[str]:
+    """The names in a line of group headers, `[Containments][2]` giving two. A "[" that has no "]"
+    after it ends the search: no later "[" could be closed either, so a line of nothing but
+    "[" takes one pass and not one pass for every "[" ."""
+    names: list[str] = []
+    start = line.find("[")
+    while start != -1:
+        found = _GROUP.match(line, start)
+        if found is None:
+            break
+        names.append(found[1])
+        start = line.find("[", found.end())
+    return names
+
+
 def parse(text: str) -> dict[tuple[str, ...], dict[str, str]]:
     """The groups of a KDE configuration file. A nested group such as
     `[Containments][2]` has the key `("Containments", "2")`. A line that hides
@@ -53,7 +69,7 @@ def parse(text: str) -> dict[tuple[str, ...], dict[str, str]]:
         if not line or line.startswith("#"):
             continue
         if line.startswith("["):
-            current = groups.setdefault(tuple(_GROUP.findall(line)), {})
+            current = groups.setdefault(tuple(_group_names(line)), {})
         elif "=" in line:
             key, value = line.split("=", 1)
             current[key.strip()] = _unescape(value.strip())
@@ -62,9 +78,24 @@ def parse(text: str) -> dict[tuple[str, ...], dict[str, str]]:
     return groups
 
 
+MAX_READ = 4_000_000  # bytes of one configuration file; a larger one is read as if it were not there
+
+
+def _read_text(path: Path) -> str:
+    """The text of a regular configuration file of a sane size. OSError for a pipe, a device or a
+    file over `MAX_READ`, so that no status check can be made slow or blocked by one."""
+    if not stat.S_ISREG(path.stat().st_mode):
+        raise OSError("not a regular file")
+    with open(path, "rb") as handle:
+        data = handle.read(MAX_READ + 1)
+    if len(data) > MAX_READ:
+        raise OSError("file too large")
+    return data.decode("utf-8")
+
+
 def _user_groups(file: str) -> dict[tuple[str, ...], dict[str, str]]:
     try:
-        return parse((paths.config_home() / file).read_text(encoding="utf-8"))
+        return parse(_read_text(paths.config_home() / file))
     except (OSError, UnicodeDecodeError):
         return {}
 
@@ -89,7 +120,7 @@ def default_value(file: str, groups: Sequence[str], key: str) -> str | None:
         if not folder:
             continue
         try:
-            text = (Path(folder) / file).read_text(encoding="utf-8")
+            text = _read_text(Path(folder) / file)
         except (OSError, UnicodeDecodeError):
             continue
         value = parse(text).get(tuple(groups), {}).get(key)
@@ -115,23 +146,32 @@ def effective_value(runner, file: str, groups: Sequence[str], key: str, default:
 
 
 def write_value(
-    runner, file: str, groups: Sequence[str], key: str, value: str | None, masked: bool = False
+    runner,
+    file: str,
+    groups: Sequence[str],
+    key: str,
+    value: str | None,
+    masked: bool = False,
+    notify: bool = False,
 ) -> None:
-    """Set a key, or with None remove it so that the default applies again.
+    """Set a key, or with None remove it so that the default applies again. With `notify` the
+    programs that watch the file are told (kwriteconfig6 --notify): a running program does not
+    read a file again that changed without it.
 
     `masked` says that the user's file hid the default before (see `masked`),
     so that the line which does it is left in place when the key is removed."""
+    flags = ["--notify"] if notify else []
     if value is None:
         if user_value(file, groups, key) is None:
             return
-        result = runner.run(["kwriteconfig6", *_location(file, groups, key), "--delete"])
+        result = runner.run(["kwriteconfig6", *flags, *_location(file, groups, key), "--delete"])
         failed = result.returncode != 0 or user_value(file, groups, key) is not None
         if not failed:
             if not masked:
                 _unmask(file, groups, key)
             drop_if_empty(file)
     else:
-        result = runner.run(["kwriteconfig6", *_location(file, groups, key), "--", value])
+        result = runner.run(["kwriteconfig6", *flags, *_location(file, groups, key), "--", value])
         # The tool that reads the value back prints it on a line, so the ends cannot be compared.
         failed = result.returncode != 0 or effective_value(runner, file, groups, key) != value.strip()
     if failed:
@@ -160,7 +200,7 @@ def _unmask(file: str, groups: Sequence[str], key: str) -> None:
     when nothing else is in it. The rest of the file stays as it is."""
     path = paths.config_home() / file
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = _read_text(path).splitlines()
     except (OSError, UnicodeDecodeError):
         return
     wanted, current = tuple(groups), ()

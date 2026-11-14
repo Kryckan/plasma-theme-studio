@@ -8,8 +8,8 @@ derived colors that are written to the color scheme.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QPointF, QRectF, QSizeF, Qt
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QCoreApplication, QPointF, QRectF, QSize, QSizeF, Qt
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from ..generators.colorscheme import scheme_groups
@@ -32,29 +32,76 @@ def _rgb(text: str, alpha: float = 1.0) -> QColor:
     return color
 
 
+MODES = ("desktop", "window", "panel", "menu")  # what the widget zooms in on
+ZOOM_MARGIN = 28
+
+
 class PreviewWidget(QWidget):
     def __init__(self, theme: Theme, parent=None):
         super().__init__(parent)
         self.theme = theme
-        self.setMinimumSize(380, 260)
+        self.mode = "desktop"
+        self.setMinimumSize(420, 320)
+        self.setAccessibleName(translate("preview", "Preview of the theme"))
 
     def set_theme(self, theme: Theme) -> None:
         self.theme = theme
         self.update()
 
+    def set_mode(self, mode: str) -> None:
+        """Show the whole desktop, or zoom in on the window, the panel or the popups."""
+        self.mode = mode if mode in MODES else "desktop"
+        self.update()
+
+    def view_rect(self) -> QRectF:
+        """The part of the scene that is shown, in scene units."""
+        scene = QRectF(0, 0, SCENE_W, SCENE_H)
+        if self.mode == "desktop":
+            return scene
+        panel, vertical, attached = self._panel_geometry()
+        if self.mode == "window":
+            area = self._frame_rect(panel, vertical, attached)
+        elif self.mode == "panel":
+            area = panel.adjusted(0, 0, 0, 0)
+        else:
+            popup, bubble = self._popup_rects(panel, vertical, attached)
+            area = popup.united(bubble)
+        area = area.adjusted(-ZOOM_MARGIN, -ZOOM_MARGIN, ZOOM_MARGIN, ZOOM_MARGIN)
+        if self.mode == "panel":  # a thin strip: show some of the desktop around it
+            area = area.adjusted(-60, -60, 60, 60)
+        return area.intersected(scene) if area.intersected(scene).isValid() else scene
+
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
+        self._paint(painter, self.width(), self.height())
+        painter.end()
+
+    def render_image(self, size: QSize, ratio: float = 1.0, mode: str | None = None) -> QPixmap:
+        """The scene (or one mode of it) as a picture of `size`, for the cards of the pickers."""
+        pixmap = QPixmap(size * ratio)
+        pixmap.setDevicePixelRatio(ratio)
+        painter = QPainter(pixmap)
+        shown, self.mode = self.mode, mode or self.mode
+        try:
+            self._paint(painter, size.width(), size.height())
+        finally:
+            self.mode = shown
+            painter.end()
+        return pixmap
+
+    def _paint(self, painter: QPainter, width: float, height: float) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        scale = min(self.width() / SCENE_W, self.height() / SCENE_H)
+        view = self.view_rect()
+        scale = min(width / view.width(), height / view.height())
         accent = QColor(self.theme.get("colors", "accent"))
-        wallpaper = QLinearGradient(0, 0, self.width(), self.height())
+        wallpaper = QLinearGradient(0, 0, width, height)
         wallpaper.setColorAt(0, accent.darker(170))
         wallpaper.setColorAt(1, accent.lighter(130))
-        painter.fillRect(self.rect(), wallpaper)
-        painter.translate((self.width() - SCENE_W * scale) / 2, (self.height() - SCENE_H * scale) / 2)
+        painter.fillRect(QRectF(0, 0, width, height), wallpaper)
+        painter.translate((width - view.width() * scale) / 2, (height - view.height() * scale) / 2)
         painter.scale(scale, scale)
+        painter.translate(-view.left(), -view.top())
         self._draw(painter)
-        painter.end()
 
     # ---- drawing -----------------------------------------------------
 
@@ -79,19 +126,7 @@ class PreviewWidget(QWidget):
         p.setFont(font)
 
         panel, vertical, attached = self._panel_geometry()
-        # The window sits in the middle of what the panel leaves free.
-        free = QRectF(0, 0, SCENE_W, SCENE_H)
-        gap = 0 if attached else PANEL_GAP
-        if vertical:
-            free.setLeft(panel.right() + gap) if panel.left() < SCENE_W / 2 else free.setRight(
-                panel.left() - gap
-            )
-        else:
-            free.setTop(panel.bottom() + gap) if panel.top() < SCENE_H / 2 else free.setBottom(
-                panel.top() - gap
-            )
-        frame = QRectF(0, 0, min(620, free.width() - 78), min(380, free.height() - 78))
-        frame.moveCenter(free.center())
+        frame = self._frame_rect(panel, vertical, attached)
 
         # Window shadow
         size, strength = theme.get("shadow", "size"), theme.get("shadow", "strength")
@@ -264,18 +299,6 @@ class PreviewWidget(QWidget):
         opacity = theme.resolved("popup", "opacity")
         text, muted = _rgb(window["ForegroundNormal"]), _rgb(window["ForegroundInactive"])
         outline = _rgb(window["ForegroundNormal"], 0.3)
-        gap = (0 if attached else PANEL_GAP) + 8
-        size, tip = QSizeF(176, 100), QSizeF(92, 28)
-
-        def place(box: QSizeF, along: float) -> QRectF:
-            """A box on the free side of the panel, `along` the panel from its start."""
-            if vertical:
-                x = panel.right() + gap if panel.left() < SCENE_W / 2 else panel.left() - gap - box.width()
-                y = min(max(panel.top() + along, 8), SCENE_H - box.height() - 8)
-            else:
-                x = min(max(panel.left() + along, 8), SCENE_W - box.width() - 8)
-                y = panel.bottom() + gap if panel.top() < SCENE_H / 2 else panel.top() - gap - box.height()
-            return QRectF(QPointF(x, y), box)
 
         def surface(rect: QRectF) -> None:
             r = min(radius, min(rect.width(), rect.height()) / 2)
@@ -286,7 +309,7 @@ class PreviewWidget(QWidget):
             p.setPen(QPen(outline, border) if border else Qt.PenStyle.NoPen)
             p.drawRoundedRect(rect, r, r)
 
-        popup = place(size, 10)
+        popup, bubble = self._popup_rects(panel, vertical, attached)
         surface(popup)
         field = QRectF(popup.left() + 12, popup.top() + 12, popup.width() - 24, 24)
         p.setPen(Qt.PenStyle.NoPen)
@@ -309,10 +332,44 @@ class PreviewWidget(QWidget):
                 p.setPen(text)
             p.drawText(row.adjusted(10, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, label)
 
-        bubble = place(tip, 10 + size.width() + 14 if not vertical else 10 + size.height() + 14)
         surface(bubble)
         p.setPen(text)
         p.drawText(bubble, Qt.AlignmentFlag.AlignCenter, translate("preview", "Tooltip"))
+
+    def _frame_rect(self, panel: QRectF, vertical: bool, attached: bool) -> QRectF:
+        """The window sits in the middle of what the panel leaves free."""
+        free = QRectF(0, 0, SCENE_W, SCENE_H)
+        gap = 0 if attached else PANEL_GAP
+        if vertical:
+            free.setLeft(panel.right() + gap) if panel.left() < SCENE_W / 2 else free.setRight(
+                panel.left() - gap
+            )
+        else:
+            free.setTop(panel.bottom() + gap) if panel.top() < SCENE_H / 2 else free.setBottom(
+                panel.top() - gap
+            )
+        frame = QRectF(0, 0, min(620, free.width() - 78), min(380, free.height() - 78))
+        frame.moveCenter(free.center())
+        return frame
+
+    def _popup_rects(self, panel: QRectF, vertical: bool, attached: bool) -> tuple[QRectF, QRectF]:
+        """Where the popup (the launcher, say) and the tooltip beside the panel are drawn."""
+        gap = (0 if attached else PANEL_GAP) + 8
+        size, tip = QSizeF(176, 100), QSizeF(92, 28)
+
+        def place(box: QSizeF, along: float) -> QRectF:
+            """A box on the free side of the panel, `along` the panel from its start."""
+            if vertical:
+                x = panel.right() + gap if panel.left() < SCENE_W / 2 else panel.left() - gap - box.width()
+                y = min(max(panel.top() + along, 8), SCENE_H - box.height() - 8)
+            else:
+                x = min(max(panel.left() + along, 8), SCENE_W - box.width() - 8)
+                y = panel.bottom() + gap if panel.top() < SCENE_H / 2 else panel.top() - gap - box.height()
+            return QRectF(QPointF(x, y), box)
+
+        return place(size, 10), place(
+            tip, 10 + size.width() + 14 if not vertical else 10 + size.height() + 14
+        )
 
     def _panel_geometry(self) -> tuple[QRectF, bool, bool]:
         """Where the panel is drawn, whether it is vertical and whether it is

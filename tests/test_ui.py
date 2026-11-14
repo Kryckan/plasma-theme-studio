@@ -6,7 +6,6 @@ pytest.importorskip("PySide6.QtWidgets")
 
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QProxyStyle, QStyle  # noqa: E402
 
 from plasma_theme_studio.apply import snapshot as snapshots  # noqa: E402
 from plasma_theme_studio.model.theme import FIELD_BY_ID, Theme  # noqa: E402
@@ -17,6 +16,7 @@ from plasma_theme_studio.ui.main_window import MainWindow  # noqa: E402
 def window(app, home, runner, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     window = MainWindow(runner)
+    window.build_pages()
     window.show()
     yield window
     window.undo_stack.setClean()
@@ -29,7 +29,8 @@ def test_edit_undo_redo_and_preview(window, app):
     window.refresh()
     assert window.theme.get("colors", "accent") == "#ff0000"
     assert window.isWindowModified()
-    assert "255,0,0" in window.file_content.toPlainText()
+    window.show_files()
+    assert "255,0,0" in window.files_dialog.file_content.toPlainText()
     assert window.editors[accent.id].text.text() == "#ff0000"
 
     window.undo_stack.undo()
@@ -120,6 +121,12 @@ def test_window_and_panel_follow_shapes_until_overridden(window):
     assert not window.grab().isNull()
 
 
+def settle(window):
+    """Bring every page in line with the theme, as showing each of them would."""
+    window.refresh()
+    window.build_pages()
+
+
 @pytest.fixture
 def nordic(home):
     folder = home / "system/share/color-schemes"
@@ -131,114 +138,109 @@ def nordic(home):
 
 
 def click_theme(window, app, title, double=False):
-    """Click a theme on the Themes tab with the mouse, as a user does."""
-    themes = window.library.list
-    app.processEvents()  # let the icon grid lay itself out
-    item = next(
-        themes.item(row) for row in range(themes.count()) if themes.item(row).text().startswith(title)
-    )
-    themes.scrollToItem(item)
+    """Click a theme on the Themes page with the mouse, as a user does."""
+    grid = window.library.grid
+    app.processEvents()  # let the grid lay itself out
+    card = next(card for card in grid.cards if card.title().startswith(title))
+    grid.scroll.ensureWidgetVisible(card)
     app.processEvents()
-    spot = themes.visualItemRect(item).center()
-    QTest.mouseClick(themes.viewport(), Qt.MouseButton.LeftButton, pos=spot)
+    QTest.mouseClick(card, Qt.MouseButton.LeftButton)
     if double:
-        QTest.mouseDClick(themes.viewport(), Qt.MouseButton.LeftButton, pos=spot)
+        QTest.mouseDClick(card, Qt.MouseButton.LeftButton)
     app.processEvents()
 
 
 def test_switch_to_an_installed_scheme_and_back(nordic, window, runner):
     runner.known.add("Nordic")
+    window.show_page("themes")
     entry = window.library.select("Nordic")
     assert entry.title == "Nordic" and window.apply_button.isEnabled()
     window.apply_button.click()
     assert runner.settings["ColorScheme"] == "Nordic"
-    assert "In use" in window.library.list.currentItem().text()
+    assert window.library.grid.in_use() == ("scheme", "Nordic")
     window.undo_last_apply()
     assert runner.settings["ColorScheme"] == "BreezeLight"
-    assert "In use" not in window.library.list.currentItem().text()
+    assert window.library.grid.in_use() != ("scheme", "Nordic")
 
 
 def test_selecting_a_theme_with_one_click_is_enough_to_switch(nordic, window, app, runner):
-    """The apply button acts on the theme that is selected on the Themes tab,
+    """The apply button acts on the theme that is selected on the Themes page,
     not on whatever happens to be open in the editor."""
     runner.known.add("Nordic")
-    assert window.tabs.currentWidget() is window.library
+    window.show_page("themes")
     click_theme(window, app, "Nordic")
     assert window.library.current().title == "Nordic"
-    assert "Nordic" in window.apply_button.text()
+    assert "Nordic" in window.apply_button.toolTip()
 
     QTest.mouseClick(window.apply_button, Qt.MouseButton.LeftButton)
     assert runner.settings["ColorScheme"] == "Nordic"
     assert "Nordic" in window.banner.text()
     assert window.theme.name == "Nordic Copy"  # the editor follows the desktop
-    assert window.tabs.currentWidget() is window.library
+    assert window.current_key == "themes"
 
 
 def test_apply_shortcut_action_also_uses_the_selected_theme(nordic, window, app, runner):
     runner.known.add("Nordic")
+    window.show_page("themes")
     click_theme(window, app, "Nordic")
     window.apply_shown()
     assert runner.settings["ColorScheme"] == "Nordic"
 
 
 def test_apply_button_names_what_it_applies(nordic, window, app):
+    window.show_page("themes")
     click_theme(window, app, "Nordic")
-    assert window.apply_button.text() == "Apply “Nordic” to desktop"
-    window.tabs.setCurrentWidget(window.preview)
-    assert window.apply_button.text() == "Apply “Breeze Light Copy” to desktop"
+    assert window.apply_button.toolTip() == "Apply “Nordic” to the desktop"
+    window.show_page("overview")
+    assert window.apply_button.toolTip() == "Apply “Breeze Light Copy” to the desktop"
     window.edit(FIELD_BY_ID[("meta", "name")], "R&D " + "x" * 40)
     window.refresh()
-    assert window.apply_button.text().startswith("Apply “R&&D xxx") and "…" in window.apply_button.text()
-    window.tabs.setCurrentWidget(window.library)
-    assert window.apply_button.text() == "Apply “Nordic” to desktop"
+    assert window.apply_button.toolTip().startswith("Apply “R&D xxx")
+    window.show_page("themes")
+    assert window.apply_button.toolTip() == "Apply “Nordic” to the desktop"
     window.library.search.setText("zzz")
-    assert window.apply_button.text() == "Apply to desktop" and not window.apply_button.isEnabled()
+    assert not window.apply_button.isEnabled()
     assert window.apply_button.toolTip()
 
 
-def test_on_the_other_tabs_the_editor_theme_is_applied(nordic, window, app, runner):
+def test_on_the_other_pages_the_editor_theme_is_applied(nordic, window, app, runner):
     runner.known.add("Nordic")
+    window.show_page("themes")
     click_theme(window, app, "Nordic")
-    window.tabs.setCurrentWidget(window.preview)
+    window.show_page("overview")
     QTest.mouseClick(window.apply_button, Qt.MouseButton.LeftButton)
     assert runner.settings["ColorScheme"] == "BreezeLightCopy"
 
 
-def test_double_click_or_enter_switches_the_desktop(nordic, window, app, runner):
+def test_double_click_or_enter_opens_a_copy_and_never_applies(nordic, window, app, runner):
     runner.known.add("Nordic")
+    window.show_page("themes")
     click_theme(window, app, "Nordic", double=True)
-    assert runner.settings["ColorScheme"] == "Nordic"
-    assert window.theme.name == "Nordic Copy" and window.tabs.currentWidget() is window.library
-
-    window.undo_last_apply()
     assert runner.settings["ColorScheme"] == "BreezeLight"
-    assert window.theme.name == "Breeze Light Copy"  # the editor went back with the desktop
-    assert window.library.current().title == "Nordic"  # the selection stays where the user put it
-    window.library.list.setFocus()
-    QTest.keyClick(window.library.list, Qt.Key.Key_Return)
-    assert runner.settings["ColorScheme"] == "Nordic"
+    assert window.theme.name == "Nordic Copy" and window.current_key == "overview"
+
+    window.show_page("themes")
+    window.new_theme("breeze-light")
+    window.library.select("Nordic")
+    window.library.grid.body.setFocus()
+    QTest.keyClick(window.library.grid.body, Qt.Key.Key_Return)
+    assert window.theme.name == "Nordic Copy"
+    assert runner.settings["ColorScheme"] == "BreezeLight"
 
 
-def test_single_click_never_opens_or_applies_even_with_single_click_activation(nordic, window, app, runner):
-    class SingleClick(QProxyStyle):
-        def styleHint(self, hint, option=None, widget=None, data=None):
-            if hint == QStyle.StyleHint.SH_ItemView_ActivateItemOnSingleClick:
-                return 1
-            return super().styleHint(hint, option, widget, data)
-
-    style = SingleClick()
-    window.library.list.setStyle(style)
+def test_single_click_never_opens_or_applies(nordic, window, app, runner):
+    window.show_page("themes")
     click_theme(window, app, "Nordic")
     assert window.library.current().title == "Nordic"
     assert runner.settings["ColorScheme"] == "BreezeLight"
-    assert window.theme.name == "Breeze Light Copy" and window.tabs.currentWidget() is window.library
+    assert window.theme.name == "Breeze Light Copy" and window.current_key == "themes"
 
 
-def test_deselecting_with_ctrl_click_disables_apply(nordic, window, app):
+def test_a_search_that_hides_the_selection_disables_apply(nordic, window, app):
+    window.show_page("themes")
     click_theme(window, app, "Nordic")
-    themes = window.library.list
-    spot = themes.visualItemRect(themes.currentItem()).center()
-    QTest.mouseClick(themes.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, spot)
+    assert window.apply_button.isEnabled()
+    window.library.search.setText("zzz")
     assert window.library.current() is None
     assert not window.apply_button.isEnabled() and not window.library.edit_button.isEnabled()
 
@@ -247,7 +249,7 @@ def test_using_the_theme_that_is_in_use_says_so(window, home, runner):
     window.edit(FIELD_BY_ID[("meta", "name")], "Mine")
     assert window._save_to(home / ".local/share/plasma-theme-studio/themes/mine.toml")
     window.new_theme("breeze-dark")
-    window.tabs.setCurrentWidget(window.library)
+    window.show_page("themes")
     window.library.select("Mine")
     window.apply_button.click()
     count = len(snapshots.list_snapshots())
@@ -264,9 +266,10 @@ def test_reloading_the_themes_keeps_the_scroll_position(home, window, app):
             "[Colors:Window]\nBackgroundNormal=46,52,64\nForegroundNormal=216,222,233\n"
             f"[General]\nName=Scheme {index:02}\n"
         )
+    window.show_page("themes")
     window.reload_library()
     app.processEvents()
-    bar = window.library.list.verticalScrollBar()
+    bar = window.library.grid.scroll.verticalScrollBar()
     assert bar.maximum() > 0
     bar.setValue(bar.maximum())
     window.reload_library()
@@ -278,7 +281,7 @@ def test_selected_saved_theme_is_applied_with_its_unsaved_edits(window, home, ru
     window.edit(FIELD_BY_ID[("meta", "name")], "Mine")
     assert window._save_to(home / ".local/share/plasma-theme-studio/themes/mine.toml")
     window.edit(FIELD_BY_ID[("colors", "accent")], "#ff0000")
-    window.tabs.setCurrentWidget(window.library)
+    window.show_page("themes")
     window.library.select("Mine")
     window.apply_button.click()
     written = (home / ".local/share/color-schemes/Mine.colors").read_text()
@@ -290,7 +293,7 @@ def test_edit_a_copy_of_an_installed_scheme(nordic, window):
     window.library.edit_button.click()
     assert window.theme.name == "Nordic Copy"
     assert window.theme.get("colors", "window") == "#2e3440"
-    assert window.tabs.currentWidget() is window.preview
+    assert window.current_key == "overview"
     assert window.path is None
 
 
@@ -298,9 +301,10 @@ def test_saved_themes_are_listed_and_can_be_used(window, home, runner):
     window.edit(FIELD_BY_ID[("meta", "name")], "Mine")
     assert window._save_to(home / ".local/share/plasma-theme-studio/themes/mine.toml")
     window.new_theme("breeze-dark")
+    window.show_page("themes")
     entry = window.library.select("Mine")
     assert entry.is_saved_theme
-    window.tabs.setCurrentWidget(window.library)
+    window.show_page("themes")
     window.library.search.setText("zzz")
     assert window.library.current() is None and not window.apply_button.isEnabled()
     window.library.search.clear()
@@ -308,8 +312,8 @@ def test_saved_themes_are_listed_and_can_be_used(window, home, runner):
     window.apply_button.click()
     assert runner.settings["ColorScheme"] == "Mine"
     # The scheme written for it does not show up as a second entry.
-    titles = [window.library.list.item(row).text() for row in range(window.library.list.count())]
-    assert len([title for title in titles if title.startswith("Mine")]) == 1
+    titles = [card.title() for card in window.library.grid.cards]
+    assert len([title for title in titles if title == "Mine"]) == 1
     window.library.edit_button.click()
     assert window.theme.name == "Mine" and window.path.name == "mine.toml"
 
@@ -324,7 +328,7 @@ def test_panel_position_is_chosen_from_named_values(window):
     assert window.theme.get("panel_layout", "location") == "top"
     assert '[panel_layout]\nlocation = "top"\nfloating = false\n' in window.theme.to_toml()
     assert Theme.from_toml(window.theme.to_toml()) == window.theme
-    assert window.tabs.currentWidget() is window.preview and not window.preview.grab().isNull()
+    assert window.current_key == "overview" and not window.preview.grab().isNull()
 
     window.undo_stack.undo()
     window.undo_stack.undo()
@@ -371,7 +375,7 @@ def test_every_page_with_a_target_says_what_an_apply_does_with_it(window):
     for section in ("apps", "popup", "gtk", "rofi"):
         assert "does not apply these values" not in window.notes[section].text()
     window.edit(FIELD_BY_ID[("rofi", "style")], "generated")
-    window.refresh()
+    settle(window)
     assert "reads the theme when it starts" in window.notes["rofi"].text()
 
 
@@ -381,14 +385,17 @@ def test_the_values_of_a_part_that_is_left_as_it_is_are_turned_off(window):
             assert not window.editors[(style, key)].isEnabled()
             assert "Leave as it is" in window.editors[(style, key)].toolTip()
         window.edit(FIELD_BY_ID[(style, "style")], "generated")
+        settle(window)
         for key in ("radius", "border_width"):
             assert window.editors[(style, key)].isEnabled()
             assert window.editors[(style, key)].toolTip() == ""
     assert not window.editors[("popup", "radius")].isEnabled()
     window.edit(FIELD_BY_ID[("panel", "style")], "generated")
+    settle(window)
     assert window.editors[("popup", "radius")].isEnabled()
     assert window.editors[("panel", "opacity")].isEnabled()
     window.undo_stack.undo()
+    settle(window)
     assert not window.editors[("popup", "radius")].isEnabled()
 
 
@@ -410,18 +417,17 @@ def test_the_drawn_preview_follows_apps_and_popup_values(window):
         assert not window.preview.grab().isNull()
 
 
-def test_the_application_style_tab_is_made_when_it_is_shown(window):
-    index = window.tabs.indexOf(window.style_preview)
-    assert window.tabs.tabText(index) == "Application style"
+def test_the_application_style_sample_is_made_when_the_page_is_shown(window):
     window.edit(FIELD_BY_ID[("apps", "style")], "generated")
     window.refresh()
-    assert window.style_preview.shows_sample is False  # not made while the tab is hidden
-    window.tabs.setCurrentWidget(window.style_preview)
+    page = window.page("app_style")
+    assert window.style_preview.shows_sample is False  # not made while the page is hidden
+    window.show_page("app_style")
     assert window.style_preview.message or window.style_preview.shows_sample
     window.edit(FIELD_BY_ID[("apps", "radius")], 3)
     window.refresh()
-    assert window.style_timer.isActive()
-    window.style_timer.timeout.emit()
+    assert page.timer.isActive()
+    page.timer.timeout.emit()
     assert not window.grab().isNull()
 
 

@@ -27,6 +27,8 @@ from PySide6.QtCore import QByteArray, QRectF, QSize
 from PySide6.QtGui import QColor, QImage, QPainter
 
 from ..messages import translate
+from ..model.color import Color
+from ..model.color import on_accent as readable_on_accent
 from .base import Item, Kind, blank, installed, placeholder, read_metadata, read_svg, unique_sorted
 from .colorschemes import BREEZE, lookup, parse_color, read_table
 
@@ -128,7 +130,11 @@ def table_from_roles(colors: Mapping[str, str] | None) -> dict[str, dict[str, QC
         "DecorationFocus": accent,
         "DecorationHover": accent,
     }
-    highlighted = QColor("#fcfcfc") if accent.lightness() < 160 else QColor("#232629")
+    highlighted = QColor(
+        readable_on_accent(
+            Color.parse(accent.name()), Color.parse(text.name()), Color.parse(window.name())
+        ).hex
+    )
     return {
         "Colors:Window": {**base, "BackgroundNormal": window},
         "Colors:View": {**base, "BackgroundNormal": role("view", ("Colors:View", "BackgroundNormal"))},

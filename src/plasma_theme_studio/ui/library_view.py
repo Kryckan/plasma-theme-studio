@@ -1,33 +1,25 @@
 # SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The Themes tab: saved themes and installed color schemes as pictures."""
+"""The themes of the Themes page: saved themes and installed color schemes as cards."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QPointF, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPainterPath, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import QCoreApplication, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
 from .. import library
 from ..generators.colorscheme import scheme_groups
 from ..model.theme import Theme
 from .preview import _rgb
+from .widgets import THUMB_SIZE, CardGrid, themed_icon
 
 translate = QCoreApplication.translate
 
-THUMBNAIL = QSize(168, 104)
+THUMBNAIL = THUMB_SIZE
 
 
 @dataclass(frozen=True)
@@ -116,115 +108,103 @@ def thumbnail(theme: Theme, ratio: float = 1.0, active: bool = False) -> QPixmap
 
 
 class LibraryView(QWidget):
-    """Shows the themes and says which one is selected.
+    """Shows the themes as cards and says which one is selected.
 
     The window's apply button acts on the selection, so there is no second
-    button here that could be mistaken for it.
+    button here that could be mistaken for it. Return and a double click open
+    the theme in the editor; nothing here puts anything on the desktop.
     """
 
     selection_changed = Signal()
-    use_requested = Signal(object)  # double-click or Enter: put it on the desktop
     edit_requested = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.active = ""
-        info = QLabel(
-            translate(
-                "ui",
-                "Your saved themes and the color schemes installed on this computer. "
-                "Select one and choose Apply, or double-click it, to switch the desktop to it. "
-                "Edit opens it in the editor.",
-            )
+        self.entries: dict[tuple[str, str], Entry] = {}
+        self.grid = CardGrid(
+            THUMBNAIL,
+            with_search=True,
+            fit=False,
+            name=translate("ui", "Themes"),
+            empty_text=translate("ui", "No theme is saved and no color scheme is installed yet."),
         )
-        info.setWordWrap(True)
-        self.search = QLineEdit()
-        self.search.setPlaceholderText(translate("ui", "Search…"))
-        self.search.setAccessibleName(translate("ui", "Search themes"))
-        self.search.setClearButtonEnabled(True)
-        self.search.textChanged.connect(self._filter)
-        self.list = QListWidget()
-        self.list.setAccessibleName(translate("ui", "Themes"))
-        self.list.setViewMode(QListWidget.ViewMode.IconMode)
-        self.list.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self.list.setMovement(QListWidget.Movement.Static)
-        self.list.setIconSize(THUMBNAIL)
-        self.list.setGridSize(QSize(THUMBNAIL.width() + 24, THUMBNAIL.height() + 84))
-        self.list.setWordWrap(True)
-        self.list.itemSelectionChanged.connect(self._update_buttons)
-        # Not itemActivated: with single-click activation turned on in Plasma,
-        # that would switch the desktop as soon as a theme is selected.
-        self.list.itemDoubleClicked.connect(lambda _item: self._emit(self.use_requested))
-        for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            shortcut = QShortcut(QKeySequence(key), self.list)
-            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
-            shortcut.activated.connect(lambda: self._emit(self.use_requested))
-        self.edit_button = QPushButton(QIcon.fromTheme("document-edit"), "")
-        self.edit_button.clicked.connect(lambda: self._emit(self.edit_requested))
-        buttons = QHBoxLayout()
-        buttons.addWidget(self.search, 1)
-        buttons.addWidget(self.edit_button)
+        self.search = self.grid.search
+        self.grid.set_filters(
+            [("mine", translate("ui", "My themes")), ("schemes", translate("ui", "Color schemes"))],
+            empty={
+                "mine": translate("ui", "You have no saved themes yet."),
+                "schemes": translate("ui", "No color schemes are installed."),
+            },
+        )
+        self.grid.selected.connect(lambda _id: self._update_buttons())
+        self.grid.activated.connect(lambda _id: self._emit_edit())
+        self.grid.search.textChanged.connect(lambda _text: self._update_buttons())
+        self.grid.filter.currentIndexChanged.connect(lambda _index: self._update_buttons())
+        self.grid.thumbnail_requested.connect(self._draw)
+        self.edit_button = QPushButton(themed_icon("document-edit"), "")
+        self.edit_button.clicked.connect(self._emit_edit)
         layout = QVBoxLayout(self)
-        layout.addWidget(info)
-        layout.addWidget(self.list, 1)
-        layout.addLayout(buttons)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.grid)
         self._update_buttons()
+
+    @staticmethod
+    def _id(entry: Entry) -> tuple[str, str]:
+        return ("theme" if entry.is_saved_theme else "scheme", entry.scheme_id)
 
     def reload(self, active: str) -> None:
         """Read the themes again. `active` is the color scheme the desktop uses now."""
         self.active = active
         current = self.current()
         keep = (current.scheme_id, current.is_saved_theme) if current else (active, False)
-        # Keep the place the user scrolled to, except the first time.
-        position = self.list.verticalScrollBar().value() if self.list.count() else None
-        self.list.clear()
-        chosen = None
-        for entry in entries():
-            in_use = entry.scheme_id == active
-            lines = [entry.title]
-            if entry.is_saved_theme:
-                lines.append(translate("ui", "Saved theme"))
-            if in_use:
-                lines.append(translate("ui", "In use"))
-            item = QListWidgetItem(
-                QIcon(thumbnail(entry.theme, self.devicePixelRatioF(), in_use)), "\n".join(lines), self.list
-            )
-            item.setData(Qt.ItemDataRole.UserRole, entry)
-            item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-            if in_use:
-                font = item.font()
-                font.setBold(True)
-                item.setFont(font)
-            if chosen is None and entry.scheme_id == keep[0] and (entry.is_saved_theme == keep[1] or in_use):
-                chosen = item
-        self._filter(self.search.text())
-        if chosen is not None:
-            self.list.setCurrentItem(chosen)
-        # The grid is laid out later; scroll once it has been.
+        bar = self.grid.scroll.verticalScrollBar()
+        position = bar.value() if self.entries else None  # keep the place, except the first time
+        found = entries()
+        self.entries = {self._id(entry): entry for entry in found}
+        self.grid.set_items(
+            [
+                (
+                    self._id(entry),
+                    entry.title,
+                    translate("ui", "Saved theme") if entry.is_saved_theme else "",
+                    "mine" if entry.is_saved_theme else "schemes",
+                )
+                for entry in found
+            ]
+        )
+        in_use = next((self._id(e) for e in found if e.scheme_id == active), None)
+        self.grid.set_in_use(in_use)
+        chosen = next(
+            (
+                self._id(e)
+                for e in found
+                if e.scheme_id == keep[0] and (e.is_saved_theme == keep[1] or e.scheme_id == active)
+            ),
+            None,
+        )
+        self.grid.set_selected(chosen)
         if position is not None:
-            QTimer.singleShot(0, lambda: self.list.verticalScrollBar().setValue(position))
-        elif chosen is not None:
-            QTimer.singleShot(0, lambda: self.list.scrollToItem(self.list.currentItem()))
+            QTimer.singleShot(0, lambda: bar.setValue(position))
         self._update_buttons()
+
+    def _draw(self, item_id) -> None:
+        entry = self.entries.get(item_id)
+        if entry is not None:
+            self.grid.set_thumbnail(item_id, thumbnail(entry.theme, self.devicePixelRatioF()))
 
     def current(self) -> Entry | None:
         """The theme that is visibly selected, or None."""
-        selected = [item for item in self.list.selectedItems() if not item.isHidden()]
-        return selected[0].data(Qt.ItemDataRole.UserRole) if selected else None
+        card = self.grid.card(self.grid.selected_id())
+        return self.entries.get(card.item_id) if card is not None and not card.isHidden() else None
 
     def select(self, scheme_id: str) -> Entry | None:
-        for row in range(self.list.count()):
-            if self.list.item(row).data(Qt.ItemDataRole.UserRole).scheme_id == scheme_id:
-                self.list.setCurrentRow(row)
+        for item_id, entry in self.entries.items():
+            if entry.scheme_id == scheme_id:
+                self.grid.set_selected(item_id)
+                self._update_buttons()
                 return self.current()
         return None
-
-    def _filter(self, text: str) -> None:
-        wanted = text.strip().casefold()
-        for row in range(self.list.count()):
-            item = self.list.item(row)
-            item.setHidden(wanted not in item.data(Qt.ItemDataRole.UserRole).title.casefold())
-        self._update_buttons()
 
     def _update_buttons(self) -> None:
         entry = self.current()
@@ -233,7 +213,7 @@ class LibraryView(QWidget):
         self.edit_button.setText(translate("ui", "Edit") if saved else translate("ui", "Edit a copy"))
         self.selection_changed.emit()
 
-    def _emit(self, signal) -> None:
+    def _emit_edit(self) -> None:
         entry = self.current()
         if entry is not None:
-            signal.emit(entry)
+            self.edit_requested.emit(entry)

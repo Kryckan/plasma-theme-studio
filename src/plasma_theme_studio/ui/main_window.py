@@ -1,6 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The editor window: sections, preview, inspector and the apply bar."""
+"""The editor window: a side bar of pages, the page shown, and the permanent Desktop bar.
+
+The window owns the theme in the editor, the undo stack, the plan and everything that touches the
+desktop (apply, switch, undo, snapshots). The pages (`ui/pages`) only show the theme and call
+`edit` or `edit_many`; see `ui/pages/base.py` for what a page can rely on.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +16,6 @@ from PySide6.QtCore import QCoreApplication, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
-    QFontDatabase,
     QIcon,
     QKeySequence,
     QUndoCommand,
@@ -22,19 +26,14 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
-    QPushButton,
-    QScrollArea,
-    QSplitter,
     QStackedWidget,
-    QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -43,32 +42,27 @@ from .. import APP_DIR, APP_NAME, __version__, archive, globaltheme, library, pa
 from ..apply import engine
 from ..apply import snapshot as snapshots
 from ..apply.runner import SystemRunner
+from ..apply.status import BLOCKED, CHANGE, LEAVE
 from ..generators import ApplyError
 from ..generators.colorscheme import current_scheme
 from ..model.color import contrast
-from ..model.theme import FIELDS, PRESETS, SECTIONS, Field, Theme, ThemeError
+from ..model.theme import FIELD_BY_ID, FIELDS, PRESETS, SECTIONS, Field, Theme, ThemeError
+from ..pickers.loader import ThumbnailLoader
+from . import pages
 from .banner import INFORMATION, POSITIVE, Banner
-from .editors import editor_for
-from .labels import FIELD_LABELS, PRESET_TITLES, SECTION_ICONS, SECTION_NOTES, SECTION_TITLES
-from .library_view import Entry, LibraryView
-from .preview import PreviewWidget
-from .style_preview import StylePreview
+from .files_dialog import FilesDialog
+from .labels import FIELD_LABELS, PRESET_TITLES, SECTION_TITLES
+from .library_view import Entry
+from .widgets import CHANGED, OFF, DesktopBar, InlineNote, NavList
 
 translate = QCoreApplication.translate
 
 MIN_TEXT_CONTRAST = 4.5
 MERGE_SECONDS = 1.0
-STYLE_PREVIEW_DELAY = 250  # milliseconds after the last edit before the style is made again
-APPLY_NAME_LENGTH = 32  # longer theme names are shortened on the apply button
-
-
-def state_titles() -> dict[str, str]:
-    return {
-        engine.NEW: translate("ui", "will be created"),
-        engine.CHANGED: translate("ui", "will be updated"),
-        engine.UNCHANGED: translate("ui", "already up to date"),
-        engine.FOREIGN: translate("ui", "exists and was not made by this app"),
-    }
+STATUS_DELAY = 200  # milliseconds after the last edit before the parts are compared with the desktop
+SIDEBAR_WIDTH = 236
+NOTICE_LINES = 3  # problems listed in the strip above the page; the tooltip has them all
+DEFAULT_PAGE = "overview"
 
 
 # The sections whose values start from the ones on the Shapes page.
@@ -177,160 +171,112 @@ class MainWindow(QMainWindow):
         self.theme = Theme.from_preset("breeze-light")
         self.path: Path | None = None
         self.editors: dict[tuple[str, str], QWidget] = {}
-        self.notes: dict[str, QLabel] = {}
-        self.note_rows: dict[str, QWidget] = {}
+        self.notes: dict[str, InlineNote] = {}
+        self.pages: dict[str, pages.base.Page] = {}
+        self.statuses: list = []
+        self._active = ""
         self.plan = engine.build_plan(self.theme)
-        # Switches made on the Themes tab that can still be undone: snapshot id ->
+        # Switches made on the Themes page that can still be undone: snapshot id ->
         # (theme and file the editor held before, the file the next start would
         # have opened, theme the editor holds since).
         self.switches: dict[str, tuple[Theme, Path | None, str, Theme]] = {}
+        self.loader = ThumbnailLoader(self)
         self.undo_stack = QUndoStack(self)
         self.undo_stack.cleanChanged.connect(self._update_title)
         self.refresh_timer = QTimer(self, singleShot=True, interval=30)
         self.refresh_timer.timeout.connect(self.refresh)
-        self.style_timer = QTimer(self, singleShot=True, interval=STYLE_PREVIEW_DELAY)
-        self.style_timer.timeout.connect(self._update_style_preview)
+        self.status_timer = QTimer(self, singleShot=True, interval=STATUS_DELAY)
+        self.status_timer.timeout.connect(self.update_status)
 
         self._build_central()
         self._build_actions()
-        self.resize(1180, 720)
-        self._sync_inherited()
-        self.refresh()
-        self.reload_library()
+        self.resize(1280, 800)
+        settings = QSettings()
+        geometry = settings.value("window/geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
         self._update_title()
+        start = str(settings.value("window/page", DEFAULT_PAGE) or DEFAULT_PAGE)
+        self.show_page(start if start in pages.SPECS else DEFAULT_PAGE)
+        self.refresh()
+        QTimer.singleShot(0, self.update_status)  # after the first paint
 
     # ---- construction ------------------------------------------------
 
     def _build_central(self) -> None:
-        self.sections = QListWidget()
-        self.sections.setAccessibleName(translate("ui", "Sections"))
-        self.sections.setMaximumWidth(220)
-        self.inspector = QStackedWidget()
-        for section in SECTIONS:
-            item = QListWidgetItem(QIcon.fromTheme(SECTION_ICONS[section]), str(SECTION_TITLES[section]))
-            self.sections.addItem(item)
-            self.inspector.addWidget(self._build_page(section))
-        self.sections.currentRowChanged.connect(self.inspector.setCurrentIndex)
+        self.files_dialog = FilesDialog(self)
+        self.nav = NavList()
+        self.nav.setAccessibleName(translate("ui", "Pages"))
+        for caption, keys in pages.GROUPS:
+            if caption:
+                self.nav.add_group(str(caption))
+            for key in keys:
+                spec = pages.SPECS[key]
+                self.nav.add_page(key, str(spec.title), spec.icon, "", spec.fallback)
+        self.nav.current_changed.connect(self._page_changed)
 
-        self.preview = PreviewWidget(self.theme)
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
-        self.library = LibraryView()
-        self.library.use_requested.connect(self.use_entry)
-        self.library.edit_requested.connect(self.edit_entry)
-        self.tabs.addTab(self.library, translate("ui", "Themes"))
-        self.tabs.addTab(self.preview, translate("ui", "Preview"))
-        self.style_preview = StylePreview(self.theme)
-        self.style_preview_stale = False
-        self.tabs.addTab(self.style_preview, translate("ui", "Application style"))
-        self.tabs.addTab(self._build_files_tab(), translate("ui", "Files written"))
+        self.theme_name = QLabel()
+        self.theme_name.setTextFormat(Qt.TextFormat.PlainText)
+        font = self.theme_name.font()
+        font.setBold(True)
+        self.theme_name.setFont(font)
+        self.theme_state = QLabel()
+        self.theme_state.setTextFormat(Qt.TextFormat.PlainText)
+        self.theme_state.setForegroundRole(self.theme_state.palette().ColorRole.PlaceholderText)
+        self.theme_menu = QToolButton()
+        self.theme_menu.setIcon(QIcon.fromTheme("application-menu"))
+        self.theme_menu.setAutoRaise(True)
+        self.theme_menu.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.theme_menu.setToolTip(translate("ui", "Theme menu"))
+        self.theme_menu.setAccessibleName(translate("ui", "Theme menu"))
+        names = QVBoxLayout()
+        names.setSpacing(0)
+        names.addWidget(self.theme_name)
+        names.addWidget(self.theme_state)
+        block = QHBoxLayout()
+        block.setContentsMargins(12, 8, 4, 4)
+        block.addLayout(names, 1)
+        block.addWidget(self.theme_menu)
+        sidebar = QWidget()
+        sidebar.setFixedWidth(SIDEBAR_WIDTH)
+        side = QVBoxLayout(sidebar)
+        side.setContentsMargins(0, 4, 0, 0)
+        side.setSpacing(0)
+        side.addLayout(block)
+        side.addWidget(self.nav, 1)
 
-        splitter = QSplitter()
-        splitter.addWidget(self.sections)
-        splitter.addWidget(self.tabs)
-        splitter.addWidget(self.inspector)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([190, 640, 350])
-        splitter.setChildrenCollapsible(False)
-
-        self.notice = QLabel()
-        self.notice.setWordWrap(True)
-        self.notice.setTextFormat(Qt.TextFormat.PlainText)
-        self.undo_apply_button = QPushButton(QIcon.fromTheme("edit-undo"), translate("ui", "Undo last apply"))
-        self.undo_apply_button.clicked.connect(self.undo_last_apply)
-        self.apply_button = QPushButton(
-            QIcon.fromTheme("dialog-ok-apply"), translate("ui", "Apply to desktop")
-        )
-        self.apply_button.setDefault(True)
-        self.apply_button.clicked.connect(self.apply_shown)
-        self.library.selection_changed.connect(self._update_apply_button)
-        self.tabs.currentChanged.connect(lambda _index: self._update_apply_button())
-        self.tabs.currentChanged.connect(lambda _index: self._update_style_preview())
-        footer = QHBoxLayout()
-        footer.addWidget(self.notice, 1)
-        footer.addWidget(self.undo_apply_button)
-        footer.addWidget(self.apply_button)
-
+        self.stack = QStackedWidget()
         self.banner = Banner()
+        self.notice = InlineNote("", "warning")
+        self.notice.hide()
+        right = QVBoxLayout()
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(0)
+        right.addWidget(self.banner)
+        right.addWidget(self.notice)
+        right.addWidget(self.stack, 1)
+
+        self.desktop_bar = DesktopBar()
+        self.apply_button = self.desktop_bar.apply_button
+        self.undo_apply_button = self.desktop_bar.undo_button
+        self.snapshots_button = self.desktop_bar.snapshots_button
+        self.apply_button.clicked.connect(self.apply_shown)
+        self.undo_apply_button.clicked.connect(self.undo_last_apply)
+        self.snapshots_button.clicked.connect(self.show_snapshots)
+        self.desktop_bar.files_button.clicked.connect(self.show_files)
+
+        columns = QHBoxLayout()
+        columns.setContentsMargins(0, 0, 0, 0)
+        columns.setSpacing(0)
+        columns.addWidget(sidebar)
+        columns.addLayout(right, 1)
         central = QWidget()
         layout = QVBoxLayout(central)
-        layout.addWidget(self.banner)
-        layout.addWidget(splitter, 1)
-        layout.addLayout(footer)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addLayout(columns, 1)
+        layout.addWidget(self.desktop_bar)
         self.setCentralWidget(central)
-        self.sections.setCurrentRow(1)
-
-    def _build_page(self, section: str) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        heading = QLabel(str(SECTION_TITLES[section]))
-        font = heading.font()
-        font.setBold(True)
-        font.setPointSizeF(font.pointSizeF() * 1.2)
-        heading.setFont(font)
-        layout.addWidget(heading)
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        for field in FIELDS:
-            if field.section != section:
-                continue
-            title = str(FIELD_LABELS[field.id])
-            editor = editor_for(field)
-            editor.set_title(title)
-            editor.set_value(self.theme.get(*field.id))
-            editor.changed.connect(lambda value, field=field: self.edit(field, value))
-            self.editors[field.id] = editor
-            form.addRow(title + translate("ui", ":"), editor)
-        layout.addLayout(form)
-        layout.addWidget(self._build_note(section))
-        layout.addStretch(1)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setWidget(page)
-        scroll.setMinimumWidth(300)
-        return scroll
-
-    def _build_files_tab(self) -> QWidget:
-        self.files_info = QLabel()
-        self.files_info.setWordWrap(True)
-        # Commands and paths are shown as they are: "<" must not start a tag.
-        self.files_info.setTextFormat(Qt.TextFormat.PlainText)
-        self.files_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.files_list = QListWidget()
-        self.files_list.setMaximumHeight(90)
-        self.files_list.currentRowChanged.connect(self._show_file)
-        self.file_content = QPlainTextEdit()
-        self.file_content.setReadOnly(True)
-        self.file_content.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
-        self.file_content.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
-        open_folder = QPushButton(QIcon.fromTheme("document-open-folder"), translate("ui", "Open folder"))
-        open_folder.clicked.connect(self._open_file_folder)
-        row = QHBoxLayout()
-        row.addWidget(self.files_info, 1)
-        row.addWidget(open_folder)
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        layout.addLayout(row)
-        layout.addWidget(self.files_list)
-        layout.addWidget(self.file_content, 1)
-        return tab
-
-    def _build_note(self, section: str) -> QWidget:
-        """What becomes of this section's values on the desktop. Filled in by refresh()."""
-        icon = QLabel()
-        icon.setPixmap(QIcon.fromTheme("dialog-information").pixmap(16, 16))
-        icon.setAlignment(Qt.AlignmentFlag.AlignTop)
-        note = self.notes[section] = QLabel()
-        note.setWordWrap(True)
-        note.setTextFormat(Qt.TextFormat.PlainText)
-        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        row = self.note_rows[section] = QWidget()
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(0, 12, 0, 0)
-        layout.addWidget(icon)
-        layout.addWidget(note, 1)
-        return row
 
     def _build_actions(self) -> None:
         def action(text, slot, shortcut=None, icon=None):
@@ -380,14 +326,14 @@ class MainWindow(QMainWindow):
         file_menu.addAction(
             action(
                 translate("ui", "Show &themes folder"),
-                lambda: self._open_folder(paths.themes_dir()),
+                lambda: self.open_folder(paths.themes_dir()),
                 icon="document-open-folder",
             )
         )
         file_menu.addAction(
             action(
                 translate("ui", "Show &color schemes folder"),
-                lambda: self._open_folder(paths.color_schemes_dir()),
+                lambda: self.open_folder(paths.color_schemes_dir()),
                 icon="document-open-folder",
             )
         )
@@ -395,6 +341,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(
             action(translate("ui", "&Quit"), self.close, QKeySequence.StandardKey.Quit, "application-exit")
         )
+        self.theme_menu.setMenu(file_menu)
 
         edit_menu = self.menuBar().addMenu(translate("ui", "&Edit"))
         undo = self.undo_stack.createUndoAction(self, translate("ui", "&Undo"))
@@ -407,17 +354,80 @@ class MainWindow(QMainWindow):
 
         desktop_menu = self.menuBar().addMenu(translate("ui", "&Desktop"))
         desktop_menu.addAction(
-            action(translate("ui", "&Apply to desktop"), self.apply_shown, "Ctrl+Return", "dialog-ok-apply")
+            action(translate("ui", "&Apply to Desktop"), self.apply_shown, "Ctrl+Return", "dialog-ok-apply")
         )
         desktop_menu.addAction(action(translate("ui", "&Undo last apply"), self.undo_last_apply))
         desktop_menu.addAction(
             action(translate("ui", "&Snapshots…"), self.show_snapshots, icon="view-history")
         )
+        desktop_menu.addAction(action(translate("ui", "Show &files…"), self.show_files, icon="document-open"))
 
         help_menu = self.menuBar().addMenu(translate("ui", "&Help"))
         help_menu.addAction(
             action(translate("ui", "&About {app}").format(app=APP_NAME), self.about, icon="help-about")
         )
+
+    # ---- pages -------------------------------------------------------
+
+    def page(self, key: str):
+        """The page `key`, made (not built) on the first call."""
+        if key not in self.pages:
+            page = pages.create(key, self)
+            self.pages[key] = page
+            self.stack.addWidget(page)
+        return self.pages[key]
+
+    @property
+    def current_key(self) -> str:
+        return self.nav.current_key()
+
+    def show_page(self, key: str) -> None:
+        """Go to a page. Nothing is edited by going there."""
+        if self.nav.current_key() == key:
+            self._page_changed(key)
+        else:
+            self.nav.set_current(key)
+
+    def _page_changed(self, key: str) -> None:
+        if not key:
+            return
+        for page in self.pages.values():
+            if page.isVisibleTo(self.stack) and page is not self.pages.get(key):
+                page.leave()
+        page = self.page(key)
+        self.stack.setCurrentWidget(page)
+        page.show_page()
+        self.update_apply_button()
+        QSettings().setValue("window/page", key)
+
+    # Where the tests and other code look for the pages' main widgets. Each makes the page.
+    @property
+    def library(self):
+        page = self.page("themes")
+        page.ensure_built()
+        return page.library
+
+    @property
+    def preview(self):
+        page = self.page("colors")
+        page.ensure_built()
+        return page.preview
+
+    @property
+    def style_preview(self):
+        page = self.page("app_style")
+        page.ensure_built()
+        return page.style_preview
+
+    def build_pages(self) -> None:
+        """Make and fill every page now (they are otherwise built when first shown)."""
+        for key in pages.SPECS:
+            self.page(key).show_page()
+
+    def show_files(self) -> None:
+        self.files_dialog.fill(self.plan, self.apply_summary())
+        self.files_dialog.show()
+        self.files_dialog.raise_()
 
     # ---- editing -----------------------------------------------------
 
@@ -428,28 +438,56 @@ class MainWindow(QMainWindow):
         try:
             self.theme.copy().set(field.section, field.key, value)
         except ThemeError as error:
-            self.editors[field.id].set_value(self.theme.get(*field.id))
-            self.statusBar().showMessage(str(error.problems[0]), 6000)
+            self._reject(field, error)
             return
-        if self.tabs.currentWidget() is self.library:
-            self.tabs.setCurrentWidget(self.preview)  # show what the edit does
         self.undo_stack.push(SetValueCommand(self, field, value))
+
+    def edit_many(self, text: str, values: dict) -> None:
+        """Change several fields as one step of the undo stack. `values` maps a Field, or its
+        (section, key), to the new value. Nothing changes when one of the values is not allowed."""
+        changes = []
+        trial = self.theme.copy()
+        for field, value in values.items():
+            field = field if isinstance(field, Field) else FIELD_BY_ID[tuple(field)]
+            try:
+                trial.set(field.section, field.key, value)
+            except ThemeError as error:
+                self._reject(field, error)
+                return
+            if value != self.theme.get(*field.id):
+                changes.append((field, value))
+        if not changes:
+            return
+        self.undo_stack.beginMacro(text)
+        for field, value in changes:
+            self.undo_stack.push(SetValueCommand(self, field, value))
+        self.undo_stack.endMacro()
+
+    def _reject(self, field: Field, error: ThemeError) -> None:
+        control = self.editors.get(field.id)
+        if control is not None:
+            control.set_value(self.theme.get(*field.id))
+        self.statusBar().showMessage(str(error.problems[0]), 6000)
 
     def store(self, field: Field, value) -> None:
         self.theme.set(field.section, field.key, value)
-        self.editors[field.id].set_value(self.theme.get(*field.id))
-        self._sync_inherited()
+        control = self.editors.get(field.id)
+        if control is not None:
+            control.set_value(self.theme.get(*field.id))
+        self.sync_editors()
         self.refresh_timer.start()
 
-    def _sync_inherited(self) -> None:
+    def sync_editors(self) -> None:
         """Tell the optional fields which value they follow while unset, and turn off
         the values of a part that is left as it is."""
         for field in FIELDS:
-            if field.inherits:
+            if field.inherits and field.id in self.editors:
                 self.editors[field.id].set_inherited(self.theme.resolved(*field.inherits))
         for field_id, gate in GATED.items():
-            editor = self.editors[field_id]
-            on = self.theme.get(*gate) != "unchanged"
+            editor = self.editors.get(field_id)
+            if editor is None:
+                continue
+            on = self.theme.get(*gate) not in ("unchanged", "installed")
             editor.setEnabled(on)
             editor.setToolTip(
                 ""
@@ -462,39 +500,24 @@ class MainWindow(QMainWindow):
     def _load_into_window(self, theme: Theme, path: Path | None) -> None:
         self.theme, self.path = theme, path
         self.undo_stack.clear()
-        self._sync_inherited()
-        for field in FIELDS:
-            self.editors[field.id].set_value(theme.get(*field.id))
+        for field_id, control in self.editors.items():
+            control.set_value(theme.get(*field_id))
+        self.sync_editors()
         self.refresh()
         self._update_title()
 
     def refresh(self) -> None:
-        """Bring preview, file list and messages in line with the theme."""
-        self.preview.set_theme(self.theme)
-        self.style_preview_stale = True
-        if self.tabs.currentWidget() is self.style_preview:
-            self.style_timer.start()  # making the style takes a moment: wait for the edits to stop
+        """Bring the page shown, the messages and the files in line with the theme."""
         self.plan = engine.build_plan(self.theme)
-        selected = max(self.files_list.currentRow(), 0)
-        self.files_list.blockSignals(True)
-        self.files_list.clear()
-        titles = state_titles()
-        commands = []
-        for target in self.plan.targets:
-            if target.reload_command:
-                commands.append(target.reload_command)
-            for status in target.files:
-                item = QListWidgetItem(f"{status.file.path} — {titles[status.state]}", self.files_list)
-                item.setData(Qt.ItemDataRole.UserRole, status.file)
-            for path in target.stale:
-                if path.is_file():
-                    removed = translate("ui", "no longer needed, will be removed")
-                    QListWidgetItem(f"{path} — {removed}", self.files_list)
-        self.files_list.blockSignals(False)
-        self.files_list.setCurrentRow(min(selected, self.files_list.count() - 1))
-        self._show_file(self.files_list.currentRow())
-        self.files_info.setText(self._apply_summary(commands))
-
+        for page in self.pages.values():
+            page.stale = True
+            if page.built:
+                page.refresh_notes()  # cheap, and a page that is not shown must not say old things
+        key = self.nav.current_key()
+        if key:
+            self.page(key).show_page()
+        if self.files_dialog.isVisible():
+            self.files_dialog.fill(self.plan, self.apply_summary())
         notices = [str(p) for p in self.plan.blocking]
         if not notices:
             for background in ("window", "view", "button", "header"):
@@ -505,30 +528,56 @@ class MainWindow(QMainWindow):
                             "ui", 'Text is hard to read on "{surface}" (contrast {ratio}:1, aim for 4.5:1).'
                         ).format(surface=str(FIELD_LABELS[("colors", background)]), ratio=f"{ratio:.1f}")
                     )
-        self.notice.setText("\n".join(notices))
-        for section, note in self.notes.items():
-            targets = [target for target in self.plan.targets if section in target.generator.sections]
-            texts = [
-                str(text)
-                for target in targets
-                for text in target.generator.section_notes(self.plan.theme, section)
-            ]
-            if section in SECTION_NOTES:
-                texts = [str(SECTION_NOTES[section]), *texts]
-            note.setText("\n\n".join(texts))
-            self.note_rows[section].setVisible(bool(texts))
-        self._update_apply_button()
+        shown = notices[:NOTICE_LINES]
+        if len(notices) > len(shown):
+            shown.append(translate("ui", "…and {count} more.").format(count=len(notices) - len(shown)))
+        self.notice.set_text("\n".join(shown))
+        self.notice.setToolTip("\n".join(notices) if len(notices) > len(shown) else "")
+        self.notice.setVisible(bool(notices))
+        self.update_apply_button()
         self.undo_apply_button.setEnabled(snapshots.latest() is not None)
         self._update_title()
+        self.status_timer.start()
 
-    def _update_style_preview(self) -> None:
-        """The application style is only made while its tab is shown."""
-        if self.style_preview_stale and self.tabs.currentWidget() is self.style_preview:
-            self.style_preview_stale = False
-            self.style_preview.set_theme(self.theme)
+    def update_status(self) -> None:
+        """Compare every part with the desktop: the dots of the side bar, the Overview and the
+        sentence of the Desktop bar. Reads the desktop, so it runs after the edits stop."""
+        self.status_timer.stop()
+        try:
+            self.statuses = engine.parts_status(self.theme, self.runner)
+        except Exception:  # noqa: BLE001 - reading the desktop must never break the window
+            self.statuses = []
+        by_key = {part.key: part.state for part in self.statuses}
+        for spec in pages.PAGES:
+            page = self.pages.get(spec.key)
+            parts = page.parts if page is not None else pages.parts_of(spec.key)
+            states = [by_key[key] for key in parts if key in by_key]
+            if CHANGE in states or BLOCKED in states:
+                self.nav.set_state(spec.key, CHANGED)
+            elif states and all(state == LEAVE for state in states):
+                self.nav.set_state(spec.key, OFF)
+            else:
+                self.nav.set_state(spec.key, "")
+        changing = sum(1 for part in self.statuses if part.state == CHANGE)
+        blocked = [part for part in self.statuses if part.state == BLOCKED]
+        if not self.statuses:
+            text = ""
+        elif blocked:
+            text = translate("ui", "Applying is refused: {problem}").format(problem=blocked[0].theme)
+        elif changing == 0:
+            text = translate("ui", "Nothing will change when you apply.")
+        elif changing == 1:
+            text = translate("ui", "One part will change when you apply.")
+        else:
+            text = translate("ui", "{count} parts will change when you apply.").format(count=changing)
+        self.desktop_bar.set_status(text, changing > 0 or bool(blocked))
+        overview = self.pages.get("overview")
+        if overview is not None:
+            overview.fill(self.statuses)
 
-    def _apply_summary(self, commands: list[str]) -> str:
+    def apply_summary(self) -> str:
         """Everything an apply does to the system, so that nothing comes as a surprise."""
+        commands = [target.reload_command for target in self.plan.targets if target.reload_command]
         if not commands:
             return ""
         settings = [str(text) for target in self.plan.targets for text in target.settings]
@@ -543,47 +592,40 @@ class MainWindow(QMainWindow):
             "Apply writes these files and then runs: {commands}. Nothing else on the system is changed.",
         ).format(commands=", ".join(commands))
 
-    def _update_apply_button(self) -> None:
-        """Make the apply button name the theme it will put on the desktop."""
-        if self.tabs.currentWidget() is self.library:
+    def update_apply_button(self) -> None:
+        """Enable the apply button and say in its tooltip which theme it puts on the desktop."""
+        page = self.pages.get(self.nav.current_key())
+        if page is not None and page.acts_on_selection:
             entry = self.library.current()
             name, enabled = (entry.title if entry else ""), entry is not None
             tip = "" if entry else translate("ui", "Select a theme first.")
         else:
             name, enabled, tip = self.theme.name, not self.plan.blocking, ""
-        if len(name) > APPLY_NAME_LENGTH:
-            name = name[: APPLY_NAME_LENGTH - 1] + "…"
-        self.apply_button.setText(
-            translate("ui", "Apply “{name}” to desktop").format(name=name.replace("&", "&&"))
-            if name
-            else translate("ui", "Apply to desktop")
-        )
+        if name and enabled:
+            tip = translate("ui", "Apply “{name}” to the desktop").format(name=name)
         self.apply_button.setEnabled(enabled)
         self.apply_button.setToolTip(tip)
-
-    def _show_file(self, row: int) -> None:
-        file = self._listed_file(row)
-        self.file_content.setPlainText(file.content if file else "")
-
-    def _listed_file(self, row: int):
-        """The planned file on a row of the list; None for a file that will be removed."""
-        item = self.files_list.item(row)
-        return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     def _update_title(self) -> None:
         name = self.path.name if self.path else translate("ui", "Unsaved theme")
         self.setWindowTitle(f"{self.theme.name or name} ({name})[*]")
         self.setWindowModified(not self.undo_stack.isClean())
+        self.theme_name.setText(self.theme.name or name)
+        self.theme_state.setText(
+            translate("ui", "Unsaved changes") if not self.undo_stack.isClean() else name
+        )
 
     # ---- files -------------------------------------------------------
 
-    def _discard_ok(self) -> bool:
+    def _discard_ok(self, text: str | None = None) -> bool:
+        """True when it is fine to go on: nothing is unsaved, or the person saved or discarded it.
+        `text` says what is about to happen to the unsaved changes."""
         if self.undo_stack.isClean():
             return True
         answer = QMessageBox.warning(
             self,
             translate("ui", "Unsaved changes"),
-            translate("ui", "The theme has changes that are not saved."),
+            text or translate("ui", "The theme has changes that are not saved."),
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel,
@@ -695,7 +737,6 @@ class MainWindow(QMainWindow):
             return False
         self._take_into_editor(theme, saved)
         self.reload_library()
-        self.tabs.setCurrentWidget(self.preview)
         self.banner.show_message(
             INFORMATION,
             translate(
@@ -760,20 +801,17 @@ class MainWindow(QMainWindow):
         )
         return True
 
-    def _open_folder(self, folder: Path) -> None:
+    def open_folder(self, folder: Path) -> None:
         folder.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
-    def _open_file_folder(self) -> None:
-        file = self._listed_file(self.files_list.currentRow())
-        if file is not None:
-            self._open_folder(file.path.parent)
-
     def closeEvent(self, event) -> None:
-        if self._discard_ok():
-            event.accept()
-        else:
+        if not self._discard_ok():
             event.ignore()
+            return
+        QSettings().setValue("window/geometry", self.saveGeometry())
+        self.loader.shutdown()
+        event.accept()
 
     # ---- desktop -----------------------------------------------------
 
@@ -782,14 +820,30 @@ class MainWindow(QMainWindow):
         box.setInformativeText("\n".join(f"• {problem}" for problem in problems))
         box.exec()
 
+    def active_scheme(self) -> str:
+        """The color scheme the desktop uses now."""
+        if self.runner.which("kreadconfig6"):
+            self._active = current_scheme(self.runner)
+        return self._active
+
     def reload_library(self) -> None:
-        active = current_scheme(self.runner) if self.runner.which("kreadconfig6") else ""
-        self.library.reload(active)
+        """The desktop changed (an apply, an undo, a save): read it again where it is shown."""
+        self.active_scheme()
+        for page in self.pages.values():
+            page.desktop_stale = True
+        themes = self.pages.get("themes")
+        if themes is not None and themes.built:
+            themes.reload()
+        key = self.nav.current_key()
+        if key:
+            self.page(key).show_page()
+        self.status_timer.start()
 
     def apply_shown(self) -> None:
         """Apply what the user is looking at: the theme selected on the Themes
-        tab, or on the other tabs the theme in the editor."""
-        if self.tabs.currentWidget() is not self.library:
+        page, or on the other pages the theme in the editor."""
+        page = self.pages.get(self.nav.current_key())
+        if page is None or not page.acts_on_selection:
             self.apply_theme()
             return
         entry = self.library.current()
@@ -797,14 +851,20 @@ class MainWindow(QMainWindow):
             self.use_entry(entry)
 
     def use_entry(self, entry: Entry) -> None:
-        """Switch the desktop to a theme from the Themes tab.
+        """Switch the desktop to a theme from the Themes page.
 
         The editor takes the theme over, so that what is changed and applied
         next changes this theme and does not bring back the one before it."""
         if self._in_editor(entry):
             self._apply(self.theme, from_library=True)  # with its unsaved edits
             return
-        if not self._discard_ok():
+        if not self._discard_ok(
+            translate(
+                "ui",
+                "Applying “{name}” replaces the theme in the editor, and its changes are not saved. "
+                "Save them first, or discard them and apply?",
+            ).format(name=entry.title)
+        ):
             return
         # Edits that were discarded just now must not come back with an undo of the switch.
         before = None
@@ -822,7 +882,7 @@ class MainWindow(QMainWindow):
             self.switches[outcome.id] = (*before, theme)
 
     def _in_editor(self, entry: Entry) -> bool:
-        """Whether an entry of the Themes tab is the theme the editor holds: its
+        """Whether an entry of the Themes page is the theme the editor holds: its
         file, or the color scheme that an apply wrote from it."""
         if entry.is_saved_theme:
             return entry.path == self.path
@@ -831,7 +891,7 @@ class MainWindow(QMainWindow):
     def _switch_scheme(self, entry: Entry) -> snapshots.Snapshot | bool:
         """Make an installed color scheme the one in use. Returns the snapshot,
         True when the desktop had the scheme already, False when it failed."""
-        active = current_scheme(self.runner) if self.runner.which("kreadconfig6") else self.library.active
+        active = self.active_scheme()
         if entry.scheme_id == active:
             self.reload_library()  # the mark may be from before the desktop was changed elsewhere
             self.banner.show_message(
@@ -864,7 +924,7 @@ class MainWindow(QMainWindow):
         return snapshot
 
     def edit_entry(self, entry: Entry) -> None:
-        """Open a theme from the Themes tab in the editor."""
+        """Open a theme from the Themes page in the editor."""
         if not self._discard_ok():
             return
         if entry.is_saved_theme:
@@ -878,10 +938,10 @@ class MainWindow(QMainWindow):
                 translate(
                     "ui",
                     "This is a new theme that starts with the colors of {name}. "
-                    "Change it on the right, then choose Apply to desktop.",
+                    "Change it on the pages, then choose Apply to Desktop.",
                 ).format(name=entry.title),
             )
-        self.tabs.setCurrentWidget(self.preview)
+        self.show_page("overview")
 
     def apply_theme(self) -> None:
         self._apply(self.theme)
@@ -991,7 +1051,7 @@ class MainWindow(QMainWindow):
         self.banner.show_message(POSITIVE, message, 20)
 
     def _undo_switches(self) -> bool:
-        """After an undo: when a switch made on the Themes tab was undone, the
+        """After an undo: when a switch made on the Themes page was undone, the
         editor goes back to the theme it held before the switch. It stays as it
         is when it holds something else by now, or changes that are not saved."""
         present = {item.id for item in snapshots.list_snapshots()}

@@ -605,6 +605,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    try:  # if memory runs out, the kernel takes the rig and what runs in it first
+        Path("/proc/self/oom_score_adj").write_text("1000")
+    except OSError:
+        pass
     if len(sys.argv) > 1 and sys.argv[1] == "_window":
         return window_main(sys.argv[2:])
     args = build_parser().parse_args()

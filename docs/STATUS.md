@@ -57,18 +57,35 @@ Supporting pieces:
 - Undo removes folders that the apply created and that are empty again; a restore of a file with CRLF line ends is byte-exact.
 - Rig-checked after the repair step: apply and undo with the Plasma style and Rofi from a home with no `plasmarc`, no `kdeglobals` and no Rofi folder; `install.sh` refusing a foreign scheme, installing, being listed by `plasma-apply-lookandfeel -l`, and `uninstall.sh` leaving nothing behind. Not verified: GTK 3 colors in a real session, and none of it on a real desktop. The style preview tests skip when Qt's plugin path is not set (`QT_PLUGIN_PATH=/usr/lib/qt6/plugins` with the pip PySide6).
 
-## Built but not yet wired into the window
+## Built, with tests, but not shown in the window yet
 
-These modules exist with tests. The window does not use them yet; the next step builds the pages on top of them.
+The window itself is rebuilt (see *The window* below). What is left over from the earlier steps:
 
-- `pickers/`: one kind per page of System Settings > Colors & Themes (`global_theme`, `color_scheme`, `app_style`, `plasma_style`, `decoration`, `icons`, `cursors`, `splash`, `sounds`). Each kind lists what is installed (`items()`, the item id is exactly what the desktop's configuration stores) and draws a preview card (`thumbnail()`). `loader.ThumbnailLoader` renders off the GUI thread with a disk cache under `$XDG_CACHE_HOME/plasma-theme-studio/thumbs/`. Application styles that cannot be drawn in-process (Kvantum, Union) and window decorations are drawn by a helper process (`pickers/_helper.py`: offscreen, software Qt Quick, core dumps off, no session bus, 15 s timeout); they need the distribution's PySide6 and give a fallback picture otherwise.
-- `globalthemes.defaults(item)` gives the parts a Global Theme sets and `globalthemes.resolve(value, items)` matches such a value to an installed item (packages spell ids loosely).
-- `ui/widgets.py`: the building blocks of the new window design (`Card`, `CardGrid`, `PageHeader`, `InlineNote`, `NavList`, `Segmented`, `DesktopBar`, `ColorDots`, `FlowLayout`).
-- `wallpaper.py`: the image of the desktop wallpaper, read from Plasma's files, with a plain reason when there is none. `palette.py`: a light and a dark set of the twelve theme colors from an image, accent candidates, import of pywal, matugen and `.colors` files, contrast correction and a contrast report.
-- `desktopparts.py`: read, switch and exactly undo each chosen part of the desktop (Plasma style, application style, window decoration, border size, title bar buttons, icons, pointer theme and size, fonts, sounds, splash screen, system accent color), verified by read-back, plus `open_system_settings()`. Every part was run through apply and restore in the rig with the config files compared byte for byte.
-- `safefile.py`: bounded reads of regular files only, for everything read from theme folders.
-- Not verified: the id KWin stores for the QML decoration Plastik (`org.kde.kwin.aurorae:kwin4_decoration_qml_plastik`); the sample icons and the sizes of SVG pointer themes are a best guess at what System Settings shows; whether Plasma updates the accent color by itself in "from wallpaper" mode.
-- Open in existing code: `library.read_scheme` and `kconfig.parse` still read any file a `.colors` path points to (a FIFO or an endless file would hang the Themes list); they should go through `safefile`.
+- `ui/widgets.py` pieces not used by a page yet: `ColorDots`.
+- `wallpaper.py` and the wallpaper and image import of `palette.py` (accent from the wallpaper, pywal, matugen, `.colors` files): no page offers them yet. The Colors page only edits the twelve colors.
+- The CLI `status` and `apply` cover every target; the window shows the same status through the side bar dots and the Overview.
+- Not verified: the sample icons and the sizes of SVG pointer themes are a best guess at what System Settings shows; whether Plasma updates the accent color by itself in "from wallpaper" mode.
+
+## The window
+
+- `ui/main_window.py` is the shell: a 236 px side bar (theme block with the File menu, `NavList` in the groups Overview, Library, Basics, Desktop, Apps), a `Banner` and the page stack, the permanent `DesktopBar` (status sentence, *Show files…*, *Snapshots…*, *Undo last apply*, *Apply to Desktop*), the menu bar and the *Show files…* dialog (`ui/files_dialog.py`). `window.apply_button`, `undo_apply_button`, `banner`, `library`, `preview`, `style_preview` are kept for the tests.
+- Pages live in `ui/pages/`; `pages/__init__.py` is the lazy registry (`PAGES`, `GROUPS`, `SPECS`, `create`, `title_of`, `parts_of`). `pages/base.py` documents the API: `Page`, `ValuePage` (controls and preview), `PickerPage` (a `CardGrid` of installed things, a part switch, optional tuning values) and `TargetPage` (a part that is only written). A page is made when first shown; `window.build_pages()` makes all of them (tests).
+- Navigating never edits and editing never navigates. Every edit goes through `window.edit(field, value)` or `window.edit_many(text, {field: value})` (one undo step, nothing changes when one value is refused).
+- The side bar dots and the dimming of a page come from `engine.parts_status`, read once after the first paint and again 200 ms after the last edit. The apply button acts on the selected card while the Themes page is shown and on the editor theme elsewhere; its tooltip names the theme.
+- QSettings keys: `window/geometry`, `window/page`. Closing with unsaved changes asks first.
+- Thumbnails of pickers come from `ThumbnailLoader` (disk cache); the cards of "This theme" and "Breeze with your changes" are drawn in-process by `PreviewWidget.render_image`.
+- First paint (window construction to the first painted frame, offscreen, 1400x900): 0.05 to 0.15 s.
+- Known gaps: the Panel page keeps one "Leave as it is" choice per value instead of one part switch; the Colors page has no Leave/Set switch (the theme cannot store it); in the Panel mode the preview shows a cropped strip of the desktop that looks odd; the Themes page lists saved themes and color schemes only (no installed Global Themes).
+
+## Things learned
+
+- A `QUndoStack` merges two edits of one field that come within a second. A test that edits a field twice and then undoes once gets the state before both.
+- `QMessageBox.warning` is a static call; tests replace it with `monkeypatch.setattr(QMessageBox, "warning", staticmethod(...))`. A real box in a test waits forever.
+- `QTest.mouseClick` on a widget that is `None` aborts the whole interpreter (a Qt assert), so look the card up first.
+- A hidden page is not refreshed on an edit (it is marked stale and updated when shown). Only the notes are kept current. Tests that look at the controls of a page they have not shown call `window.refresh()` and `window.build_pages()`.
+- Widgets disabled through a parent stay disabled for `isEnabled()`; check the parent box too.
+- Cards of the picker grids are checkable buttons; a click on the selected card does not unselect it.
+- `QSettings` key `window/page` that names no page opens the Overview.
 
 ## Known limits of the new targets
 
@@ -118,6 +135,12 @@ Smaller open items:
 - A window frame generated by this app follows the colors of whatever is put on the desktop, so it behaves like Breeze's own decoration. A theme that leaves the window frame at *unchanged* while such a frame is in use (kwinrc names a `PlasmaThemeStudio-*` Aurorae folder that was made here) plans a new frame with the shape of the one in use and the colors of the theme; the old folder is removed after the reload and put back by an undo. The same goes for a color scheme switch on the Themes tab (`engine.switch_color_scheme` with the scheme's theme): one snapshot, one undo. The shape is read from the `[PlasmaThemeStudio]` group of the frame's rc file, or, for folders written before that group existed, from the files (border and padding in the rc, the arc of `decoration-topleft`, the first gradient stop). A frame that is not ours or cannot be read is left alone. Panel style and panel position at *unchanged* keep what an earlier theme put there (the panel SVG uses ColorScheme classes and follows the scheme by itself), and every apply runs the reload command of each target the theme asks for, changed or not.
 - Use the distribution's PySide6 (`/usr/bin/python3`), not one from pip, so the app gets the desktop's Qt style and platform integration.
 - `QApplication.setDesktopFileName` with an ID whose desktop file is not installed triggers a portal warning; only set it when the file exists.
+
+**Installed parts**
+
+- Plastik (the QML decoration) is chosen as `library=org.kde.kwin.aurorae`, `theme=kwin4_decoration_qml_plastik` and KWin's `supportInformation` reports exactly that as loaded (verified in the rig), so the picker id `org.kde.kwin.aurorae:kwin4_decoration_qml_plastik` is right.
+- Rig run of a theme naming every installed part (style, decoration, border size, buttons, icons, pointers, fonts, splash, sounds): after the undo every config file was identical to the copy taken before, except `kdeglobals` (made by `plasma-apply-colorscheme`) and the GTK color files, the known limit above.
+- The text color on an accent (or any background) is the one of the two candidates with the better contrast ratio, not a luminance threshold.
 
 **KDE configuration files**
 
@@ -170,7 +193,14 @@ Smaller open items:
 .venv/bin/python -m pytest          # runs offscreen; tests/conftest.py sees to that
 .venv/bin/ruff check . && .venv/bin/ruff format .
 scripts/update-translations.sh sv
+scripts/capped COMMAND...           # memory capped at 8 GB, first to be killed, no core dump
 ```
+
+Run throwaway scripts, helpers and anything that builds or reads hostile input through `scripts/capped`.
+A fixture script that built a pointer file of 100000 x 100000 pixels in memory once filled all memory and
+swap, and the kernel killed unrelated programs first. A hostile file is written truncated or sparse; its
+declared size is never built in memory. The test run caps itself (`tests/conftest.py`,
+`PTS_TEST_MEMORY_CAP`), and the rig makes itself the first to go when memory runs out.
 
 The headless rig, for trying an apply against a real KWin and plasmashell that are not yours:
 

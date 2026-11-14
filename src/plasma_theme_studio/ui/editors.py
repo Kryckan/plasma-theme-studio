@@ -121,6 +121,7 @@ class NumberEditor(QWidget):
         self._float = field.kind == "float"
         self._steps = 100 if self._float else 1
         self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.setMinimumWidth(160)
         self.slider.setRange(round(field.minimum * self._steps), round(field.maximum * self._steps))
         if self._float:
             self.box = QDoubleSpinBox()
@@ -193,7 +194,7 @@ class OptionalTextEditor(QWidget):
         super().__init__(parent)
         self.same = QCheckBox(translate("ui", "Same as the desktop"))
         self.text = QLineEdit()
-        self.text.setMaxLength(120)
+        self.text.setMaxLength(200)
         self.same.toggled.connect(lambda checked: self.changed.emit(None if checked else self.text.text()))
         self.text.textEdited.connect(lambda text: self.changed.emit(text))
         layout = QVBoxLayout(self)
@@ -205,6 +206,10 @@ class OptionalTextEditor(QWidget):
     def set_title(self, title: str) -> None:
         self.same.setAccessibleName(f"{title}: {self.same.text()}")
         self.text.setAccessibleName(title)
+
+    def set_placeholder(self, text: str) -> None:
+        """What to show while the field is empty, such as the value the desktop has."""
+        self.text.setPlaceholderText(text)
 
     def set_value(self, value) -> None:
         blocked = self.same.blockSignals(True)

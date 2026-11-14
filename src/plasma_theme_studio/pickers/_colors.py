@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from PySide6.QtGui import QColor, QPalette
 
 from ..model.color import Color, readable_on
+from ..model.color import on_accent as readable_on_accent
 
 # Breeze Light, for a request that comes without colors and for roles that are missing.
 DEFAULT_COLORS = {
@@ -80,7 +81,9 @@ def kdeglobals(colors: Mapping[str, str] | None) -> str:
     """The color groups of a kdeglobals file for these roles. Decorations read the
     title bar colors from `[WM]` and the rest from the `Colors:*` groups."""
     c = complete(colors)
-    on_accent = readable_on(Color.parse(c["accent"])).hex
+    on_accent = readable_on_accent(
+        Color.parse(c["accent"]), Color.parse(c["text"]), Color.parse(c["window"])
+    ).hex
     lines: list[str] = []
 
     def group(name: str, background: str, foreground: str, alternate: str | None = None) -> None:

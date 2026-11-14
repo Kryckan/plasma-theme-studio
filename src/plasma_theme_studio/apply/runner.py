@@ -25,6 +25,17 @@ class SystemRunner:
     def which(self, program: str) -> bool:
         return shutil.which(program) is not None
 
+    def launch(self, argv: list[str]) -> None:
+        """Start a program that stays open, apart from this one. Raises OSError when it cannot start."""
+        prlimit = shutil.which("prlimit")  # no core dump, and no preexec_fn: the loader's threads run
+        subprocess.Popen(  # noqa: S603
+            [prlimit, "--core=0:0", "--", *argv] if prlimit else argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
     def run(self, argv: list[str], timeout: float = 20) -> Result:
         env = dict(os.environ)
         if not env.get("WAYLAND_DISPLAY") and not env.get("DISPLAY"):

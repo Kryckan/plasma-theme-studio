@@ -262,3 +262,12 @@ def test_an_empty_linked_file_is_not_removed_without_plasmas_defaults(home, runn
     kconfig.write_value(runner, "breezerc", ["Common"], "ShadowSize", None)
 
     assert config("breezerc").is_symlink() and target.exists()
+
+
+def test_a_notified_write_and_removal_tell_the_programs_that_watch_the_file(home, desktop_runner):
+    runner = desktop_runner
+    kconfig.write_value(runner, "kdeglobals", ["Icons"], "Theme", "Papirus", notify=True)
+    kconfig.write_value(runner, "kdeglobals", ["Icons"], "Theme", None, notify=True)
+    kconfig.write_value(runner, "kdeglobals", ["Icons"], "Theme", "Papirus")
+    writes = [call for call in runner.calls if call[0] == "kwriteconfig6"]
+    assert ["--notify" in call for call in writes] == [True, True, False]

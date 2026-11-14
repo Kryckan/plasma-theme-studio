@@ -29,6 +29,8 @@ from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 
 from ..messages import translate
+from ..model.color import Color
+from ..model.color import on_accent as readable_on_accent
 from . import base
 from .base import Item, Kind
 
@@ -290,7 +292,11 @@ def _stylesheet(colors: Mapping[str, str]) -> str:
         "Background": colors.get("window", "#eff0f1"),
         "Accent": accent,
         "Highlight": accent,
-        "HighlightedText": "#ffffff" if QColor(accent).lightness() < 150 else "#000000",
+        "HighlightedText": readable_on_accent(
+            Color.parse(QColor(accent).name()),
+            Color.parse(QColor(text).name()),
+            Color.parse(QColor(colors.get("window", "#eff0f1")).name()),
+        ).hex,
         "PositiveText": colors.get("positive", "#27ae60"),
         "NeutralText": colors.get("neutral", "#f67400"),
         "NegativeText": colors.get("negative", "#da4453"),

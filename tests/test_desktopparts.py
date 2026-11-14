@@ -4,139 +4,15 @@
 
 import pytest
 
-from conftest import FakeRunner
+from conftest import ICONS_TOOL
 from plasma_theme_studio import desktopparts as dp
-from plasma_theme_studio import kconfig, paths
+from plasma_theme_studio import paths
 from plasma_theme_studio.apply import desktop
 from plasma_theme_studio.apply.runner import Result
 from plasma_theme_studio.generators import ApplyError
 from plasma_theme_studio.generators import windowframe as wf
 
-ICONS_TOOL = "/usr/lib/plasma-changeicons"
 KWINRC = ("kwinrc", ("org.kde.kdecoration2"))
-
-
-class DesktopRunner(FakeRunner):
-    """FakeRunner that keeps every configuration file, kdeglobals too, as a real file, and a
-    desktop behind the tools: KDE's own tools, KWin's report, the D-Bus senders."""
-
-    def __init__(self):
-        super().__init__()
-        self.signals = []
-        self.tool_effect = True  # False: the tools exit with 0 and change nothing
-        self.themes = {
-            "plasma-apply-desktoptheme": ("plasmarc", ["Theme"], "name"),
-            "plasma-apply-cursortheme": ("kcminputrc", ["Mouse"], "cursorTheme"),
-            ICONS_TOOL: ("kdeglobals", ["Icons"], "Theme"),
-        }
-        for tool in self.themes:
-            self.handlers[tool] = self._theme_tool
-        self.handlers["plasma-apply-colorscheme"] = self._colorscheme
-        self.handlers["dbus-send"] = self._signal
-        self.handlers["busctl"] = self._signal
-        self.handlers["qdbus6"] = self._kwin
-
-    def _config(self, argv):
-        file, key, default, delete, groups, values = "kdeglobals", "", "", False, [], []
-        arguments = iter(argv[1:])
-        for argument in arguments:
-            if argument == "--file":
-                file = next(arguments)
-            elif argument == "--group":
-                groups.append(next(arguments))
-            elif argument == "--key":
-                key = next(arguments)
-            elif argument == "--default":
-                default = next(arguments)
-            elif argument == "--delete":
-                delete = True
-            elif argument == "--":
-                values = list(arguments)
-            elif argument != "--notify":
-                values.append(argument)
-        location = tuple(groups)
-        path = paths.config_home() / file
-        stored = kconfig.parse(path.read_text()) if path.exists() else {}
-        hidden = key + kconfig.MASK
-        if argv[0] == "kreadconfig6":
-            value = stored.get(location, {}).get(key)
-            if value is None and hidden in stored.get(location, {}):
-                value = default
-            elif value is None:
-                value = self.defaults.get((file, location, key), default)
-            return Result(0, value + "\n")
-        if delete:
-            stored.get(location, {}).pop(key, None)
-            if (file, location, key) in self.defaults:
-                stored.setdefault(location, {})[hidden] = ""
-        else:
-            stored.setdefault(location, {}).pop(hidden, None)
-            stored.setdefault(location, {})[key] = values[0]
-        path.parent.mkdir(parents=True, exist_ok=True)
-        from conftest import _config_text
-
-        path.write_text(_config_text(stored))
-        return Result(0)
-
-    def set(self, file, groups, key, value):
-        self._config(
-            [
-                "kwriteconfig6",
-                "--file",
-                file,
-                *[a for g in groups for a in ("--group", g)],
-                "--key",
-                key,
-                "--",
-                value,
-            ]
-        )
-
-    def get(self, file, groups, key):
-        return self._config(
-            ["kreadconfig6", "--file", file, *[a for g in groups for a in ("--group", g)], "--key", key]
-        ).stdout.strip()
-
-    def _theme_tool(self, argv):
-        if self.tool_effect:
-            file, groups, key = self.themes[argv[0]]
-            self.set(file, groups, key, argv[1])
-        return Result(0, "done\n")
-
-    def _colorscheme(self, argv):
-        """Applies a scheme as KDE's tool does: the colors in use get the accent."""
-        if "--accent-color" in argv:
-            focus = ",".join(str(int(argv[-1][n : n + 2], 16)) for n in (1, 3, 5))
-        else:
-            focus = self.get("kdeglobals", ["General"], "AccentColor") or "61,174,233"
-            self.set("kdeglobals", ["General"], "ColorScheme", argv[1])
-        if self.tool_effect:
-            self.set("kdeglobals", ["Colors:Button"], "DecorationFocus", focus)
-        return Result(0)
-
-    def _signal(self, argv):
-        self.signals.append(argv)
-        return Result(0)
-
-    def _kwin(self, argv):
-        if argv[3:] == ["reconfigure"]:
-            return Result(0)
-        group = ["org.kde.kdecoration2"]
-        sizes = [key for key, _name in dp.BORDER_SIZES]
-        size = self.get("kwinrc", group, "BorderSize") or "Normal"
-        left = self.get("kwinrc", group, "ButtonsOnLeft")
-        right = self.get("kwinrc", group, "ButtonsOnRight")
-        report = [
-            "Decoration",
-            "==========",
-            f"Plugin: {self.get('kwinrc', group, 'library') or 'org.kde.breeze'}",
-            f"Theme: {self.get('kwinrc', group, 'theme') or 'Breeze'}",
-            f"decorationButtonsLeft: {dp._kwin_numbers(left)}",
-            f"decorationButtonsRight: {dp._kwin_numbers(right)}",
-            f"borderSize: {sizes.index(size)}",
-            "",
-        ]
-        return Result(0, "\n".join(report))
 
 
 @pytest.fixture(autouse=True)
@@ -148,28 +24,8 @@ def quiet(monkeypatch):
 
 
 @pytest.fixture
-def runner(home):
-    runner = DesktopRunner()
-    data = home / "system/share"
-    for name in ("breeze-dark", "My Theme"):
-        (data / "plasma/desktoptheme" / name).mkdir(parents=True)
-        (data / "plasma/desktoptheme" / name / "metadata.json").write_text("{}")
-    for name in ("Papirus", "breeze"):
-        (data / "icons" / name).mkdir(parents=True)
-        (data / "icons" / name / "index.theme").write_text("[Icon Theme]\nDirectories=16x16\n")
-    (data / "icons/Hidden").mkdir()
-    (data / "icons/Hidden/index.theme").write_text("[Icon Theme]\nDirectories=16x16\nHidden=true\n")
-    for name in ("Pop", "Qogir Dark"):
-        (data / "icons" / name / "cursors").mkdir(parents=True)
-    for name in ("oxygen", "ocean"):
-        (data / "sounds" / name).mkdir(parents=True)
-        (data / "sounds" / name / "index.theme").write_text("[Sound Theme]\n")
-    (data / "plasma/look-and-feel/org.kde.breeze.desktop/contents/splash").mkdir(parents=True)
-    (data / "plasma/look-and-feel/org.kde.nosplash/contents").mkdir(parents=True)
-    (data / "kstyle/themes").mkdir(parents=True)
-    (data / "kstyle/themes/union.themerc").write_text("[KDE]\nWidgetStyle=Union\n")
-    (data / "union/styles/breeze").mkdir(parents=True)
-    return runner
+def runner(desktop_runner):
+    return desktop_runner
 
 
 def tools(runner):
@@ -616,29 +472,25 @@ def test_global_theme_is_read_only(runner):
     part.restore(part.capture(runner), runner)
 
 
-def test_open_system_settings_prefers_systemsettings(runner, monkeypatch):
-    started = []
-    monkeypatch.setattr(dp, "_launch", started.append)
+def test_open_system_settings_prefers_systemsettings(runner):
     assert dp.open_system_settings("kcm_sddm", runner) is None
-    assert started == [["systemsettings", "kcm_sddm"]]
+    assert runner.launched == [["systemsettings", "kcm_sddm"]]
     runner.missing.add("systemsettings")
     assert dp.open_system_settings("kcm_fonts", runner) is None
-    assert started[-1] == ["kcmshell6", "kcm_fonts"]
+    assert runner.launched[-1] == ["kcmshell6", "kcm_fonts"]
     runner.missing.add("kcmshell6")
     assert "System Settings" in str(dp.open_system_settings("kcm_fonts", runner))
-    assert len(started) == 2
+    assert len(runner.launched) == 2
 
 
 def test_open_system_settings_refuses_other_ids_and_survives_a_failing_start(runner, monkeypatch):
-    started = []
-    monkeypatch.setattr(dp, "_launch", started.append)
     assert dp.open_system_settings("../evil --flag", runner) is not None
-    assert started == []
+    assert runner.launched == []
 
     def fail(argv):
         raise OSError("no")
 
-    monkeypatch.setattr(dp, "_launch", fail)
+    monkeypatch.setattr(runner, "launch", fail)
     assert "could not be started" in str(dp.open_system_settings("kcm_colors", runner))
 
 
@@ -695,10 +547,12 @@ def test_app_style_knows_what_qt_can_load_and_nothing_else(runner):
 
 
 def test_launch_uses_no_preexec_function(monkeypatch):
+    from plasma_theme_studio.apply import runner as runner_module
+
     calls = []
-    monkeypatch.setattr(dp.subprocess, "Popen", lambda argv, **kw: calls.append((argv, kw)))
-    monkeypatch.setattr(dp.shutil, "which", lambda name: "/usr/bin/prlimit")
-    dp._launch(["systemsettings", "kcm_fonts"])
+    monkeypatch.setattr(runner_module.subprocess, "Popen", lambda argv, **kw: calls.append((argv, kw)))
+    monkeypatch.setattr(runner_module.shutil, "which", lambda name: "/usr/bin/prlimit")
+    runner_module.SystemRunner().launch(["systemsettings", "kcm_fonts"])
     argv, kw = calls[0]
     assert argv[:3] == ["/usr/bin/prlimit", "--core=0:0", "--"] and argv[3:] == [
         "systemsettings",

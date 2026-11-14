@@ -92,11 +92,23 @@ def calls(desktop, *programs):
 def test_the_app_registers_every_target_in_the_order_they_are_applied():
     assert [generator.id for generator in generators.GENERATORS] == [
         "colors",
+        "accent",
         "apps",
+        "app_style",
         "gtk",
         "window",
+        "decoration",
+        "border_size",
+        "buttons",
         "panel",
+        "plasma_style",
         "panel_layout",
+        "icons",
+        "cursors",
+        "cursor_size",
+        "fonts",
+        "splash",
+        "sounds",
         "rofi",
     ]
     assert generators.section_generators("shadow") == [generators.generator_by_id("window")]
@@ -275,7 +287,7 @@ def test_the_plan_names_every_setting_that_changes_besides_the_files(desktop):
     assert all(commands)
 
     plain = engine.build_plan(Theme())
-    assert [target.settings for target in plain.targets] == [[]] * 7
+    assert [target.settings for target in plain.targets] == [[]] * len(generators.GENERATORS)
 
 
 def test_a_theme_file_with_every_part_survives_saving(desktop):
@@ -300,56 +312,61 @@ def window(app, desktop, monkeypatch):
     monkeypatch.setattr(
         MainWindow, "_show_problems", lambda self, title, problems: self.problems.append((title, problems))
     )
+    window.build_pages()
     window.show()
+    window.show_files()  # kept filled while it is open
     yield window
     window.undo_stack.setClean()
     window.close()
 
 
 def listed_files(window):
-    return [window.files_list.item(row).text() for row in range(window.files_list.count())]
+    return [
+        window.files_dialog.files_list.item(row).text()
+        for row in range(window.files_dialog.files_list.count())
+    ]
 
 
 def test_the_window_shows_what_a_generated_frame_writes_and_changes(window):
     assert "left as it is" in window.notes["window"].text()
     assert "choose a window frame on the Windows page" in window.notes["shadow"].text()
-    assert "kwinrc" not in window.files_info.text()
+    assert "kwinrc" not in window.files_dialog.files_info.text()
     assert not any("aurorae" in line for line in listed_files(window))
 
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.refresh()
 
     assert any(line.split(" — ")[0].endswith("/decoration.svg") for line in listed_files(window))
     assert "left as it is" not in window.notes["window"].text()
-    summary = window.files_info.text()
+    summary = window.files_dialog.files_info.text()
     assert "qdbus6 org.kde.KWin /KWin reconfigure" in summary
     assert "It also changes which window frame KWin uses and its border size (kwinrc)." in summary
     assert summary.endswith("Nothing else on the system is changed.")
 
-    window.editors[("window", "decoration")].choose("breeze")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "breeze")
     window.refresh()
     assert not any("aurorae" in line for line in listed_files(window))
     assert "Breeze fixes the corner radius" in window.notes["window"].text()
-    assert "breezerc" in window.files_info.text()
+    assert "breezerc" in window.files_dialog.files_info.text()
 
 
 def test_the_window_shows_the_panel_parts_too(window):
-    assert "plasma-apply-desktoptheme" not in window.files_info.text()
-    window.editors[("panel", "style")].choose("generated")
+    assert "plasma-apply-desktoptheme" not in window.files_dialog.files_info.text()
+    window.edit(FIELD_BY_ID[("panel", "style")], "generated")
     window.editors[("panel_layout", "location")].choose("left")
     window.refresh()
 
     assert any("panel-background.svg" in line for line in listed_files(window))
-    summary = window.files_info.text()
+    summary = window.files_dialog.files_info.text()
     assert f"plasma-apply-desktoptheme {style_id(window.theme)}" in summary
     assert "the position and shape of the panel" in summary
 
 
 def test_apply_and_undo_through_the_window(window, desktop):
     before = system_state(desktop)
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.edit(FIELD_BY_ID[("window", "radius")], 16)
-    window.editors[("panel", "style")].choose("generated")
+    window.edit(FIELD_BY_ID[("panel", "style")], "generated")
     window.editors[("panel_layout", "location")].choose("top")
 
     window.apply_theme()
@@ -377,7 +394,7 @@ def test_apply_and_undo_through_the_window(window, desktop):
 
 def test_a_changed_radius_reaches_the_desktop_on_the_next_apply(window, desktop):
     """The report that started this: a new window radius did not go through."""
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.edit(FIELD_BY_ID[("window", "radius")], 6)
     window.apply_theme()
     first = kconfig.user_value(*KWIN, "theme")
@@ -405,7 +422,7 @@ def test_window_values_without_a_frame_are_named_as_left_out(window, desktop):
     assert len(left_out) == 3  # windows, shadow and panel, by the names of their pages
     assert desktop.kwin.reconfigured == 0 and desktop.runner.calls_to_tool == []
 
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.apply_theme()
     left_out = window.banner.text().split("Not put on the desktop: ")[1].split(".")[0].split(", ")
     assert len(left_out) == 1  # the panel
@@ -413,7 +430,7 @@ def test_window_values_without_a_frame_are_named_as_left_out(window, desktop):
 
 def test_a_failed_apply_through_the_window_puts_everything_back(window, desktop):
     before = system_state(desktop)
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.editors[("panel_layout", "location")].choose("top")
     desktop.shell.ignore = {"location"}
 
@@ -427,7 +444,7 @@ def test_a_failed_apply_through_the_window_puts_everything_back(window, desktop)
 
 
 def test_a_missing_tool_is_said_before_anything_is_tried(window, desktop):
-    window.editors[("panel", "style")].choose("generated")
+    window.edit(FIELD_BY_ID[("panel", "style")], "generated")
     desktop.runner.missing.add("plasma-apply-desktoptheme")
 
     window.apply_theme()
@@ -459,7 +476,7 @@ def rested_kwin(desktop):
 
 def test_a_rollback_that_is_not_complete_is_not_called_complete(window, desktop):
     before = system_state(desktop)
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.editors[("panel_layout", "location")].choose("top")
     desktop.shell.ignore = {"location"}  # the apply fails at the panel, after the frame
     tired_kwin(desktop)
@@ -483,7 +500,7 @@ def test_a_rollback_that_is_not_complete_is_not_called_complete(window, desktop)
 
 
 def test_an_undo_that_fails_through_the_window_can_be_tried_once_more(window, desktop):
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.apply_theme()
     tired_kwin(desktop)
 
@@ -506,7 +523,7 @@ def test_a_restore_from_the_list_stops_at_the_apply_it_cannot_undo(window, deskt
     window.editors[("panel_layout", "location")].choose("top")
     window.apply_theme()
     oldest = snapshots.latest()
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.apply_theme()
     tired_kwin(desktop)
 
@@ -537,8 +554,8 @@ def test_the_summary_shows_commands_as_they_are(window):
     window.editors[("panel_layout", "location")].choose("top")
     window.refresh()
 
-    assert window.files_info.textFormat() == Qt.TextFormat.PlainText
-    summary = window.files_info.text()
+    assert window.files_dialog.files_info.textFormat() == Qt.TextFormat.PlainText
+    summary = window.files_dialog.files_info.text()
     assert "<script>" in summary
     assert summary.endswith("Nothing else on the system is changed.")
 
@@ -546,19 +563,19 @@ def test_the_summary_shows_commands_as_they_are(window):
 def test_each_page_says_only_what_concerns_it(window):
     from PySide6.QtCore import Qt
 
-    assert window.note_rows["colors"].isHidden()  # nothing to say: no empty row
-    assert not window.note_rows["window"].isHidden() and not window.note_rows["shadow"].isHidden()
+    assert window.notes["colors"].isHidden()  # nothing to say: no empty row
+    assert not window.notes["window"].isHidden() and not window.notes["shadow"].isHidden()
     assert window.notes["shadow"].text() != window.notes["window"].text()
     for note in window.notes.values():
         assert note.isEnabled()  # readable, not greyed out
-        assert note.textFormat() == Qt.TextFormat.PlainText
+        assert note.label.textFormat() == Qt.TextFormat.PlainText
 
-    window.editors[("window", "decoration")].choose("breeze")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "breeze")
     window.refresh()
     assert "shadow" not in window.notes["window"].text()
     assert "shadow" in window.notes["shadow"].text() and "radius" not in window.notes["shadow"].text()
 
-    window.editors[("window", "decoration")].choose("generated")
+    window.edit(FIELD_BY_ID[("window", "decoration")], "generated")
     window.refresh()
     assert (
         window.notes["shadow"].text()

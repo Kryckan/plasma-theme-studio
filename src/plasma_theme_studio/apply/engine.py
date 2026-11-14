@@ -252,7 +252,7 @@ def switch_color_scheme(scheme_id: str, scheme_name: str, runner, theme: Theme |
 
 def _frame_target(theme: Theme | None, runner) -> TargetPlan | None:
     """The plan for recoloring the window frame in use, or None when it is not ours."""
-    if theme is None or theme.problems() or theme.get("window", "decoration") != "unchanged":
+    if theme is None or theme.problems() or theme.part_state("window", "decoration") != "unchanged":
         return None
     generator = generator_by_id("window")
     if generator is None or not generator.wanted(theme):
@@ -329,3 +329,10 @@ def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> lis
     except OSError as error:  # the snapshot's own folder cannot be written to
         failures.append(str(error))
     return failures
+
+
+def parts_status(theme: Theme, runner):
+    """What the desktop uses for each part, what the theme wants and whether an apply changes it."""
+    from .status import parts_status as status
+
+    return status(theme, runner)

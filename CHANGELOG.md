@@ -6,12 +6,14 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 
 ### Added
 
+- A new window: a side bar with the pages Overview, Themes, Colors, Shapes, Fonts, Plasma Style, Panel, Window Decorations, Icons, Pointers, Splash Screen, System Sounds, Application Style, GTK Apps and Rofi, a dot beside every part that an apply would change, and a bar at the bottom with what an apply does and the buttons *Show files…*, *Snapshots…*, *Undo last apply* and *Apply to Desktop*. The window remembers its size and the page it was on.
+- Pages for the icon, pointer and sound themes, the splash screen, the Plasma style, window decorations and the application style show what is installed as cards. Choosing one sets it in the theme; *Leave as it is* | *Set by this theme* turns a part off or on. Each choice is one step of undo.
 - Theme file (TOML, `schema_version = 1`) with colors, shapes, shadows and panel values.
 - Editor window with sections, live preview, undo and redo, and a view of the files an apply writes.
 - Color scheme target: writes a `.colors` file and activates it with `plasma-apply-colorscheme`.
 - Snapshot before every apply, *Undo last apply*, a snapshot list, and automatic rollback when an apply fails.
-- Themes tab: saved themes and every installed color scheme as thumbnails, with the one in use marked. Select one and press the apply button (or double-click it, or press Enter) to switch the desktop to it. The editor takes that theme over, so what you change next builds on it; *Edit* opens a theme in the editor without applying it.
-- The apply button always names the theme it will put on the desktop: the one selected on the Themes tab, or on the other tabs the theme in the editor.
+- Themes page: saved themes and every installed color scheme as thumbnails, with the one in use marked. Select one and press the apply button to switch the desktop to it. The editor takes that theme over, so what you change next builds on it; *Edit* (also a double click or Enter) opens a theme in the editor without applying it.
+- The apply button always names the theme it will put on the desktop: the one selected on the Themes page, or on the other pages the theme in the editor.
 - Windows and the panel can each have their own corner radius and border width. They follow *Shapes* until overridden.
 - Window frame target. Choose *Breeze* to set Breeze's border and shadow to the nearest steps it has, or *Generated* to get a frame drawn for the theme with the exact corner radius, border width, shadow and colors. The editor says beforehand what the desktop can and cannot show, for example how round the bottom corners can be with the chosen border.
 - Panel style target: a generated Plasma style gives the panel its own corner radius, border and opacity.
@@ -31,9 +33,21 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 - Command line: `validate`, `apply`, `restore`, `export`, `import`, `export-global-theme`.
 - Swedish translation. The UI follows the system language.
 - Arch Linux PKGBUILD (`packaging/arch`).
+- Installed parts in the theme file: Plasma style, application style and window decoration can name an installed one (`installed` plus an id), and the theme can set border size, title bar buttons, icons, pointer theme and size, fonts, splash screen and system sounds. Each is applied with a snapshot and undone exactly; a part that names something not installed is reported and nothing changes. `colors.accent_from_wallpaper` chooses between the theme's accent and the wallpaper's.
+- Command line: `status` shows, part by part, what the desktop has now and what a theme would change.
+- Filling a theme from an installed Global Theme or color scheme (`edits.py`).
 
 ### Fixed
 
+- Fonts with an old-style (Qt 5) description or a weight below 100 are read and saved back unchanged.
+- A window decoration id is written exactly as the installed decoration spells it, and a name that starts with `-` is refused for every part.
+- *Status* and the Overview say when an apply would be refused (*Refused*) and give the reason, instead of *Will change*.
+- Text on the accent color is chosen the same way in the color scheme and in every preview.
+- An accent color in kdeglobals that is not a color is no longer treated as an override to remove.
+- Theme files without a wallpaper accent no longer gain an `accent_from_wallpaper = false` line; a missing, oversized or irregular theme file gets its own message.
+- The Overview shows its parts when it is opened after another page, and has the theme's name and author. Thumbnails of a card grid are no longer lost by leaving the page early, and a card that cannot be drawn says *No preview*. The group *My themes* says so when it is empty. A card of a part that is left as it is dims only its picture. Applying a theme from the Themes page with unsaved changes says what happens to them. Fonts left as they are show the desktop's font.
+
+- The text color on the accent color is the one with the better contrast, and theme and scheme files are read through bounded reads of regular files only; a line of nothing but `[` no longer makes the config parser slow.
 - Importing a theme that is nested too deeply no longer crashes the app or the command line; it is refused with a message.
 - A theme name can no longer break out of the comment in the generated Rofi theme.
 - The scripts of an exported Global Theme no longer replace or remove a file that this app did not make, and uninstall also removes the folders it leaves empty. The export message says that applying a Global Theme turns the splash screen off.
