@@ -57,6 +57,19 @@ Supporting pieces:
 - Undo removes folders that the apply created and that are empty again; a restore of a file with CRLF line ends is byte-exact.
 - Rig-checked after the repair step: apply and undo with the Plasma style and Rofi from a home with no `plasmarc`, no `kdeglobals` and no Rofi folder; `install.sh` refusing a foreign scheme, installing, being listed by `plasma-apply-lookandfeel -l`, and `uninstall.sh` leaving nothing behind. Not verified: GTK 3 colors in a real session, and none of it on a real desktop. The style preview tests skip when Qt's plugin path is not set (`QT_PLUGIN_PATH=/usr/lib/qt6/plugins` with the pip PySide6).
 
+## Built but not yet wired into the window
+
+These modules exist with tests. The window does not use them yet; the next step builds the pages on top of them.
+
+- `pickers/`: one kind per page of System Settings > Colors & Themes (`global_theme`, `color_scheme`, `app_style`, `plasma_style`, `decoration`, `icons`, `cursors`, `splash`, `sounds`). Each kind lists what is installed (`items()`, the item id is exactly what the desktop's configuration stores) and draws a preview card (`thumbnail()`). `loader.ThumbnailLoader` renders off the GUI thread with a disk cache under `$XDG_CACHE_HOME/plasma-theme-studio/thumbs/`. Application styles that cannot be drawn in-process (Kvantum, Union) and window decorations are drawn by a helper process (`pickers/_helper.py`: offscreen, software Qt Quick, core dumps off, no session bus, 15 s timeout); they need the distribution's PySide6 and give a fallback picture otherwise.
+- `globalthemes.defaults(item)` gives the parts a Global Theme sets and `globalthemes.resolve(value, items)` matches such a value to an installed item (packages spell ids loosely).
+- `ui/widgets.py`: the building blocks of the new window design (`Card`, `CardGrid`, `PageHeader`, `InlineNote`, `NavList`, `Segmented`, `DesktopBar`, `ColorDots`, `FlowLayout`).
+- `wallpaper.py`: the image of the desktop wallpaper, read from Plasma's files, with a plain reason when there is none. `palette.py`: a light and a dark set of the twelve theme colors from an image, accent candidates, import of pywal, matugen and `.colors` files, contrast correction and a contrast report.
+- `desktopparts.py`: read, switch and exactly undo each chosen part of the desktop (Plasma style, application style, window decoration, border size, title bar buttons, icons, pointer theme and size, fonts, sounds, splash screen, system accent color), verified by read-back, plus `open_system_settings()`. Every part was run through apply and restore in the rig with the config files compared byte for byte.
+- `safefile.py`: bounded reads of regular files only, for everything read from theme folders.
+- Not verified: the id KWin stores for the QML decoration Plastik (`org.kde.kwin.aurorae:kwin4_decoration_qml_plastik`); the sample icons and the sizes of SVG pointer themes are a best guess at what System Settings shows; whether Plasma updates the accent color by itself in "from wallpaper" mode.
+- Open in existing code: `library.read_scheme` and `kconfig.parse` still read any file a `.colors` path points to (a FIFO or an endless file would hang the Themes list); they should go through `safefile`.
+
 ## Known limits of the new targets
 
 - Breeze cannot change its corner radius. Only the generated frame gives an exact radius. Breeze's border step *Tiny* is 2 px at the sides and 4 px at the bottom.

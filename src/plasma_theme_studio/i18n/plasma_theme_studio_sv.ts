@@ -251,8 +251,288 @@
       <translation>Kör kommandot igen för att backa ett verkställande till ({count} ögonblicksbilder kvar).</translation>
     </message>
     <message>
+      <source>{tool} is not installed.</source>
+      <translation>{tool} är inte installerat.</translation>
+    </message>
+    <message>
+      <source>Plasma style</source>
+      <translation>Plasmastil</translation>
+    </message>
+    <message>
+      <source>The Plasma style</source>
+      <translation>Plasmastilen</translation>
+    </message>
+    <message>
+      <source>The application style</source>
+      <translation>Programstilen</translation>
+    </message>
+    <message>
+      <source>Window decorations</source>
+      <translation>Fönsterdekorationer</translation>
+    </message>
+    <message>
+      <source>The window decoration</source>
+      <translation>Fönsterdekorationen</translation>
+    </message>
+    <message>
+      <source>No borders</source>
+      <translation>Inga kanter</translation>
+    </message>
+    <message>
+      <source>No side borders</source>
+      <translation>Inga sidokanter</translation>
+    </message>
+    <message>
+      <source>Tiny</source>
+      <translation>Mycket liten</translation>
+    </message>
+    <message>
+      <source>Normal</source>
+      <translation>Normal</translation>
+    </message>
+    <message>
+      <source>Large</source>
+      <translation>Stor</translation>
+    </message>
+    <message>
+      <source>Very large</source>
+      <translation>Mycket stor</translation>
+    </message>
+    <message>
+      <source>Huge</source>
+      <translation>Enorm</translation>
+    </message>
+    <message>
+      <source>Very huge</source>
+      <translation>Mycket enorm</translation>
+    </message>
+    <message>
+      <source>Oversized</source>
+      <translation>Överdimensionerad</translation>
+    </message>
+    <message>
+      <source>Border size</source>
+      <translation>Kantstorlek</translation>
+    </message>
+    <message>
+      <source>The border size</source>
+      <translation>Kantstorleken</translation>
+    </message>
+    <message>
+      <source>border size</source>
+      <translation>kantstorlek</translation>
+    </message>
+    <message>
+      <source>Window menu</source>
+      <translation>Fönstermeny</translation>
+    </message>
+    <message>
+      <source>Application menu</source>
+      <translation>Programmeny</translation>
+    </message>
+    <message>
+      <source>On all desktops</source>
+      <translation>På alla skrivbord</translation>
+    </message>
+    <message>
+      <source>Help</source>
+      <translation>Hjälp</translation>
+    </message>
+    <message>
+      <source>Minimize</source>
+      <translation>Minimera</translation>
+    </message>
+    <message>
+      <source>Maximize</source>
+      <translation>Maximera</translation>
+    </message>
+    <message>
+      <source>Close</source>
+      <translation>Stäng</translation>
+    </message>
+    <message>
+      <source>Keep above others</source>
+      <translation>Behåll över andra</translation>
+    </message>
+    <message>
+      <source>Keep below others</source>
+      <translation>Behåll under andra</translation>
+    </message>
+    <message>
+      <source>Shade (not used by KWin 6)</source>
+      <translation>Rulla upp (används inte av KWin 6)</translation>
+    </message>
+    <message>
+      <source>Hide from screenshots</source>
+      <translation>Dölj från skärmbilder</translation>
+    </message>
+    <message>
+      <source>Spacer</source>
+      <translation>Mellanrum</translation>
+    </message>
+    <message>
+      <source>Title bar buttons</source>
+      <translation>Namnlistens knappar</translation>
+    </message>
+    <message>
+      <source>The title bar buttons</source>
+      <translation>Namnlistens knappar</translation>
+    </message>
+    <message>
+      <source>title bar buttons</source>
+      <translation>namnlistens knappar</translation>
+    </message>
+    <message>
+      <source>Icons</source>
+      <translation>Ikoner</translation>
+    </message>
+    <message>
+      <source>The icon theme</source>
+      <translation>Ikontemat</translation>
+    </message>
+    <message>
+      <source>Pointer theme</source>
+      <translation>Pekartema</translation>
+    </message>
+    <message>
+      <source>The pointer theme</source>
+      <translation>Pekartemat</translation>
+    </message>
+    <message>
+      <source>Pointer size</source>
+      <translation>Pekarstorlek</translation>
+    </message>
+    <message>
+      <source>The pointer size</source>
+      <translation>Pekarstorleken</translation>
+    </message>
+    <message>
+      <source>Thin</source>
+      <translation>Tunn</translation>
+    </message>
+    <message>
+      <source>Extra light</source>
+      <translation>Extra lätt</translation>
+    </message>
+    <message>
+      <source>Light</source>
+      <translation>Lätt</translation>
+    </message>
+    <message>
+      <source>Regular</source>
+      <translation>Normal</translation>
+    </message>
+    <message>
+      <source>Medium</source>
+      <translation>Medium</translation>
+    </message>
+    <message>
+      <source>Demi bold</source>
+      <translation>Halvfet</translation>
+    </message>
+    <message>
+      <source>Bold</source>
+      <translation>Fet</translation>
+    </message>
+    <message>
+      <source>Extra bold</source>
+      <translation>Extra fet</translation>
+    </message>
+    <message>
+      <source>Black</source>
+      <translation>Svart</translation>
+    </message>
+    <message>
+      <source>Italic</source>
+      <translation>Kursiv</translation>
+    </message>
+    <message>
+      <source>Fonts</source>
+      <translation>Teckensnitt</translation>
+    </message>
+    <message>
+      <source>The font</source>
+      <translation>Teckensnittet</translation>
+    </message>
+    <message>
+      <source>System sounds</source>
+      <translation>Systemljud</translation>
+    </message>
+    <message>
+      <source>The sound theme</source>
+      <translation>Ljudtemat</translation>
+    </message>
+    <message>
+      <source>Splash screen</source>
+      <translation>Startskärm</translation>
+    </message>
+    <message>
+      <source>The splash screen</source>
+      <translation>Startskärmen</translation>
+    </message>
+    <message>
+      <source>Accent color</source>
+      <translation>Accentfärg</translation>
+    </message>
+    <message>
+      <source>The accent color</source>
+      <translation>Accentfärgen</translation>
+    </message>
+    <message>
+      <source>Global theme</source>
+      <translation>Globalt tema</translation>
+    </message>
+    <message>
+      <source>Global Theme</source>
+      <translation>Globalt tema</translation>
+    </message>
+    <message>
       <source>Colors</source>
       <translation>Färger</translation>
+    </message>
+    <message>
+      <source>Application Style</source>
+      <translation>Programstil</translation>
+    </message>
+    <message>
+      <source>Plasma Style</source>
+      <translation>Plasmastil</translation>
+    </message>
+    <message>
+      <source>Window Decorations</source>
+      <translation>Fönsterdekorationer</translation>
+    </message>
+    <message>
+      <source>Cursors</source>
+      <translation>Pekare</translation>
+    </message>
+    <message>
+      <source>Splash Screen</source>
+      <translation>Startskärm</translation>
+    </message>
+    <message>
+      <source>System Sounds</source>
+      <translation>Systemljud</translation>
+    </message>
+    <message>
+      <source>Wallpaper</source>
+      <translation>Skrivbordsunderlägg</translation>
+    </message>
+    <message>
+      <source>Login Screen (SDDM)</source>
+      <translation>Inloggningsskärm (SDDM)</translation>
+    </message>
+    <message>
+      <source>{name} is not a page of System Settings.</source>
+      <translation>{name} är inte en sida i Systeminställningar.</translation>
+    </message>
+    <message>
+      <source>{tool} could not be started. {detail}</source>
+      <translation>{tool} kunde inte startas. {detail}</translation>
+    </message>
+    <message>
+      <source>System Settings is not installed.</source>
+      <translation>Systeminställningar är inte installerat.</translation>
     </message>
     <message>
       <source>{tool} was not found. Colors can only be applied in KDE Plasma 6.</source>
@@ -778,6 +1058,166 @@
       <source>Could not write the Rofi configuration: {detail}</source>
       <translation>Kunde inte skriva Rofis inställningar: {detail}</translation>
     </message>
+    <message>
+      <source>Text</source>
+      <translation>Text</translation>
+    </message>
+    <message>
+      <source>Muted text</source>
+      <translation>Dämpad text</translation>
+    </message>
+    <message>
+      <source>Links</source>
+      <translation>Länkar</translation>
+    </message>
+    <message>
+      <source>Visited links</source>
+      <translation>Besökta länkar</translation>
+    </message>
+    <message>
+      <source>Negative text</source>
+      <translation>Negativ text</translation>
+    </message>
+    <message>
+      <source>Neutral text</source>
+      <translation>Neutral text</translation>
+    </message>
+    <message>
+      <source>Positive text</source>
+      <translation>Positiv text</translation>
+    </message>
+    <message>
+      <source>Accent</source>
+      <translation>Accent</translation>
+    </message>
+    <message>
+      <source>window background</source>
+      <translation>fönsterbakgrund</translation>
+    </message>
+    <message>
+      <source>view background</source>
+      <translation>vybakgrund</translation>
+    </message>
+    <message>
+      <source>button background</source>
+      <translation>knappbakgrund</translation>
+    </message>
+    <message>
+      <source>header background</source>
+      <translation>rubrikbakgrund</translation>
+    </message>
+    <message>
+      <source>{text} on {background}</source>
+      <translation>{text} på {background}</translation>
+    </message>
+    <message>
+      <source>The image cannot be read.</source>
+      <translation>Bilden kan inte läsas.</translation>
+    </message>
+    <message>
+      <source>The file cannot be read.</source>
+      <translation>Filen kan inte läsas.</translation>
+    </message>
+    <message>
+      <source>The file is too large to be a color file.</source>
+      <translation>Filen är för stor för att vara en färgfil.</translation>
+    </message>
+    <message>
+      <source>The file is not a text file.</source>
+      <translation>Filen är inte en textfil.</translation>
+    </message>
+    <message>
+      <source>The file is not valid JSON.</source>
+      <translation>Filen är inte giltig JSON.</translation>
+    </message>
+    <message>
+      <source>The file does not hold a color palette.</source>
+      <translation>Filen innehåller ingen färgpalett.</translation>
+    </message>
+    <message>
+      <source>The pywal file has no background and foreground colors.</source>
+      <translation>Pywal-filen saknar bakgrunds- och förgrundsfärger.</translation>
+    </message>
+    <message>
+      <source>The file is not a pywal color file.</source>
+      <translation>Filen är inte en färgfil från pywal.</translation>
+    </message>
+    <message>
+      <source>The file is not a matugen color file.</source>
+      <translation>Filen är inte en färgfil från matugen.</translation>
+    </message>
+    <message>
+      <source>The file is not a KDE color scheme.</source>
+      <translation>Filen är inte ett färgschema för KDE.</translation>
+    </message>
+    <message>
+      <source>Window title</source>
+      <translation>Fönstertitel</translation>
+    </message>
+    <message>
+      <source>Normal text</source>
+      <translation>Normal text</translation>
+    </message>
+    <message>
+      <source>Link</source>
+      <translation>Länk</translation>
+    </message>
+    <message>
+      <source>Visited link</source>
+      <translation>Besökt länk</translation>
+    </message>
+    <message>
+      <source>View text</source>
+      <translation>Text i vy</translation>
+    </message>
+    <message>
+      <source>Selected text</source>
+      <translation>Markerad text</translation>
+    </message>
+    <message>
+      <source>Disabled text</source>
+      <translation>Inaktiverad text</translation>
+    </message>
+    <message>
+      <source>Button</source>
+      <translation>Knapp</translation>
+    </message>
+    <message>
+      <source>Follows color scheme</source>
+      <translation>Följer färgschemat</translation>
+    </message>
+    <message>
+      <source>None</source>
+      <translation>Ingen</translation>
+    </message>
+    <message>
+      <source>The desktop settings cannot be read.</source>
+      <translation>Skrivbordets inställningar kan inte läsas.</translation>
+    </message>
+    <message>
+      <source>No desktop wallpaper is set for this screen.</source>
+      <translation>Inget skrivbordsunderlägg är valt för den här skärmen.</translation>
+    </message>
+    <message>
+      <source>The wallpaper image cannot be found.</source>
+      <translation>Bilden för skrivbordsunderlägget hittas inte.</translation>
+    </message>
+    <message>
+      <source>The slideshow has no images the app can read.</source>
+      <translation>Bildspelet har inga bilder som programmet kan läsa.</translation>
+    </message>
+    <message>
+      <source>The wallpaper is a plain color, not an image.</source>
+      <translation>Skrivbordsunderlägget är en enfärgad yta, inte en bild.</translation>
+    </message>
+    <message>
+      <source>The picture of the day has not been downloaded yet.</source>
+      <translation>Dagens bild har inte laddats ner än.</translation>
+    </message>
+    <message>
+      <source>This kind of wallpaper has no image.</source>
+      <translation>Den här typen av skrivbordsunderlägg har ingen bild.</translation>
+    </message>
   </context>
   <context>
     <name>fields</name>
@@ -1048,6 +1488,49 @@
     <message>
       <source>Breeze Dark</source>
       <translation>Breeze mörk</translation>
+    </message>
+  </context>
+  <context>
+    <name>pickers</name>
+    <message>
+      <source>Tab 1</source>
+      <translation>Flik 1</translation>
+    </message>
+    <message>
+      <source>Tab 2</source>
+      <translation>Flik 2</translation>
+    </message>
+    <message>
+      <source>Group</source>
+      <translation>Grupp</translation>
+    </message>
+    <message>
+      <source>Check box</source>
+      <translation>Kryssruta</translation>
+    </message>
+    <message>
+      <source>Radio button</source>
+      <translation>Alternativknapp</translation>
+    </message>
+    <message>
+      <source>Combo box</source>
+      <translation>Kombinationsruta</translation>
+    </message>
+    <message>
+      <source>Push button</source>
+      <translation>Tryckknapp</translation>
+    </message>
+    <message>
+      <source>Application Style</source>
+      <translation>Programstil</translation>
+    </message>
+    <message>
+      <source>Window Decorations</source>
+      <translation>Fönsterdekorationer</translation>
+    </message>
+    <message>
+      <source>Window</source>
+      <translation>Fönster</translation>
     </message>
   </context>
   <context>
@@ -1530,6 +2013,101 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
       <source>Edit a copy</source>
       <translation>Redigera en kopia</translation>
+    </message>
+    <message>
+      <source>Pointers</source>
+      <translation>Pekare</translation>
+    </message>
+    <message>
+      <source>Icons</source>
+      <translation>Ikoner</translation>
+    </message>
+  </context>
+  <context>
+    <name>widgets</name>
+    <message>
+      <source>In use</source>
+      <translation>Används</translation>
+    </message>
+    <message>
+      <source>Selected</source>
+      <translation>Vald</translation>
+    </message>
+    <message>
+      <source>Nothing to show here.</source>
+      <translation>Det finns inget att visa här.</translation>
+    </message>
+    <message>
+      <source>Search…</source>
+      <translation>Sök…</translation>
+    </message>
+    <message>
+      <source>Search</source>
+      <translation>Sök</translation>
+    </message>
+    <message>
+      <source>Filter</source>
+      <translation>Filter</translation>
+    </message>
+    <message>
+      <source>Choices</source>
+      <translation>Alternativ</translation>
+    </message>
+    <message>
+      <source>All</source>
+      <translation>Alla</translation>
+    </message>
+    <message>
+      <source>Nothing matches your search.</source>
+      <translation>Inget matchar din sökning.</translation>
+    </message>
+    <message>
+      <source>Leave as it is</source>
+      <translation>Lämna som det är</translation>
+    </message>
+    <message>
+      <source>Set by this theme</source>
+      <translation>Bestäms av det här temat</translation>
+    </message>
+    <message>
+      <source>This part of the desktop</source>
+      <translation>Den här delen av skrivbordet</translation>
+    </message>
+    <message>
+      <source>Pages</source>
+      <translation>Sidor</translation>
+    </message>
+    <message>
+      <source>will change when you apply</source>
+      <translation>ändras när du verkställer</translation>
+    </message>
+    <message>
+      <source>left as it is</source>
+      <translation>lämnas som det är</translation>
+    </message>
+    <message>
+      <source>Snapshots…</source>
+      <translation>Ögonblicksbilder…</translation>
+    </message>
+    <message>
+      <source>Undo last apply</source>
+      <translation>Ångra senaste verkställande</translation>
+    </message>
+    <message>
+      <source>Apply to Desktop</source>
+      <translation>Verkställ på skrivbordet</translation>
+    </message>
+    <message>
+      <source>Custom…</source>
+      <translation>Egen…</translation>
+    </message>
+    <message>
+      <source>Accent color</source>
+      <translation>Accentfärg</translation>
+    </message>
+    <message>
+      <source>Choose a Color</source>
+      <translation>Välj en färg</translation>
     </message>
   </context>
 </TS>
