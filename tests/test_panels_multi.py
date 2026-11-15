@@ -7,7 +7,6 @@ import pytest
 pytest.importorskip("PySide6.QtWidgets")
 
 from PySide6.QtCore import QPointF  # noqa: E402
-from tests.test_panellayout import FakePlasmashell, panel  # noqa: E402
 
 from plasma_theme_studio.apply import engine  # noqa: E402
 from plasma_theme_studio.generators import panellayout as pl  # noqa: E402
@@ -16,6 +15,7 @@ from plasma_theme_studio.model.theme import Theme, panel_section  # noqa: E402
 from plasma_theme_studio.ui.main_window import MainWindow  # noqa: E402
 from plasma_theme_studio.ui.pages.panel_screen import ScreenChooser  # noqa: E402
 from plasma_theme_studio.ui.preview import PreviewWidget  # noqa: E402
+from test_panellayout import FakePlasmashell, panel  # noqa: E402
 
 
 @pytest.fixture

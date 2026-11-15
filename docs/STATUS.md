@@ -253,3 +253,4 @@ The headless rig, for trying an apply against a real KWin and plasmashell that a
 - When bisecting a crash like this, do not stop at the first failure (`-x`): count the runs that exit with a code of 128 or more.
 - Workers are stopped when the window hides or closes (`MainWindow.stop_page_workers`), and `ColorsPage.stop_workers` waits for its pool, or a thread pool task can touch a deleted widget.
 - Card captions need a few pixels of air under the last line (`Card.CAPTION_AIR`), or descenders touch the card's border.
+- CI runs plain `pytest`, which puts `tests/` on the import path but not the repo root (`python -m pytest` adds both). A test file imports helpers from another as `from test_panellayout import …`, never `from tests.test_panellayout import …`; before pushing new test files, run `.venv/bin/pytest` once the way CI does.
