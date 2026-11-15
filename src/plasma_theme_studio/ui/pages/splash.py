@@ -10,12 +10,12 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ..widgets import LARGE_SPACING, SPACING
 from .base import PickerPage
-from .pickers_common import PICTURE_SIZE, Background, PreviewPicture
+from .pickers_common import PICTURE_SIZE, Background, LoadsInBackground, PreviewPicture
 
 translate = QCoreApplication.translate
 
 
-class SplashPage(PickerPage):
+class SplashPage(LoadsInBackground, PickerPage):
     key = "splash"
     parts = ("splash",)
     kind_key = "splash"
@@ -65,9 +65,8 @@ class SplashPage(PickerPage):
         self.add_top_row(box, 1)
         self.top_row.hide()
 
-    def read_desktop(self) -> None:
+    def after_desktop(self) -> None:
         self.desktop_id = self.current_id()
-        self.grid.set_in_use(self.desktop_id)
         self.update_large()
 
     def refresh(self) -> None:

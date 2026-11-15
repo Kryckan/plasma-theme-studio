@@ -134,7 +134,7 @@ def installed_scheme_of(theme: Theme):
 def scheme_name(theme: Theme) -> str:
     """The name the desktop knows the theme's colors by."""
     found = installed_scheme_of(theme)
-    return found.id if found is not None else theme.slug
+    return found.id if found is not None else theme.scheme_slug
 
 
 class ColorSchemeGenerator(Generator):
@@ -156,8 +156,8 @@ class ColorSchemeGenerator(Generator):
         window, text = theme.color("window"), theme.color("text")
         content = _TEMPLATES.get_template("colorscheme.colors.j2").render(
             marker=MARKER,
-            slug=theme.slug,
-            name=theme.name,
+            slug=theme.scheme_slug,
+            name=theme.scheme_title,
             groups=scheme_groups(theme),
             wm={
                 "activeBackground": theme.color("header").kde,
@@ -170,7 +170,7 @@ class ColorSchemeGenerator(Generator):
             disabled_color=window.mix(text, 0.75).kde,
             inactive_color=theme.color("text_muted").kde,
         )
-        return [PlannedFile(paths.color_schemes_dir() / f"{theme.slug}.colors", content)]
+        return [PlannedFile(paths.color_schemes_dir() / f"{theme.scheme_slug}.colors", content)]
 
     def check_output(self, file: PlannedFile) -> list[Msg]:
         parser = configparser.ConfigParser(interpolation=None, strict=True)
@@ -205,22 +205,23 @@ class ColorSchemeGenerator(Generator):
         return problems
 
     def problems(self, theme: Theme) -> list[Msg]:
-        if not theme.slug or installed_scheme_of(theme) is not None:
+        if not theme.scheme_slug or installed_scheme_of(theme) is not None:
             return []  # reported by the theme itself, or nothing is written
         for directory in paths.system_data_dirs():
-            found = directory / "color-schemes" / f"{theme.slug}.colors"
+            found = directory / "color-schemes" / f"{theme.scheme_slug}.colors"
             if found.exists():
                 return [
                     translate(
                         "core",
                         "A color scheme called {name} is already installed with the system ({file}). "
                         "Give the theme another name.",
-                    ).format(name=theme.slug, file=found)
+                    ).format(name=theme.scheme_slug, file=found)
                 ]
         return []
 
     def is_active(self, theme: Theme, runner) -> bool:
-        return current_scheme(runner) == scheme_name(theme)
+        # a desktop with no ColorScheme key shows Breeze Light
+        return (current_scheme(runner) or FALLBACK_SCHEME) == scheme_name(theme)
 
     def reload_command(self, theme: Theme) -> str:
         return f"plasma-apply-colorscheme {scheme_name(theme)}"
@@ -253,7 +254,7 @@ def _write_scheme_name(runner, name: str) -> None:
 def activate_scheme(name: str, runner) -> None:
     """Make `name` the active color scheme, reloading it if it already is."""
     current = _read_setting(runner, "ColorScheme")
-    if current == name:
+    if (current or FALLBACK_SCHEME) == name:  # no name in the file means Breeze Light
         _write_scheme_name(runner, RELOAD_PLACEHOLDER)
     result = runner.run(["plasma-apply-colorscheme", name])
     # The tool exits with 0 even when it rejects the scheme, so check the outcome.

@@ -12,14 +12,14 @@ from PySide6.QtCore import QCoreApplication, QTimer
 
 from ... import pickers
 from .base import PickerPage
-from .pickers_common import SoundList, find_player, player_command, speaker_badge
+from .pickers_common import LoadsInBackground, SoundList, find_player, player_command, speaker_badge
 
 translate = QCoreApplication.translate
 
 BADGE_SIDE = 40
 
 
-class SoundsPage(PickerPage):
+class SoundsPage(LoadsInBackground, PickerPage):
     key = "sounds"
     parts = ("sounds",)
     kind_key = "sounds"
@@ -52,8 +52,7 @@ class SoundsPage(PickerPage):
         self.this_timer = QTimer(self, singleShot=True, interval=0)  # no generated card here
         self.load_items()
 
-    def load_items(self) -> None:
-        found = self.kind.items()
+    def show_items(self, found) -> None:
         self.items = {item.id: item for item in found}
         self.grid.set_items([(item.id, item.name, item.description) for item in found])
         self.grid.set_empty_text(
@@ -70,9 +69,6 @@ class SoundsPage(PickerPage):
         self.grid.set_playable(
             self.player is not None, tip, {i for i, item in self.items.items() if item.extra.get("sample")}
         )
-
-    def read_desktop(self) -> None:
-        self.grid.set_in_use(self.current_id())
 
     def update_this_theme_cards(self) -> None:
         """No generated card on this page."""

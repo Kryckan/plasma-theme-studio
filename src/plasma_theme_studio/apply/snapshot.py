@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .. import paths
 from ..model.theme import write_atomic
+from . import sidefiles
 
 KEEP = 20
 _MANIFEST = "manifest.json"
@@ -33,13 +34,17 @@ class Snapshot:
     settings: dict  # target id -> settings captured by that target's generator
     # Folders that did not exist yet; a restore removes them again if they are empty.
     created_dirs: tuple[str, ...] = ()
+    # What KDE's daemons and tools write on their own (see sidefiles.py); None for an older snapshot.
+    side: dict | None = None
+    # The targets whose settings the apply may have changed; None while it runs and for an older snapshot.
+    reached: tuple[str, ...] | None = None
 
     @property
     def created_at(self) -> datetime:
         return datetime.fromisoformat(self.created)
 
 
-def create(theme_name: str, file_paths: list[Path], settings: dict) -> Snapshot:
+def create(theme_name: str, file_paths: list[Path], settings: dict, side: bool = True) -> Snapshot:
     now = datetime.now()
     snapshot_id = now.strftime("%Y%m%d-%H%M%S-%f")
     directory = paths.snapshots_dir() / snapshot_id
@@ -57,15 +62,30 @@ def create(theme_name: str, file_paths: list[Path], settings: dict) -> Snapshot:
                 break
             if str(parent) not in created_dirs:
                 created_dirs.append(str(parent))
+    record = sidefiles.capture(directory / "side") if side else None
     manifest = {
         "created": now.isoformat(timespec="seconds"),
         "theme": theme_name,
         "files": files,
         "settings": settings,
         "created_dirs": created_dirs,
+        "side": record,
     }
     write_atomic(directory / _MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
     return _read(directory)
+
+
+def set_reached(snapshot: Snapshot, reached: list[str]) -> Snapshot | None:
+    """Record which targets the apply really ran, so that an undo puts back only those."""
+    try:
+        manifest = json.loads((snapshot.directory / _MANIFEST).read_text(encoding="utf-8"))
+        manifest["reached"] = list(dict.fromkeys(reached))
+        write_atomic(
+            snapshot.directory / _MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
+        )
+    except (OSError, ValueError):
+        return None  # the snapshot then counts every target, as an older one does
+    return _read(snapshot.directory)
 
 
 def _read(directory: Path) -> Snapshot | None:
@@ -79,6 +99,8 @@ def _read(directory: Path) -> Snapshot | None:
             files=tuple(data["files"]),
             settings=data["settings"],
             created_dirs=tuple(data.get("created_dirs", ())),
+            side=data.get("side"),
+            reached=tuple(data["reached"]) if isinstance(data.get("reached"), list) else None,
         )
     except (OSError, ValueError, KeyError, TypeError):
         return None

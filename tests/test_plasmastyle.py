@@ -577,7 +577,7 @@ def test_the_popup_page_explains_when_the_values_apply():
     assert GENERATOR.section_notes(look(style="unchanged"), "panel") == GENERATOR.notes(
         look(style="unchanged")
     )
-    assert GENERATOR.sections == ("panel", "popup")
+    assert GENERATOR.sections == ("panel", "popup", "artwork")
 
 
 def test_undo_removes_the_plasmarc_the_apply_made(style):

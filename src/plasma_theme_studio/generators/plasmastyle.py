@@ -16,7 +16,8 @@ from pathlib import Path
 
 from .. import kconfig, paths
 from ..messages import Msg, translate
-from ..model.theme import Theme
+from ..model.theme import ARTWORK_KEYS, Theme
+from . import artwork
 from .base import JSON_MARKER, MARKER, XML_MARKER, ApplyError, Generator, PlannedFile, made_here
 
 ID_PREFIX = "PlasmaThemeStudio-"
@@ -47,7 +48,21 @@ REQUIRED_IDS = POPUP_REQUIRED_IDS | {"thick-center", *(f"thick-hint-{side}-margi
 PANEL_FILE = "widgets/panel-background.svg"
 # Popups, launcher, notifications, KRunner and OSD; tooltips; desktop widgets.
 POPUP_FILES = ("dialogs/background.svg", "widgets/tooltip.svg", "widgets/background.svg")
+# The frames and the files of the style each one is: the keys of the theme's [artwork] section.
+FRAME_FILES = {
+    "panel": (PANEL_FILE,),
+    "popups": ("dialogs/background.svg",),
+    "tooltips": ("widgets/tooltip.svg",),
+    "widgets": ("widgets/background.svg",),
+}
+assert tuple(FRAME_FILES) == ARTWORK_KEYS
 _TOOLS = ("plasma-apply-desktoptheme", "kreadconfig6", "kwriteconfig6")
+FRAME_TITLES = {
+    "panel": translate("core", "the panel"),
+    "popups": translate("core", "popups"),
+    "tooltips": translate("core", "tooltips"),
+    "widgets": translate("core", "widget backgrounds"),
+}
 
 
 def _num(value: float) -> str:
@@ -71,11 +86,56 @@ def _popup_look(theme: Theme) -> tuple[int, int, float]:
     )
 
 
+def required_ids(frame: str) -> frozenset[str]:
+    """The element ids Plasma needs in the SVG of `frame`."""
+    return REQUIRED_IDS if frame == "panel" else POPUP_REQUIRED_IDS
+
+
+def own_artwork(theme: Theme, frame: str) -> artwork.Artwork:
+    """The own artwork of `frame`: unset, or read and checked (see `artwork.load`)."""
+    return artwork.load(theme, frame, required_ids(frame))
+
+
+def frame_svg(theme: Theme, frame: str, *, solid: bool = False) -> str:
+    """The generated SVG of `frame` from the theme's values."""
+    if frame == "panel":
+        radius, border, opacity = _look(theme)
+        return panel_svg(radius, border, opacity, solid=solid)
+    radius, border, opacity = _popup_look(theme)
+    return panel_svg(radius, border, opacity, solid=solid, thick=False)
+
+
+def artwork_problems(theme: Theme) -> list[Msg]:
+    """What is wrong with the own artwork the theme names, one sentence per frame and problem."""
+    found: list[Msg] = []
+    for frame in ARTWORK_KEYS:
+        art = own_artwork(theme, frame)
+        for problem in art.problems:
+            found.append(
+                translate(
+                    "core", "Artwork for {frame} ({name}): {problem} The generated frame is used."
+                ).format(frame=FRAME_TITLES[frame], name=art.name, problem=problem)
+            )
+    return found
+
+
+def status_words(theme: Theme) -> str:
+    """For the status of the Plasma Style part: which frames are drawn by hand, or "" when none is."""
+    own = [FRAME_TITLES[frame] for frame in ARTWORK_KEYS if own_artwork(theme, frame).usable]
+    if not own:
+        return ""
+    return str(translate("core", "own artwork for {frames}").format(frames=", ".join(str(t) for t in own)))
+
+
 def style_id(theme: Theme) -> str:
     """The name of the package for the theme's panel and popup look."""
     radius, border, opacity = _look(theme)
     p_radius, p_border, p_opacity = _popup_look(theme)
     key = f"{DESIGN}/{radius}/{border}/{_num(opacity)}/{p_radius}/{p_border}/{_num(p_opacity)}"
+    for frame in ARTWORK_KEYS:  # a frame drawn by hand is part of the look, so it gets a name of its own
+        text = own_artwork(theme, frame).text
+        if text is not None:
+            key += f"/{frame}:{hashlib.sha256(text.encode()).hexdigest()}"
     digest = hashlib.sha256(key.encode()).hexdigest()[:8]
     return f"{ID_PREFIX}{theme.slug}-{digest}"
 
@@ -357,7 +417,7 @@ def stale_packages(keep: str | None) -> list[Path]:
 class PlasmaStyleGenerator(Generator):
     id = "panel"
     title = translate("core", "Panel style")
-    sections = ("panel", "popup")
+    sections = ("panel", "popup", "artwork")
 
     def wanted(self, theme: Theme) -> bool:
         return theme.get("panel", "style") == "generated"
@@ -389,9 +449,11 @@ class PlasmaStyleGenerator(Generator):
                     "core", "With this corner radius the panel cannot be thinner than {pixels} pixels."
                 ).format(pixels=thinnest)
             )
-        return notes
+        return notes + artwork_problems(theme)
 
     def section_notes(self, theme: Theme, section: str) -> list[Msg]:
+        if section == "artwork":
+            return []  # the page of the panel style says it all
         if section != "popup":
             return self.notes(theme)
         if self.wanted(theme):
@@ -422,21 +484,18 @@ class PlasmaStyleGenerator(Generator):
         files = [
             PlannedFile(root / "metadata.json", metadata_json(name, theme.name), JSON_MARKER),
             PlannedFile(root / "plasmarc", f"{MARKER}\n\n[AdaptiveTransparency]\nenabled=true\n"),
-            PlannedFile(
-                root / PANEL_FILE,
-                panel_svg(radius, border, opacity, solid=False),
-                XML_MARKER,
-            ),
-            PlannedFile(
-                root / "solid" / PANEL_FILE,
-                panel_svg(radius, border, opacity, solid=True),
-                XML_MARKER,
-            ),
         ]
-        for popup_file in POPUP_FILES:
-            for solid in (False, True):
-                svg = panel_svg(p_radius, p_border, p_opacity, solid=solid, thick=False)
-                files.append(PlannedFile(root / ("solid" if solid else "") / popup_file, svg, XML_MARKER))
+        for frame, relatives in FRAME_FILES.items():
+            own = own_artwork(theme, frame).text
+            for relative in relatives:
+                for solid in (False, True):
+                    if own is not None:
+                        svg = artwork.style_text(own)
+                    elif frame == "panel":
+                        svg = panel_svg(radius, border, opacity, solid=solid)
+                    else:
+                        svg = panel_svg(p_radius, p_border, p_opacity, solid=solid, thick=False)
+                    files.append(PlannedFile(root / ("solid" if solid else "") / relative, svg, XML_MARKER))
         return files
 
     def check_output(self, file: PlannedFile) -> list[Msg]:
@@ -450,6 +509,8 @@ class PlasmaStyleGenerator(Generator):
             return []
         if file.path.suffix != ".svg":
             return []
+        if artwork.OWN_MARK in file.content[:200]:
+            return []  # drawn by hand: checked when it was read
         try:
             root = ET.fromstring(file.content)
         except ET.ParseError as error:
@@ -483,10 +544,11 @@ class PlasmaStyleGenerator(Generator):
         return stale_packages(style_id(theme))
 
     def warnings(self, theme: Theme, runner) -> list[Msg]:
+        found = artwork_problems(theme)
         current = _current_style(runner)
         if current in ("", "default") or current.startswith(ID_PREFIX):
-            return []
-        return [
+            return found
+        return found + [
             translate(
                 "core",
                 "The Plasma style {name} is in use. Except for the backgrounds of the panel, popups, "

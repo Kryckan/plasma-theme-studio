@@ -18,6 +18,8 @@ desktop. Only KDE's four status colors (positive, information, warning, negative
 
 from __future__ import annotations
 
+from functools import partial
+
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
@@ -49,8 +51,6 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QStyle,
     QStyledItemDelegate,
-    QStyleOptionButton,
-    QStylePainter,
     QToolTip,
     QVBoxLayout,
     QWidget,
@@ -111,12 +111,19 @@ def _scroll_area_of(widget: QWidget) -> QScrollArea | None:
 
 
 class FlowLayout(QLayout):
-    """Lays widgets out like words in a paragraph. Its height depends on its width."""
+    """Lays widgets out like words in a paragraph. Its height depends on its width. With `justified`
+    (see `JustifiedFlow`) the cards fill every row from edge to edge.
 
-    def __init__(self, parent=None, h=LARGE_SPACING, v=LARGE_SPACING):
+    This is one class and not a base with a subclass: PySide 6.12 on Python 3.14 frees the methods
+    a subclass inherits from a Python layout class, and the program then crashes in a later layout pass."""
+
+    MAX_GROWTH = 1.3
+
+    def __init__(self, parent=None, h=LARGE_SPACING, v=LARGE_SPACING, justified=False):
         super().__init__(parent)
         self._items = []
         self._h, self._v = h, v
+        self._justified = justified
 
     def addItem(self, item):
         self._items.append(item)
@@ -154,6 +161,8 @@ class FlowLayout(QLayout):
         return size + QSize(m.left() + m.right(), m.top() + m.bottom())
 
     def _flow(self, rect, place):
+        if self._justified:
+            return self._flow_justified(rect, place)
         m = self.contentsMargins()
         inner = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
         parent = self.parentWidget()
@@ -172,6 +181,44 @@ class FlowLayout(QLayout):
             row_height = max(row_height, hint.height())
         return y + row_height - rect.y() + m.bottom()
 
+    def _flow_justified(self, rect, place):
+        m = self.contentsMargins()
+        inner = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
+        items = [item for item in self._items if not item.isEmpty()]
+        if not items:
+            return m.top() + m.bottom()
+        cell_w = max(item.sizeHint().width() for item in items)
+        cell_h = max(item.sizeHint().height() for item in items)
+        columns = max(1, (inner.width() + self._h) // (cell_w + self._h))
+        card_w, card_h, gap = cell_w, cell_h, self._h
+        if len(items) >= columns:
+            widgets = [item.widget() for item in items]
+            growable = all(getattr(w, "thumb_size", None) is not None for w in widgets)
+            room = inner.width() - (columns - 1) * self._h
+            if growable:
+                card_w = max(cell_w, min(room // columns, int(cell_w * self.MAX_GROWTH)))
+                thumb = widgets[0].thumb_size
+                card_h = cell_h + round((card_w - cell_w) * thumb.height() / max(1, thumb.width()))
+            if columns > 1:
+                gap = max(self._h, (inner.width() - columns * card_w) // (columns - 1))
+        parent = self.parentWidget()
+        rtl = parent is not None and parent.layoutDirection() == Qt.LayoutDirection.RightToLeft
+        for number, item in enumerate(items):
+            row, column = divmod(number, columns)
+            x = column * (card_w + gap)
+            left = inner.right() + 1 - x - card_w if rtl else inner.x() + x
+            if place:
+                item.setGeometry(QRect(left, inner.y() + row * (card_h + self._v), card_w, card_h))
+        rows = -(-len(items) // columns)
+        return rows * card_h + (rows - 1) * self._v + m.top() + m.bottom()
+
+
+# A flow of equal cards that uses the whole width: the first column sits at the left edge and the last at
+# the right edge, so no strip is left over. The room left in a row is shared first by the cards themselves
+# (a card with a `thumb_size` grows its picture, up to `MAX_GROWTH`) and then by the gaps. A row that is
+# not full keeps the cards of the full ones, in the same columns.
+JustifiedFlow = partial(FlowLayout, justified=True)
+
 
 class Card(QAbstractButton):
     """A picker card. Checked means selected. It is not a tab stop: the CardGrid owns the focus.
@@ -186,6 +233,8 @@ class Card(QAbstractButton):
     thumbnail_requested = Signal()  # once, after the first paint without a thumbnail
 
     PAD = 8
+    CAPTION_AIR = 5  # room under the second line of words, so that it does not touch the edge
+    BADGE = 18  # the check badge of the selected card
 
     def __init__(self, item_id, title, subtitle="", thumb_size=THUMB_SIZE, parent=None):
         super().__init__(parent)
@@ -207,6 +256,8 @@ class Card(QAbstractButton):
         self._action_down = False
         self.setText(title)
         self.setCheckable(True)
+        # Preferred both ways: a layout that makes the card larger than its hint (`JustifiedFlow`) is obeyed
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -267,7 +318,8 @@ class Card(QAbstractButton):
     def sizeHint(self):
         line = self.fontMetrics().height() + 1 + QFontMetrics(self._small_font()).height()
         return QSize(
-            self.thumb_size.width() + 2 * self.PAD, self.PAD + self.thumb_size.height() + 6 + line + self.PAD
+            self.thumb_size.width() + 2 * self.PAD,
+            self.PAD + self.thumb_size.height() + 6 + line + self.PAD + self.CAPTION_AIR,
         )
 
     def minimumSizeHint(self):
@@ -287,7 +339,11 @@ class Card(QAbstractButton):
         self.update()
 
     def _thumb_rect(self) -> QRectF:
-        return QRectF(self.PAD, self.PAD, self.thumb_size.width(), self.thumb_size.height())
+        """The picture's place. A card that is laid out wider than its size hint (`JustifiedFlow`) has a
+        wider picture of the same shape."""
+        width = max(self.thumb_size.width(), self.width() - 2 * self.PAD)
+        height = round(width * self.thumb_size.height() / max(1, self.thumb_size.width()))
+        return QRectF(self.PAD, self.PAD, width, height)
 
     def _action_rect(self) -> QRectF:
         rect = QRectF(self._thumb_rect().x() + 6, self._thumb_rect().y() + 6, 20, 20)
@@ -355,7 +411,6 @@ class Card(QAbstractButton):
     def paintEvent(self, _):
         palette = self.palette()
         rtl = self.layoutDirection() == _RIGHT_TO_LEFT
-        width = self.width()
         p = QPainter(self)
         p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
         # a card that is in the background is dimmed in its picture only: its words stay readable
@@ -395,20 +450,6 @@ class Card(QAbstractButton):
         p.setPen(QPen(with_alpha(text, 0.18), 1))
         p.drawRoundedRect(thumb, 4, 4)
         p.setOpacity(resting)
-        # the check badge of a selected card, in the corner opposite the action
-        if selected:
-            badge = QRectF(thumb.right() - 24, thumb.top() + 4, 20, 20)
-            if rtl:
-                badge = _flip(width, badge)
-            c = badge.center()
-            p.setPen(QPen(base, 2))
-            p.setBrush(highlight)
-            p.drawEllipse(badge)
-            pen = QPen(palette.highlightedText().color(), 2)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            p.setPen(pen)
-            p.drawPolyline([c + QPointF(-4, 0), c + QPointF(-1, 3), c + QPointF(5, -3)])
         if self._action_visible():
             self._paint_action(p, palette)
         # the texts
@@ -421,8 +462,13 @@ class Card(QAbstractButton):
         font.setBold(selected)
         p.setFont(font)
         p.setPen(palette.text().color())
-        title = QFontMetrics(font).elidedText(self.text(), Qt.TextElideMode.ElideRight, inner)
-        p.drawText(self._mirrored(QRectF(self.PAD, y, inner, fm.height()), rtl), align, title)
+        # The check badge of a selected card sits at the end of the title line, beside the words, so it
+        # never hides a part of the picture (on every kind of card).
+        room = inner - (self.BADGE + 6 if selected else 0)
+        title = QFontMetrics(font).elidedText(self.text(), Qt.TextElideMode.ElideRight, room)
+        p.drawText(self._mirrored(QRectF(self.PAD, y, room, fm.height()), rtl), align, title)
+        if selected:
+            self._paint_badge(p, palette, self._mirrored(self._badge_rect(y, fm.height()), rtl))
         y += fm.height() + 1
         small = self._small_font()
         p.setFont(small)
@@ -451,6 +497,22 @@ class Card(QAbstractButton):
 
     def _mirrored(self, rect: QRectF, rtl: bool) -> QRectF:
         return _flip(self.width(), rect) if rtl else rect
+
+    def _badge_rect(self, line_top: float, line_height: float) -> QRectF:
+        """Where the check badge goes (left to right): the end of the title line."""
+        side = float(self.BADGE)
+        return QRectF(self._thumb_rect().right() - side, line_top + (line_height - side) / 2, side, side)
+
+    def _paint_badge(self, p: QPainter, palette: QPalette, badge: QRectF) -> None:
+        c = badge.center()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(palette.highlight().color())
+        p.drawEllipse(badge)
+        pen = QPen(palette.highlightedText().color(), 1.8)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.drawPolyline([c + QPointF(-3.6, 0.2), c + QPointF(-1, 2.8), c + QPointF(3.6, -2.6)])
 
     def _paint_action(self, p: QPainter, palette: QPalette) -> None:
         rect = self._action_rect()
@@ -542,9 +604,15 @@ class CardGrid(QWidget):
         type_ahead=True,
         parent=None,
         flow_class=None,
+        reveal=True,
+        tall=False,
     ):
         super().__init__(parent)
         self.fit = fit
+        self.tall = (
+            tall  # a scroll area with no scroll bar of its own, as tall as the cards (see _fit_height)
+        )
+        self.reveal = reveal  # scroll the page to the card that is selected by the program
         self.thumb_size = QSize(thumb_size)
         self.cards: list[Card] = []
         self._by_id: dict = {}
@@ -581,7 +649,7 @@ class CardGrid(QWidget):
         bar.setContentsMargins(0, 0, 0, 0)
 
         self.body = _Body(self, name or translate("widgets", "Choices"))
-        self.flow = (flow_class or FlowLayout)(self.body)
+        self.flow = (flow_class or JustifiedFlow)(self.body)
         self.flow.setContentsMargins(2, 2, 2, 2)
         self.message = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.message.setTextFormat(Qt.TextFormat.PlainText)
@@ -597,6 +665,10 @@ class CardGrid(QWidget):
         layout.setSpacing(SPACING)
         layout.addWidget(self.bar)
         layout.addWidget(self.message)
+        self.empty_extras: dict = {}  # category -> a widget (buttons) shown under that group's empty message
+        self._extras_box = QVBoxLayout()
+        self._extras_box.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(self._extras_box)
         if fit:
             self.scroll = None
             layout.addWidget(self.body)
@@ -608,6 +680,13 @@ class CardGrid(QWidget):
             self.scroll.setWidget(self.body)
             self.scroll.viewport().setAutoFillBackground(False)
             self.body.setAutoFillBackground(False)
+            if tall:
+                self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                # No resizeEvent here: a Python override on this class crashes PySide 6.12 when windows
+                # are taken apart. A light timer sees the width change instead.
+                self._fit_timer = QTimer(self, interval=100)
+                self._fit_timer.timeout.connect(self._fit_height)
+                self._fit_timer.start()
             layout.addWidget(self.scroll, 1)
         self._content = self.scroll or self.body
         self.setFocusProxy(self.body)
@@ -708,7 +787,7 @@ class CardGrid(QWidget):
             card.setChecked(card.item_id == self._selected)
         self._sync_ring()
         card = self._by_id.get(self._selected)
-        if card is not None:
+        if card is not None and self.reveal:
             self._reveal(card)
 
     def selected_id(self):
@@ -743,6 +822,42 @@ class CardGrid(QWidget):
         self.flow.invalidate()
         self._update_state()
         self._sync_ring()
+        self._fit_height()
+
+    def _fit_height(self) -> None:
+        """A `tall` grid is as high as its cards need at its width, so that the page scrolls and the
+        grid does not. (A `fit` grid does the same through the layout, but a page that holds one of
+        those crashes PySide 6.12 when its windows are taken apart: see docs/STATUS.md.)"""
+        if not self.tall or self.scroll is None:
+            return
+        fitted = self.scroll.minimumHeight() > 0
+        if fitted and not self.isVisible():
+            return
+        width = self.scroll.viewport().width()
+        if width <= 0 and not self.isVisible():
+            width = max(self.width(), 300)
+        shown = sum(1 for c in self.cards if not c.isHidden())
+        key = (width, shown, self.message.isVisible())
+        if fitted and key == getattr(self, "_fit_key", None):
+            return
+        self._fit_key = key
+        height = self.flow.heightForWidth(width) if shown else 0
+        height = max(height, 1)
+        if self.scroll.minimumHeight() != height:
+            self.scroll.setFixedHeight(height)
+
+    def add_empty_extra(self, category, widget) -> None:
+        """Show `widget` under the empty message of the group `category` (the buttons that fill it)."""
+        self.empty_extras[category] = widget
+        widget.hide()
+        self._extras_box.addWidget(widget, 0, Qt.AlignmentFlag.AlignHCenter)
+
+    def _show_extra(self, text: str) -> None:
+        category = self.filter.currentData() if self.filter.count() else None
+        searching = bool(self.search.text().strip())
+        own = bool(text) and bool(self.cards) and not searching
+        for key, widget in self.empty_extras.items():
+            widget.setVisible(own and key == category)
 
     def _update_state(self) -> None:
         shown = len(self.visible_cards())
@@ -758,10 +873,13 @@ class CardGrid(QWidget):
             text = ""
         self.message.setText(text)
         self.message.setVisible(bool(text))
+        self._show_extra(text)
         self._content.setVisible(not text)
         self.search.setVisible(self._with_search and bool(self.cards))
         self.filter.setVisible(self.filter.count() > 0 and bool(self.cards))
-        self.bar.setVisible(not (self.search.isHidden() and self.filter.isHidden()))
+        self.bar.setVisible(
+            any(not child.isHidden() for child in self.bar.children() if isinstance(child, QWidget))
+        )
 
     def ask_again_for_thumbnails(self) -> None:
         """Let the cards that have no picture ask for it when they are painted next. A page that is
@@ -913,7 +1031,7 @@ class Segmented(QWidget):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(6)
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
         for i, label in enumerate(labels):
@@ -966,23 +1084,52 @@ class Segmented(QWidget):
 
 
 class _SegmentButton(QPushButton):
-    """A checkable button whose checked state is an accent fill, so it reads in light and dark."""
+    """A chip: a rounded pill, an accent fill when checked with text that reads on that accent (white or
+    dark, whichever has the better contrast), a quiet outline when not, in light and dark."""
 
     def __init__(self, text):
         super().__init__(text)
         self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._hover = False
+        # A minimum size, not a `sizeHint` override: PySide crashes when a layout asks a Python sizeHint
+        # of a widget that is being deleted.
+        metrics = self.fontMetrics()
+        self.setMinimumSize(metrics.horizontalAdvance(text) + 28, metrics.height() + 12)
+
+    def enterEvent(self, event):
+        self._hover = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self._hover = False
+        self.update()
 
     def paintEvent(self, _):
-        option = QStyleOptionButton()
-        self.initStyleOption(option)
-        if self.isChecked() and self.parentWidget() and self.parentWidget().hasFocus():
-            option.state |= QStyle.StateFlag.State_HasFocus
+        palette = self.palette()
+        text = palette.color(QPalette.ColorRole.ButtonText)
+        accent = palette.color(QPalette.ColorRole.Highlight)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = rect.height() / 2
         if self.isChecked():
-            palette = QPalette(option.palette)
-            palette.setColor(QPalette.ColorRole.Button, palette.color(QPalette.ColorRole.Highlight))
-            palette.setColor(QPalette.ColorRole.ButtonText, palette.color(QPalette.ColorRole.HighlightedText))
-            option.palette = palette
-        QStylePainter(self).drawControl(QStyle.ControlElement.CE_PushButton, option)
+            p.setBrush(accent)
+            p.setPen(Qt.PenStyle.NoPen)
+            fill = Color(accent.red(), accent.green(), accent.blue())
+            ink = readable_on(fill, dark=Color(35, 38, 41))
+            ink = QColor(ink.r, ink.g, ink.b)
+        else:
+            p.setBrush(with_alpha(text, 0.14 if self._hover else 0.07))
+            p.setPen(QPen(with_alpha(text, 0.3), 1))
+            ink = text
+        p.drawRoundedRect(rect, radius, radius)
+        if self.isChecked() and self.parentWidget() and self.parentWidget().hasFocus():
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(with_alpha(ink, 0.8), 1.5, Qt.PenStyle.DotLine))
+            p.drawRoundedRect(rect.adjusted(3, 3, -3, -3), radius - 3, radius - 3)
+        p.setPen(ink)
+        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
 
 
 class _IconLabel(QWidget):

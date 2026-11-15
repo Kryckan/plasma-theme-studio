@@ -76,6 +76,8 @@ class ThemesPage(Page):
         self.shown_package = ""  # the package the strip describes
         self.library.selection_changed.connect(self._selection_changed)
         self.library.edit_requested.connect(self.open_entry)
+        self.library.new_requested.connect(self.new_from_desktop)
+        self.library.save_requested.connect(lambda: self.window.save_as())
         self.new_button = QPushButton(
             themed_icon("document-new"), translate("ui", "New Theme from the Desktop")
         )
@@ -130,6 +132,13 @@ class ThemesPage(Page):
         note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         box.addWidget(self.night)
         box.addWidget(note)
+        # What a theme with a light and a dark variant adds: which parts follow Plasma's switch.
+        self.night_variants = QLabel()
+        self.night_variants.setWordWrap(True)
+        self.night_variants.setTextFormat(Qt.TextFormat.PlainText)
+        self.night_variants.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        self.night_variants.hide()
+        box.addWidget(self.night_variants)
 
     def refresh(self) -> None:
         super().refresh()
@@ -139,6 +148,26 @@ class ThemesPage(Page):
         """The switch shows what the theme says, or, while the theme leaves it, what the desktop has."""
         value = self.window.theme.get("desktop", "dark_at_night")
         self.night.set_value(self.night_now if value is None else value)
+        self._show_night_variants()
+
+    def _show_night_variants(self) -> None:
+        from ...generators.variants import NightVariantsTarget
+
+        theme = self.window.theme
+        if not theme.has_both:
+            self.night_variants.hide()
+            return
+        target = NightVariantsTarget()
+        if target.wanted(theme):
+            text = "\n".join(str(note) for note in target.notes(theme))
+        else:
+            text = translate(
+                "ui",
+                "This theme has a light and a dark variant. Turn the switch on and Plasma changes "
+                "between them by itself; until then Apply puts the variant you see on the desktop.",
+            )
+        self.night_variants.setText(text)
+        self.night_variants.show()
 
     def read_desktop(self) -> None:
         runner = self.window.runner
@@ -172,8 +201,8 @@ class ThemesPage(Page):
         self.strip_note = QLabel(
             translate(
                 "ui",
-                "Apply to Desktop loads this into the editor first and then applies the editor theme. "
-                "The package's own panel layout and widgets are not installed.",
+                "Apply to Desktop first copies these settings into the editor and then applies them. "
+                "The theme's own panel layout and widgets are left as they are.",
             )
         )
         self.strip_note.setWordWrap(True)
@@ -208,7 +237,7 @@ class ThemesPage(Page):
         self.strip_about.setText(entry.item.description)
         self.strip_about.setVisible(bool(entry.item.description))
         self._fill_strip([])
-        self.strip_empty.setText(translate("ui", "Reading what it sets…"))
+        self.strip_empty.setText(translate("ui", "Looking at what this theme changes…"))
         self.strip.show()
         self.summary.request(entry.item)
 
@@ -216,7 +245,7 @@ class ThemesPage(Page):
         if item.id == self.shown_package:
             self._fill_strip(rows)
             self.strip_empty.setText(
-                "" if rows else translate("ui", "It sets none of the parts this app can change.")
+                "" if rows else translate("ui", "This theme changes nothing that this app can edit.")
             )
             self.strip_empty.setVisible(not rows)
 
@@ -304,9 +333,8 @@ class ThemesPage(Page):
             translate("ui", "Apply to Desktop"),
             translate(
                 "ui",
-                "Apply “{name}”? Its settings are loaded into the editor first, and then the editor theme "
-                "is applied to the desktop. The Global Theme itself is not installed as the desktop's, "
-                "so its panel layout and widgets stay as they are. Undo last apply takes you back.",
+                "Apply “{name}”? Its settings are copied into the editor first, and then applied to the "
+                "desktop. Its panel layout and widgets stay as they are. Undo last apply takes you back.",
             ).format(name=entry.title),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Yes,

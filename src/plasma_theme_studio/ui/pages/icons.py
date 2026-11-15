@@ -10,14 +10,14 @@ from PySide6.QtGui import QColor
 
 from ...pickers import icons as icon_picker
 from .base import PickerPage
-from .pickers_common import Background, ImageStrip
+from .pickers_common import Background, ImageStrip, LoadsInBackground
 
 translate = QCoreApplication.translate
 
 PREVIEW_SIDES = (48, 32)
 
 
-class IconsPage(PickerPage):
+class IconsPage(LoadsInBackground, PickerPage):
     key = "icons"
     parts = ("icons",)
     kind_key = "icons"
@@ -42,9 +42,8 @@ class IconsPage(PickerPage):
         self.add_top_row(self.strip, 1)
         self.top_row.hide()
 
-    def read_desktop(self) -> None:
+    def after_desktop(self) -> None:
         self.desktop_id = self.current_id()
-        self.grid.set_in_use(self.desktop_id)
         self.update_strip()
 
     def refresh(self) -> None:

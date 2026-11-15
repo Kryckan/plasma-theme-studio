@@ -253,19 +253,15 @@ def test_the_pointer_strip_follows_the_size(window, home, app):
     assert page.shown_size() == 48
 
 
-def test_launch_feedback_opens_the_system_settings_page(window, desktop_runner):
+def test_launch_feedback_opens_the_dialog_in_the_app(window, desktop_runner):
     window.show_page("pointers")
     page = window.page("pointers")
+    assert page.launch_button.text() == "Configure Launch Feedback…"
     page.launch_button.click()
-    assert desktop_runner.launched[-1] == ["systemsettings", "kcm_cursortheme"]
-    desktop_runner.missing.add("systemsettings")
-    page.launch_button.click()
-    assert desktop_runner.launched[-1] == ["kcmshell6", "kcm_cursortheme"]
-    desktop_runner.missing.add("kcmshell6")
-    count = len(desktop_runner.launched)
-    page.launch_button.click()  # nothing to start: a message, no crash
-    assert len(desktop_runner.launched) == count
-    assert page.launch_button.accessibleName() or page.launch_button.text()
+    dialog = window.small_dialog
+    assert dialog.isVisible() and dialog.windowTitle() == "Configure Launch Feedback"
+    assert desktop_runner.launched == []  # nothing of System Settings is started
+    dialog.reject()
 
 
 # ---- Splash Screen

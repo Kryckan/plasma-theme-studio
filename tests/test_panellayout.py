@@ -102,17 +102,23 @@ class FakePlasmashell:
             f"var plasma = getApiVersion(1);\n\nvar layout = {layout};\n\nplasma.loadSerializedLayout(layout);\n",  # noqa: E501
         )
 
+    def ordered(self):
+        """The main panel first (lowest screen, longest, lowest id), the others by id."""
+        if not self.panels:
+            return []
+        main = min(self.panels.values(), key=lambda p: (p["screen"], -p["maximumLength"], p["id"]))
+        rest = sorted((p for p in self.panels.values() if p is not main), key=lambda p: p["id"])
+        return [main, *rest]
+
     def choose(self, request):
         if request["panel"] is not None:
             return self.panels.get(request["panel"])
-        found = None
-        for p in self.panels.values():
-            key = (p["screen"], -p["maximumLength"], p["id"])
-            if found is None or key < (found["screen"], -found["maximumLength"], found["id"]):
-                found = p
-        return found
+        found = self.ordered()
+        return found[request["number"] - 1] if 0 < request["number"] <= len(found) else None
 
     def execute(self, request):
+        if request["op"] == "list":
+            return {"panels": [self.getters(p) | {"screen": p["screen"]} for p in self.ordered()]}
         p = self.choose(request)
         if p is None:
             return {"found": False}
@@ -145,9 +151,13 @@ class FakePlasmashell:
             keys = request["set"].keys()
             if keys & {"alignment", "lengthMode"}:
                 self.shown[p["id"]] = (p["alignment"], p["lengthMode"])  # the floating toggle in the script
+        return {"found": True} | self.getters(p)
+
+    def getters(self, p):
+        """What the scripting getters say, with their quirks."""
         return {
-            "found": True,
             "id": p["id"],
+            "maximumLength": p["maximumLength"],
             "location": p["location"],
             "height": p["height"],
             "alignment": p["alignment"],
@@ -614,8 +624,8 @@ def run_program(request, panels):
     return (json.loads(printed[0]) if printed else None), error, after
 
 
-def request(values, op="write", panel=None, min_height=1):
-    return {"op": op, "panel": panel, "set": values, "minHeight": min_height}
+def request(values, op="write", panel=None, min_height=1, number=1):
+    return {"op": op, "panel": panel, "number": number, "set": values, "minHeight": min_height}
 
 
 def test_the_real_script_sets_what_is_asked_and_answers_with_the_state(app):

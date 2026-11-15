@@ -58,3 +58,11 @@ def test_it_never_raises(desktop_runner, monkeypatch):
     records = by_key(parts_status(everything(), desktop_runner))
     assert records["icons"].state in ("change", "same", "leave")
     assert len(records) == 14
+
+
+def test_every_target_belongs_to_a_part_of_the_status():
+    from plasma_theme_studio import generators
+    from plasma_theme_studio.apply.status import PARTS
+
+    in_parts = {target for _key, _title, targets in PARTS for target in targets}
+    assert {generator.id for generator in generators.GENERATORS} <= in_parts

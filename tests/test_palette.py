@@ -380,3 +380,36 @@ def test_hostile_files_do_not_block(tmp_path):
         import signal
 
         signal.alarm(0)
+
+
+def test_the_same_colors_from_the_text_of_a_file(tmp_path):
+    from_file = palette.from_pywal(write(tmp_path, "colors.json", WAL))
+    from_text = palette.from_pywal_text(json.dumps(WAL))
+    assert from_text.ok and from_text.dark == from_file.dark and from_text.source == from_file.source
+    assert not palette.from_pywal_text("not json at all").ok
+    assert not palette.from_matugen_text("[]").ok
+    assert not palette.from_matugen_text("").ok
+
+
+def test_the_colors_a_person_can_choose_from():
+    result = palette.from_pywal_text(json.dumps(WAL))
+    assert result.source, "pywal's own colors are listed"
+    for variant in ("light", "dark"):
+        offered = palette.candidates(result, variant)
+        assert len(offered) == len(set(offered))
+        assert set(result.source) <= set(offered)
+        chosen = result.light if variant == "light" else result.dark
+        assert set(chosen.values()) <= set(offered)
+
+
+def test_colors_saved_in_pywals_format_are_read_back():
+    colors = palette.from_pywal_text(json.dumps(WAL)).dark
+    data = palette.pywal_colors(colors)
+    assert json.loads(json.dumps(data)) == data
+    assert [f"color{i}" for i in range(16)] == list(data["colors"])
+    assert all(Color.parse(value) for value in data["colors"].values())
+    assert data["special"]["background"] == colors["window"]
+    assert data["special"]["foreground"] == colors["text"]
+    back = palette.from_pywal_text(json.dumps(data))
+    assert back.ok
+    assert Color.parse(back.dark["window"]) == Color.parse(colors["window"])

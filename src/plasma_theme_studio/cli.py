@@ -38,13 +38,26 @@ def _load_translation() -> None:
         pass  # without PySide6 the console commands still work, in English
 
 
-def _load_theme(path: str) -> Theme | None:
+def _load_theme(path: str, variant: str | None = None) -> Theme | None:
+    """The theme in the file. With `variant`, the theme shows that variant; one the theme does not
+    have is reported and gives None."""
     try:
-        return Theme.load(Path(path))
+        theme = Theme.load(Path(path))
     except ThemeError as error:
         print(translate("core", "{path} cannot be used:").format(path=path), file=sys.stderr)
         _print_problems(error.problems)
         return None
+    if variant is not None:
+        if variant not in theme.variants:
+            print(
+                translate("core", "{path} has no {variant} variant. Add it on the Colors page first.").format(
+                    path=path, variant=variant
+                ),
+                file=sys.stderr,
+            )
+            return None
+        theme.show(variant)
+    return theme
 
 
 def cmd_validate(args) -> int:
@@ -61,7 +74,7 @@ def cmd_validate(args) -> int:
 
 
 def cmd_apply(args) -> int:
-    theme = _load_theme(args.file)
+    theme = _load_theme(args.file, getattr(args, "variant", None))
     if theme is None:
         return 1
     runner = SystemRunner()
@@ -98,7 +111,7 @@ def cmd_apply(args) -> int:
 
 
 def cmd_status(args) -> int:
-    theme = _load_theme(args.file)
+    theme = _load_theme(args.file, getattr(args, "variant", None))
     if theme is None:
         return 1
     labels = {
@@ -115,12 +128,23 @@ def cmd_status(args) -> int:
             translate("core", "Apply"),
         )
     ]
-    for part in engine.parts_status(theme, SystemRunner()):
+    runner = SystemRunner()
+    for part in engine.parts_status(theme, runner):
         rows.append((part.title, part.desktop, part.theme, str(labels[part.state])))
     rows = [tuple(str(cell) for cell in row) for row in rows]
     widths = [max(len(row[column]) for row in rows) for column in range(4)]
     for row in rows:
         print("  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip())
+    if theme.has_both:
+        from .generators.variants import variant_on_desktop
+
+        on_desktop = variant_on_desktop(theme, runner)
+        shown = {"light": translate("core", "light"), "dark": translate("core", "dark")}
+        print()
+        if on_desktop is None:
+            print(translate("core", "The desktop uses neither variant of this theme."))
+        else:
+            print(translate("core", "Variant on the desktop: {variant}").format(variant=shown[on_desktop]))
     return 0
 
 
@@ -273,10 +297,18 @@ def _command_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="replace files with the same name that were not made by this app",
     )
+    apply.add_argument(
+        "--variant",
+        choices=("light", "dark"),
+        help="apply this variant of a theme that has both (default: its main one)",
+    )
     apply.set_defaults(run=cmd_apply)
 
     status = commands.add_parser("status", help="show what an apply would change, part by part")
     status.add_argument("file")
+    status.add_argument(
+        "--variant", choices=("light", "dark"), help="compare this variant of a theme that has both"
+    )
     status.set_defaults(run=cmd_status)
 
     export = commands.add_parser("export", help="write a theme file as one shareable archive")
@@ -306,7 +338,8 @@ USAGE = f"""{APP_NAME} {__version__}
 
 usage: plasma-theme-studio [FILE]             open the editor
        plasma-theme-studio validate FILE      check a theme file
-       plasma-theme-studio apply FILE         apply a theme file to the desktop
+       plasma-theme-studio apply FILE [--variant light|dark]
+                                              apply a theme file to the desktop
        plasma-theme-studio status FILE        show what applying a theme file would change
        plasma-theme-studio export FILE [OUT]  write a theme file as one shareable archive (.ptstheme)
        plasma-theme-studio import FILE        save an archive or theme file as a new theme

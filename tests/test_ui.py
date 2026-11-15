@@ -320,7 +320,7 @@ def test_saved_themes_are_listed_and_can_be_used(window, home, runner):
 
 def test_panel_position_is_chosen_from_named_values(window):
     location = window.editors[("panel_layout", "location")]
-    assert location.currentText() == "Leave as it is"
+    assert location.value() is None and not location.leave.isVisibleTo(location)
     assert "[panel_layout]" not in window.theme.to_toml()
 
     location.choose("top")
@@ -333,19 +333,22 @@ def test_panel_position_is_chosen_from_named_values(window):
     window.undo_stack.undo()
     window.undo_stack.undo()
     assert window.theme.get("panel_layout", "location") is None
-    assert location.currentText() == "Leave as it is"
+    assert location.value() is None and not location.leave.isVisibleTo(location)
 
 
 def test_panel_thickness_is_left_alone_until_it_gets_a_value(window):
+    window.show_page("panel")
     height = window.editors[("panel_layout", "height")]
-    assert height.same.text() == "Leave as it is" and height.same.isChecked()
+    assert height.value() is None and not height.leave.isVisibleTo(height)
 
-    height.same.setChecked(False)
-    assert window.theme.get("panel_layout", "height") == 44  # Plasma's own default
-    height.number.box.setValue(60)
+    height.choose(44)  # Plasma's own default
+    assert window.theme.get("panel_layout", "height") == 44
+    assert height.leave.isVisibleTo(height)
+    height.choose(60)
     assert window.theme.get("panel_layout", "height") == 60
 
-    height.same.setChecked(True)
+    window.refresh()
+    height.leave.click()
     assert window.theme.get("panel_layout", "height") is None
 
 

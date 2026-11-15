@@ -127,7 +127,10 @@ def test_the_empty_states_say_something(window, page, home):
         window.reload_library()
         page.reload()
     assert visible_titles(page) == []
-    assert page.library.grid.message.text() == "You have no saved themes yet."
+    assert page.library.grid.message.text().startswith("A theme is a set of colors")
+    assert not page.library.mine_buttons.isHidden()
+    page.library.mine_new.click()  # the same as the page's own button
+    assert window.theme.name == "My desktop"
     page.library.chips.button(0).click()
 
 

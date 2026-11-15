@@ -30,7 +30,7 @@ def state_titles() -> dict[str, str]:
         engine.NEW: translate("ui", "will be created"),
         engine.CHANGED: translate("ui", "will be updated"),
         engine.UNCHANGED: translate("ui", "already up to date"),
-        engine.FOREIGN: translate("ui", "exists and was not made by this app"),
+        engine.FOREIGN: translate("ui", "already there, made by something else"),
     }
 
 

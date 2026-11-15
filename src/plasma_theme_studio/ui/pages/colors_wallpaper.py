@@ -213,7 +213,7 @@ class WallpaperBlock(QWidget):
         self.big = Strip(28)
         self.light = QPushButton(translate("ui", "Use as light theme"))
         self.dark = QPushButton(translate("ui", "Use as dark theme"))
-        self.other = QPushButton(translate("ui", "Choose a picture…"))
+        self.other = QPushButton(translate("ui", "Colors from a Picture…"))
         self.light.clicked.connect(self.use_light)
         self.dark.clicked.connect(self.use_dark)
         self.other.clicked.connect(self.choose)

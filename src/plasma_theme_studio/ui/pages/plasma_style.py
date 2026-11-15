@@ -7,13 +7,15 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
+from ..frame_editor import FrameEditor
 from .base import THIS_THEME, TUNING_WIDTH, PickerPage
+from .pickers_common import LoadsInBackground
 from .preview_box import RatioPreview
 
 translate = QCoreApplication.translate
 
 
-class PlasmaStylePage(PickerPage):
+class PlasmaStylePage(LoadsInBackground, PickerPage):
     key = "plasma_style"
     parts = ("plasma_style",)
     note_sections = ("panel", "popup")
@@ -55,6 +57,9 @@ class PlasmaStylePage(PickerPage):
         row.addWidget(left, 5)
         row.addWidget(self.style_preview, 6, Qt.AlignmentFlag.AlignTop)
         outer.addLayout(row)
+        outer.addWidget(self.separator())
+        self.frame_editor = FrameEditor(self.window)
+        outer.addWidget(self.frame_editor)
         self.style_box.hide()
         self.add_below(self.style_box)
 
@@ -65,3 +70,4 @@ class PlasmaStylePage(PickerPage):
         self.style_box.setVisible(shown)
         if shown:
             self.style_preview.set_theme(self.theme)
+            self.frame_editor.set_theme(self.theme)

@@ -16,6 +16,7 @@ from .. import generators
 from ..generators import ApplyError, Generator, PlannedFile, generator_by_id
 from ..messages import Msg, translate
 from ..model.theme import Theme, write_atomic
+from . import sidefiles
 from . import snapshot as snapshots
 from .snapshot import Snapshot
 
@@ -193,6 +194,7 @@ def _execute(
         for path in stale_files:
             path.unlink(missing_ok=True)
         snapshots.remove_empty_dirs(path for path in stale if path.is_dir())
+        snapshot = snapshots.set_reached(snapshot, reached) or snapshot
     except BaseException as error:  # an interrupted apply is rolled back too
         # The snapshot goes when everything is back. If not, it is kept as it is: this
         # was not an undo yet, so the user's own undo still gets both of its tries.
@@ -259,6 +261,7 @@ def switch_color_scheme(scheme_id: str, scheme_name: str, runner, theme: Theme |
     except ApplyError:
         snapshots.delete(snapshot)
         raise
+    snapshot = snapshots.set_reached(snapshot, [generator.id]) or snapshot
     snapshots.prune()
     return snapshot
 
@@ -317,6 +320,8 @@ def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> lis
     `only` names the targets whose settings are put back; the files always are.
     """
     failures = []
+    if only is None and snapshot.reached is not None:
+        only = set(snapshot.reached)  # a part the apply left alone is not put back over later changes
     try:
         snapshots.restore_files(snapshot)
     except OSError as error:
@@ -334,6 +339,19 @@ def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> lis
     # A setting that was a file (Rofi's config, Kvantum's selection) can leave a folder empty
     # that the apply made, once the setting is back.
     snapshots.remove_empty_dirs(Path(d) for d in snapshot.created_dirs)
+    # What the desktop's daemons wrote in reaction goes back last, when they are done.
+    took_part = {t for t in snapshot.settings if only is None or t in only}
+    if snapshot.side is not None and took_part & sidefiles.SIDE_TARGETS:
+        try:
+            skip = sidefiles.managed(entry["path"] for entry in snapshot.files)
+            colors = bool(took_part & sidefiles.COLOR_TARGETS)  # else a scheme chosen since stays
+            if not colors:
+                skip |= sidefiles.color_sheets()
+            sidefiles.restore(snapshot.side, snapshot.directory / "side", colors=colors, skip=skip)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            failures.append(
+                translate("core", "Could not put the files back: {detail}").format(detail=str(error))
+            )
     try:
         if consume and failures and not snapshots.tried(snapshot):
             snapshots.mark_tried(snapshot)

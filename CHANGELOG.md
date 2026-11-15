@@ -6,6 +6,22 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 
 ### Added
 
+- A frame editor on the Plasma Style page: own artwork for the panel, popups, tooltips and widget backgrounds, nine-part guides, *Open in Inkscape…* and *Back to the generated frame*. Own artwork is packed into `.ptstheme` archives.
+- An undo that also puts back what KDE's tools and daemons wrote on their own (GTK color sheets and settings, `xsettingsd.conf`, the color groups of `kdeglobals`), for the parts that took part in that apply.
+- Several panels on the Panel page (up to six, a chooser for each), and window frame extras: title bar height, button size, space between buttons and shadow offsets.
+- *Import Colors…* has a mapping dialog for pywal and matugen palettes, colors can be taken from a picture, and *Switch to Dark Mode at Night* picks a light and a dark Global Theme.
+- Light and dark variants: *Add a Dark Variant* on the Colors page; the Overview and the apply follow the variant on the desktop, and `apply` and `status` take `--variant light|dark`.
+- *Configure Icons and Toolbars…* and *Configure Launch Feedback…* open small dialogs inside the app instead of System Settings.
+- *Fix Contrast…* shows each color as it is and as it will be before it changes anything.
+- Every part, including the new ones, shows in the status bar, the Overview and *Show files…*.
+- Swedish translation of all new text.
+- `scripts/rig_roundtrip.py` checks that an apply and its undo leave a throwaway desktop's home as it was.
+
+### Changed
+
+- Card captions have a little more air under the last line.
+- The same words are used for the same things on every page: *Colors from a Picture…*, *Configure …*, *Leave as it is*.
+
 - Every page of System Settings' Colors & Themes part now has a page in the app with preview cards: Themes (also the installed Global Themes, loaded into the editor), Colors, Application Style, Plasma Style, Window Decorations, Icons, Pointers, Splash Screen, System Sounds and Login Screen (SDDM), and Fonts.
 - Colors: an accent color row (standard colors, your own, colors from the wallpaper, or let the accent follow the wallpaper), color scheme cards drawn as small windows with search and a Light/Dark filter, *Install from File…*, *Import Colors…* (pywal, matugen and `.colors` files), theme colors taken from a wallpaper or any picture, and a contrast check that lists text that is hard to read and fixes it with one click.
 - Window Decorations: *Window border size*, *Configure Titlebar Buttons…* (drag buttons between the title bar and a pool), and the frame and shadow values with a large preview.
@@ -32,7 +48,7 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 - Windows and the panel can each have their own corner radius and border width. They follow *Shapes* until overridden.
 - Window frame target. Choose *Breeze* to set Breeze's border and shadow to the nearest steps it has, or *Generated* to get a frame drawn for the theme with the exact corner radius, border width, shadow and colors. The editor says beforehand what the desktop can and cannot show, for example how round the bottom corners can be with the chosen border.
 - Panel style target: a generated Plasma style gives the panel its own corner radius, border and opacity.
-- Panel position: location, height, alignment, length, floating, visibility and opacity of the main panel can be set in the theme. Values left empty are not touched.
+- Panel position: location, height, alignment, length, floating, visibility and opacity of up to six panels can be set in the theme. Values left empty are not touched.
 - Each of these targets is off until chosen in the theme, and each is undone by *Undo last apply* together with the files it wrote.
 - Before an apply, the app lists the desktop settings that will change, next to the files that will be written and removed.
 - Each editor page says, below its controls, what its values become on the desktop and what the desktop cannot show.
@@ -53,6 +69,9 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 - Filling a theme from an installed Global Theme or color scheme (`edits.py`).
 
 ### Fixed
+
+- Repair step 4: an undo of fonts or another single part no longer puts an older color scheme, GTK colors or `kdeglobals` colors over a scheme chosen since (the snapshot records which parts ran); an undo of GTK gives back `gtk.css` as it was, also when it did not exist; a damaged snapshot manifest can no longer make an undo touch files outside what the app watches; pictures with many blurred elements or markers are refused before they are drawn; saving an imported theme next to another picture of the same name picks a free name; two theme file names that clean up alike get their own artwork folders; very long theme file names can be saved; the thumbnail cache keeps the newest few pictures of an item; the Panel page with two or three screens no longer scrolls sideways at 1100 px.
+- Repair step 3: an imported theme keeps its picture names and never overwrites a different picture; frames with nested `<use>` or chained patterns are refused before they are drawn; the undo of one part puts back only the side files of the parts that took part; a named pipe called `kdeglobals` no longer blocks a snapshot; waiting for the desktop after an undo keeps the window alive; the panel page makes its thread pool before the object that answers it; Rofi follows the general font of the theme; the Plasma Style banner no longer calls own artwork unapplied; the Plasma Style page opens at the top; the Colors page scrolls once; the label and slider on the Shapes page no longer overlap at 1100 px; thumbnails are cached per language, so the sample texts of the cards are translated.
 
 - A picture that is a pipe or a huge file no longer hangs or fills memory; every picture goes through one safe reader.
 - Installing a color scheme from a file reads it once, and asks before it hides a scheme that came with the system. The clash message names the file.

@@ -4,6 +4,7 @@
 
 from ..messages import translate
 from ..model.parts import BORDER_SIZES
+from ..model.theme import MAX_PANELS, panel_section
 
 SECTION_TITLES = {
     "meta": translate("fields", "Theme"),
@@ -36,6 +37,12 @@ SECTION_ICONS = {
     "gtk": "preferences-gtk-config",
     "rofi": "system-run",
 }
+
+for _number in range(2, MAX_PANELS + 1):  # the further panels are named after the main one
+    SECTION_TITLES[panel_section(_number)] = translate("fields", "Panel {number} position").format(
+        number=_number
+    )
+    SECTION_ICONS[panel_section(_number)] = SECTION_ICONS["panel_layout"]
 
 # What a page says about its values whatever the targets are. No target reads the
 # Shapes page: its values are what the pages of the parts follow until they are set.
@@ -185,3 +192,12 @@ PRESET_TITLES = {
     "breeze-light": translate("fields", "Breeze Light"),
     "breeze-dark": translate("fields", "Breeze Dark"),
 }
+
+# The further panels have the values of the main one.
+for _number in range(2, MAX_PANELS + 1):
+    for _key in ("location", "height", "alignment", "length_mode", "floating", "visibility", "opacity_mode"):
+        FIELD_LABELS[(panel_section(_number), _key)] = FIELD_LABELS[("panel_layout", _key)]
+        if ("panel_layout", _key) in CHOICE_LABELS:
+            CHOICE_LABELS[(panel_section(_number), _key)] = CHOICE_LABELS[("panel_layout", _key)]
+
+from . import labels_artwork, labels_small  # noqa: E402, F401  (add their entries to the tables above)

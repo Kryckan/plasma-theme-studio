@@ -121,7 +121,7 @@ class NumberEditor(QWidget):
         self._float = field.kind == "float"
         self._steps = 100 if self._float else 1
         self.slider = QSlider(Qt.Orientation.Horizontal)
-        self.slider.setMinimumWidth(160)
+        self.slider.setMinimumWidth(120)
         self.slider.setRange(round(field.minimum * self._steps), round(field.maximum * self._steps))
         if self._float:
             self.box = QDoubleSpinBox()

@@ -4,6 +4,7 @@
 
 from .base import CSS_MARKER, JSON_MARKER, MARKER, XML_MARKER, ApplyError, Generator, PlannedFile, made_here
 from .colorscheme import ColorSchemeGenerator
+from .extras import LaunchFeedbackTarget, ToolbarsTarget
 from .gtk import GtkGenerator
 from .installed import (
     AccentTarget,
@@ -24,6 +25,7 @@ from .kvantum import KvantumGenerator
 from .panellayout import PanelLayoutGenerator
 from .plasmastyle import PlasmaStyleGenerator
 from .rofi import RofiGenerator
+from .variants import NightVariantsTarget
 from .windowframe import WindowFrameGenerator
 
 # The colors come first: Kvantum and GTK take their palette from the scheme that is in use.
@@ -39,6 +41,7 @@ GENERATORS: tuple[Generator, ...] = (
     AccentTarget(),
     KvantumGenerator(),
     InstalledAppStyle(),
+    ToolbarsTarget(),
     GtkGenerator(),
     WindowFrameGenerator(),
     InstalledDecoration(),
@@ -50,9 +53,11 @@ GENERATORS: tuple[Generator, ...] = (
     IconsTarget(),
     CursorThemeTarget(),
     CursorSizeTarget(),
+    LaunchFeedbackTarget(),
     FontsTarget(),
     SplashTarget(),
     SoundsTarget(),
+    NightVariantsTarget(),
     NightModeTarget(),
     RofiGenerator(),
 )

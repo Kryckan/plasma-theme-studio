@@ -90,6 +90,22 @@ def pauses(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def pickers_read_at_once(monkeypatch):
+    """The picker pages read their lists in a worker; a test finds the cards where `show_page` left them.
+    A test of the worker itself uses the fixture `pickers_in_background`."""
+    from plasma_theme_studio.ui.pages import pickers_common
+
+    monkeypatch.setattr(pickers_common.LoadsInBackground, "synchronous", True)
+
+
+@pytest.fixture
+def pickers_in_background(monkeypatch):
+    from plasma_theme_studio.ui.pages import pickers_common
+
+    monkeypatch.setattr(pickers_common.LoadsInBackground, "synchronous", False)
+
+
+@pytest.fixture(autouse=True)
 def settings(tmp_path, home):
     """What the app remembers between starts (QSettings) is kept in the test's
     own folder, under names of its own, and never reaches the real one. The home folder is

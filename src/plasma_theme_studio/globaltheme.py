@@ -39,6 +39,8 @@ def package_id(theme: Theme) -> str:
     slug = theme.slug.lower()
     if not slug:
         raise ExportError(translate("core", "The theme needs a name that contains letters or digits."))
+    if theme.has_both and theme.shown_variant != theme.main_variant:
+        slug += f".{theme.shown_variant}"  # the second variant of a theme is a package of its own
     return PACKAGE_PREFIX + slug
 
 
@@ -125,7 +127,7 @@ def _metadata(theme: Theme, pid: str) -> str:
             ),
             "Id": pid,
             "License": "GPL-3.0-or-later",
-            "Name": theme.name,
+            "Name": theme.scheme_title,
             "Version": "1.0",
         },
         "X-Plasma-APIVersion": "2",

@@ -10,16 +10,17 @@ from PySide6.QtWidgets import QBoxLayout, QLabel, QPushButton, QStackedLayout, Q
 from ...generators import kvantum
 from ..style_preview import StylePreview
 from ..widgets import LARGE_SPACING, SPACING, InlineNote
+from . import small_settings
 from .base import TUNING_WIDTH, PickerPage
+from .pickers_common import LoadsInBackground
 
 translate = QCoreApplication.translate
 
 STYLE_DELAY = 250  # milliseconds after the last edit before the style is made again
 SIDE_BY_SIDE = 1130  # page width from which the values and the sample sit side by side
-MODULE = "kcm_style"  # System Settings' page with the icon and toolbar settings
 
 
-class AppStylePage(PickerPage):
+class AppStylePage(LoadsInBackground, PickerPage):
     key = "app_style"
     parts = ("app_style",)
     note_sections = ("apps",)
@@ -41,11 +42,9 @@ class AppStylePage(PickerPage):
 
     def build(self) -> None:
         super().build()
-        self.configure_button = QPushButton(
-            translate("ui", "Configure Icons and Toolbars in System Settings…")
-        )
+        self.configure_button = QPushButton(translate("ui", "Configure Icons and Toolbars…"))
         self.configure_button.setToolTip(
-            translate("ui", "Opens the icon and toolbar settings of System Settings.")
+            translate("ui", "Sets how toolbars show their buttons, and the icon sizes, in this theme.")
         )
         self.configure_button.clicked.connect(self.configure)
         self.header.add_action(self.configure_button)
@@ -108,17 +107,24 @@ class AppStylePage(PickerPage):
         if self.beside.direction() != direction:
             self.beside.setDirection(direction)
 
+    def read_state(self) -> dict:
+        """Besides what the desktop has: whether Kvantum is there (it looks through many folders)."""
+        state = super().read_state()
+        state["kvantum_missing"] = not (
+            kvantum.plugin_installed() or self.window.runner.which("kvantummanager")
+        )
+        return state
+
+    def after_desktop(self) -> None:
+        self.kvantum_note.setVisible(self.kvantum_missing())
+
     def kvantum_missing(self) -> bool:
-        return not (kvantum.plugin_installed() or self.window.runner.which("kvantummanager"))
+        """Not known (so not said) until the worker has looked."""
+        return bool((self.desktop_state or {}).get("kvantum_missing"))
 
     def configure(self) -> None:
-        """Open the icon and toolbar settings in System Settings."""
-        from ... import desktopparts
-        from ..banner import WARNING
-
-        problem = desktopparts.open_system_settings(MODULE, self.window.runner)
-        if problem is not None:
-            self.window.banner.show_message(WARNING, str(problem), 8)
+        """Open the dialog of the toolbar and icon settings; what it holds goes into the theme."""
+        small_settings.open_toolbars(self.window)
 
     def draw_sample(self) -> None:
         """Show the real widgets in the style of "This theme", or say why there are none."""

@@ -3,6 +3,7 @@
 """What the Icons, Pointers, Splash Screen and System Sounds pages share.
 
 Background      runs a function off the GUI thread; only the answer to the newest request arrives
+LoadsInBackground  a picker page that reads the list of installed things in a worker
 ImageStrip      rows of pictures on a background color (the large icon and pointer previews)
 PreviewPicture  one picture, 16:10, with rounded corners (the splash screen preview)
 SoundList       the rows of the sound themes, each with a Play button, shaped like a CardGrid
@@ -107,6 +108,89 @@ class Background(QObject):
     def _done(self, generation: int, result) -> None:
         if generation == self.generation:
             self.ready.emit(result)
+
+
+class LoadsInBackground:
+    """For a `PickerPage` whose list of installed things or whose desktop state is slow to read (icon
+    themes are hundreds of files, the desktop's setting is a program run). Put it before `PickerPage`
+    in the bases. The page shows at once with "Looking for what is installed…", the worker reads the
+    list and what the desktop uses (`read_state`, which may use the runner but no widget) and the cards
+    come when it is done. `desktop_state` holds the answer; `current_id` uses it, so nothing on the GUI
+    thread runs a program. A page that needs the cards now (a test) calls `wait_items()`."""
+
+    items_loading = False
+    desktop_state: dict | None = None  # None until the first answer
+    synchronous = False  # the tests read at once, on the calling thread
+
+    def read_state(self) -> dict:
+        """What the desktop has, in the worker: {"current": the part's value} and a page's own values."""
+        from ... import desktopparts
+
+        try:
+            return {"current": desktopparts.PARTS[self.part_key].current(self.window.runner)}
+        except Exception:  # noqa: BLE001 - what the desktop has is only a hint
+            return {"current": None}
+
+    def after_desktop(self) -> None:
+        """The desktop state is there (GUI thread); a page shows what depends on it."""
+
+    def load_items(self) -> None:
+        if self.kind is None:
+            super().load_items()
+            return
+        self.items_loading = True
+        self.items_worker = Background(self)
+        self.items_worker.ready.connect(self._items_ready)
+        self.state_worker = Background(self)
+        self.state_worker.ready.connect(self._state_ready)
+        if self.synchronous:
+            self.items_loading = False
+            self.show_items(self.kind.items())  # `show_page` reads the desktop and refreshes
+            return
+        self.grid.set_empty_text(translate("ui", "Looking for what is installed…"))
+        self.items_worker.request(self.kind.items)
+
+    def _items_ready(self, found) -> None:
+        self.items_loading = False
+        self.show_items(found or [])
+        self.read_desktop()
+        self.refresh()
+
+    def read_desktop(self) -> None:
+        if self.kind is None:
+            super().read_desktop()
+        elif self.synchronous:
+            self._state_ready(self.read_state())
+        elif not self.items_loading:
+            self.state_worker.request(self.read_state)
+
+    def _state_ready(self, state) -> None:
+        self.desktop_state = state if isinstance(state, dict) else {"current": None}
+        self.grid.set_in_use(self.current_id())
+        self.after_desktop()
+
+    def current_id(self):
+        if self.desktop_state is None:
+            return None
+        value = self.desktop_state.get("current")
+        if isinstance(value, dict):
+            value = value.get("theme")
+        return self._match(value) if value else None
+
+    def refresh(self) -> None:
+        if not self.items_loading:
+            super().refresh()
+
+    def wait_items(self) -> None:
+        """Block until the list and the desktop state are read and shown (tests, code that needs them)."""
+        from PySide6.QtCore import QCoreApplication
+
+        for name in ("items_worker", "state_worker"):
+            worker = getattr(self, name, None)
+            if worker is not None:
+                worker.wait()
+                # Only this worker's answer is delivered: events of other objects are not this page's.
+                QCoreApplication.sendPostedEvents(worker, 0)
 
 
 # ---- pictures

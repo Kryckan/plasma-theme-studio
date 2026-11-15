@@ -118,13 +118,21 @@ def test_union_is_never_drawn_in_this_process():
 
 def test_union_styles_are_listed_as_union_slash_name(home, monkeypatch):
     monkeypatch.setattr(appstyles, "style_keys", lambda: ["Breeze", "Union"])
-    for name in ("breeze", "breeze-mobile"):
+    for name in ("breeze", "breeze-mobile", "breeze-rtl", "mine"):
         share(home, "union", "styles", name)
+    (share(home, "union", "styles", "breeze") / "metadata.json").write_text('{"name": "Breeze (Union)"}')
+    for name in ("breeze-mobile", "breeze-rtl"):
+        (share(home, "union", "styles", name) / "metadata.json").write_text(
+            '{"name": "Other", "hidden": true}'
+        )
     items = {item.id: item for item in appstyles.list_styles()}
+    # a style that says it is hidden is made for other devices and is not offered
+    assert set(items) >= {"union/breeze", "union/mine"}
+    assert "union/breeze-mobile" not in items and "union/breeze-rtl" not in items
     assert items["union/breeze"].name == "Breeze (Union)"
-    assert items["union/breeze-mobile"].name == "Breeze Mobile (Union)"
+    assert items["union/mine"].name == "Mine (Union)"  # no metadata: made from the folder name
     assert items["union/breeze"].extra["in_process"] is False
-    assert appstyles.AppStyles().thumbnail(items["union/breeze-mobile"], SIZE, 1.0, None).isNull()
+    assert appstyles.AppStyles().thumbnail(items["union/mine"], SIZE, 1.0, None).isNull()
     monkeypatch.setattr(appstyles, "style_keys", lambda: ["Breeze"])
     assert not [i for i in appstyles.list_styles() if i.id.startswith("union/")]
 

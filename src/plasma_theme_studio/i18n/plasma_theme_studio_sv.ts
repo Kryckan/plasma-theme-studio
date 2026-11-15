@@ -147,6 +147,10 @@
         <translation>{path} kan inte användas:</translation>
     </message>
     <message>
+        <source>{path} has no {variant} variant. Add it on the Colors page first.</source>
+        <translation>{path} har ingen {variant}variant. Lägg till den på sidan Färger först.</translation>
+    </message>
+    <message>
         <source>{path} cannot be applied:</source>
         <translation>{path} kan inte verkställas:</translation>
     </message>
@@ -209,6 +213,22 @@
     <message>
         <source>Apply</source>
         <translation>Verkställ</translation>
+    </message>
+    <message>
+        <source>light</source>
+        <translation>ljus</translation>
+    </message>
+    <message>
+        <source>dark</source>
+        <translation>mörk</translation>
+    </message>
+    <message>
+        <source>The desktop uses neither variant of this theme.</source>
+        <translation>Skrivbordet använder ingen av det här temats varianter.</translation>
+    </message>
+    <message>
+        <source>Variant on the desktop: {variant}</source>
+        <translation>Variant på skrivbordet: {variant}</translation>
     </message>
     <message>
         <source>Could not write {path}: {detail}</source>
@@ -319,6 +339,26 @@
         <translation>Meny</translation>
     </message>
     <message>
+        <source>Not looked at, the theme leaves it</source>
+        <translation>Granskas inte, temat lämnar det</translation>
+    </message>
+    <message>
+        <source>{name} (made from this theme)</source>
+        <translation>{name} (gjord från det här temat)</translation>
+    </message>
+    <message>
+        <source>Size from the decoration</source>
+        <translation>Storlek från dekorationen</translation>
+    </message>
+    <message>
+        <source>This theme&apos;s own</source>
+        <translation>Det här temats egna</translation>
+    </message>
+    <message>
+        <source>Buttons: left {left}; right {right}</source>
+        <translation>Knappar: vänster {left}; höger {right}</translation>
+    </message>
+    <message>
         <source>Left as it is</source>
         <translation>Lämna som det är</translation>
     </message>
@@ -343,16 +383,16 @@
         <translation>GTK-program</translation>
     </message>
     <message>
-        <source>Not checked</source>
-        <translation>Inte kontrollerad</translation>
-    </message>
-    <message>
-        <source>{name} (made by this app)</source>
-        <translation>{name} (gjord av det här programmet)</translation>
-    </message>
-    <message>
         <source>Breeze</source>
         <translation>Breeze</translation>
+    </message>
+    <message>
+        <source>{name}, dark variant</source>
+        <translation>{name}, mörk variant</translation>
+    </message>
+    <message>
+        <source>{name}, light variant</source>
+        <translation>{name}, ljus variant</translation>
     </message>
     <message>
         <source>{name}, accent from the wallpaper</source>
@@ -361,10 +401,6 @@
     <message>
         <source>The frame in use, in the colors of the theme</source>
         <translation>Ramen som används, i temats färger</translation>
-    </message>
-    <message>
-        <source>The decoration&apos;s own</source>
-        <translation>Dekorationens egen</translation>
     </message>
     <message>
         <source>{name}, {size} px</source>
@@ -383,10 +419,6 @@
         <translation>Av</translation>
     </message>
     <message>
-        <source>This theme&apos;s</source>
-        <translation>Det här temats</translation>
-    </message>
-    <message>
         <source>Something else</source>
         <translation>Något annat</translation>
     </message>
@@ -397,10 +429,6 @@
     <message>
         <source>No panel was found</source>
         <translation>Ingen panel hittades</translation>
-    </message>
-    <message>
-        <source>buttons {left} | {right}</source>
-        <translation>knappar {left} | {right}</translation>
     </message>
     <message>
         <source>Could not be read</source>
@@ -751,6 +779,10 @@
         <translation>{key} måste vara ett teckensnitt, till exempel ”Noto Sans, 10”.</translation>
     </message>
     <message>
+        <source>{key} must be the name of an .svg file next to the theme file.</source>
+        <translation>{key} måste vara namnet på en .svg-fil intill temafilen.</translation>
+    </message>
+    <message>
         <source>{key} must be KWin&apos;s button letters, each at most once (a spacer is _).</source>
         <translation>{key} måste vara KWins knappbokstäver, var och en högst en gång (ett mellanrum är _).</translation>
     </message>
@@ -761,6 +793,10 @@
     <message>
         <source>Unknown key {key}.</source>
         <translation>Okänd nyckel {key}.</translation>
+    </message>
+    <message>
+        <source>{key} must be light or dark.</source>
+        <translation>{key} måste vara ljus eller mörk.</translation>
     </message>
     <message>
         <source>The file does not exist.</source>
@@ -883,6 +919,10 @@
         <translation>Plasma gav ett svar om panelen som inte gick att tolka.</translation>
     </message>
     <message>
+        <source>Plasma did not take the {setting} of panel {number}: wanted {wanted}, got {got}.</source>
+        <translation>Plasma tog inte emot {setting} för panel {number}: {wanted} önskades, {got} blev det.</translation>
+    </message>
+    <message>
         <source>Plasma did not take the panel {setting}: wanted {wanted}, got {got}.</source>
         <translation>Plasma tog inte emot panelens {setting}: {wanted} önskades, {got} blev det.</translation>
     </message>
@@ -891,8 +931,28 @@
         <translation>Plasma har ingen panel att ändra.</translation>
     </message>
     <message>
+        <source>Panel {number}: {text}</source>
+        <translation>Panel {number}: {text}</translation>
+    </message>
+    <message>
+        <source>No such panel on this desktop</source>
+        <translation>Ingen sådan panel på det här skrivbordet</translation>
+    </message>
+    <message>
+        <source>other values</source>
+        <translation>andra värden</translation>
+    </message>
+    <message>
+        <source>does not exist on this desktop, so it is skipped</source>
+        <translation>finns inte på det här skrivbordet, så den hoppas över</translation>
+    </message>
+    <message>
         <source>Panel position</source>
         <translation>Panelens placering</translation>
+    </message>
+    <message>
+        <source>Alignment of panel {number} has no effect while it fills the whole edge.</source>
+        <translation>Justeringen av panel {number} har ingen verkan så länge den fyller hela kanten.</translation>
     </message>
     <message>
         <source>The panel stays where it is and keeps its shape.</source>
@@ -911,12 +971,44 @@
         <translation>Plasma svarar inte om panelen. {detail}</translation>
     </message>
     <message>
+        <source>This desktop has no panel {number}, so that part of the theme is skipped.</source>
+        <translation>Det här skrivbordet har ingen panel {number}, så den delen av temat hoppas över.</translation>
+    </message>
+    <message>
         <source>the position and shape of the panel, through that script</source>
         <translation>panelens placering och form, genom det skriptet</translation>
     </message>
     <message>
+        <source>the position and shape of the panels, through that script</source>
+        <translation>panelernas placering och form, genom det skriptet</translation>
+    </message>
+    <message>
         <source>The panel {id} does not exist any more, so it was not put back.</source>
         <translation>Panelen {id} finns inte längre, så den lades inte tillbaka.</translation>
+    </message>
+    <message>
+        <source>the panel</source>
+        <translation>panelen</translation>
+    </message>
+    <message>
+        <source>popups</source>
+        <translation>popupfönster</translation>
+    </message>
+    <message>
+        <source>tooltips</source>
+        <translation>verktygstips</translation>
+    </message>
+    <message>
+        <source>widget backgrounds</source>
+        <translation>modulbakgrunder</translation>
+    </message>
+    <message>
+        <source>Artwork for {frame} ({name}): {problem} The generated frame is used.</source>
+        <translation>Bild för {frame} ({name}): {problem} Den skapade ramen används.</translation>
+    </message>
+    <message>
+        <source>own artwork for {frames}</source>
+        <translation>egen bild för {frames}</translation>
     </message>
     <message>
         <source>Plasma did not accept the style {name}. {detail}</source>
@@ -1033,6 +1125,14 @@
     <message>
         <source>KWin does not clip the window&apos;s own content, so with a {border} px border the bottom corners can only be rounded by {bottom} px. The top corners get the radius {radius} px. A wider border allows rounder bottom corners.</source>
         <translation>KWin beskär inte fönstrets eget innehåll, så med en kant på {border} px kan de nedre hörnen bara rundas med {bottom} px. De övre hörnen får radien {radius} px. En bredare kant ger rundare nedre hörn.</translation>
+    </message>
+    <message>
+        <source>The buttons are {size} px at most in a title bar that is {height} px high. Make the title bar higher for larger buttons.</source>
+        <translation>Knapparna är högst {size} px i en namnlist som är {height} px hög. Gör namnlisten högre för större knappar.</translation>
+    </message>
+    <message>
+        <source>The shadow falls {x} px sideways and {y} px downwards, so it is thicker on that side.</source>
+        <translation>Skuggan faller {x} px åt sidan och {y} px nedåt, så den är tjockare åt det hållet.</translation>
     </message>
     <message>
         <source>The frame colors are fixed in the frame. Apply the theme again after you change them.</source>
@@ -1518,6 +1618,194 @@
         <source>the accent color chosen in System Settings, which is removed (kdeglobals)</source>
         <translation>accentfärgen som valts i Systeminställningar, som tas bort (kdeglobals)</translation>
     </message>
+    <message>
+        <source>The file is too large to be artwork for a frame.</source>
+        <translation>Filen är för stor för att vara bild till en ram.</translation>
+    </message>
+    <message>
+        <source>The file is not text in UTF-8, so it is not an SVG picture.</source>
+        <translation>Filen är inte text i UTF-8, så den är ingen SVG-bild.</translation>
+    </message>
+    <message>
+        <source>The file has a document type declaration, which is not accepted.</source>
+        <translation>Filen har en dokumenttypsdeklaration, vilket inte accepteras.</translation>
+    </message>
+    <message>
+        <source>The file has processing instructions, which are not accepted.</source>
+        <translation>Filen har bearbetningsinstruktioner, vilket inte accepteras.</translation>
+    </message>
+    <message>
+        <source>The picture is too complicated for a frame.</source>
+        <translation>Bilden är för komplicerad för en ram.</translation>
+    </message>
+    <message>
+        <source>The picture contains {name}, which a frame must not have.</source>
+        <translation>Bilden innehåller {name}, vilket en ram inte får ha.</translation>
+    </message>
+    <message>
+        <source>The picture points at another file.</source>
+        <translation>Bilden pekar på en annan fil.</translation>
+    </message>
+    <message>
+        <source>The picture contains a script.</source>
+        <translation>Bilden innehåller ett skript.</translation>
+    </message>
+    <message>
+        <source>The file is not a valid SVG picture: {detail}</source>
+        <translation>Filen är ingen giltig SVG-bild: {detail}</translation>
+    </message>
+    <message>
+        <source>The file is not a valid SVG picture.</source>
+        <translation>Filen är ingen giltig SVG-bild.</translation>
+    </message>
+    <message>
+        <source>The file is not an SVG picture.</source>
+        <translation>Filen är ingen SVG-bild.</translation>
+    </message>
+    <message>
+        <source>The picture lacks parts Plasma needs: {names}.</source>
+        <translation>Bilden saknar delar som Plasma behöver: {names}.</translation>
+    </message>
+    <message>
+        <source>The theme is not saved yet, so its artwork cannot be found.</source>
+        <translation>Temat är inte sparat än, så dess bilder går inte att hitta.</translation>
+    </message>
+    <message>
+        <source>The artwork {name} is outside the folder of the theme.</source>
+        <translation>Bilden {name} ligger utanför temats mapp.</translation>
+    </message>
+    <message>
+        <source>The artwork file {name} was not found.</source>
+        <translation>Bildfilen {name} hittades inte.</translation>
+    </message>
+    <message>
+        <source>The artwork file {name} cannot be read or is too large.</source>
+        <translation>Bildfilen {name} kan inte läsas eller är för stor.</translation>
+    </message>
+    <message>
+        <source>Icons and toolbars</source>
+        <translation>Ikoner och verktygsfält</translation>
+    </message>
+    <message>
+        <source>the icon and toolbar settings of applications (kdeglobals)</source>
+        <translation>programmens inställningar för ikoner och verktygsfält (kdeglobals)</translation>
+    </message>
+    <message>
+        <source>Launch feedback</source>
+        <translation>Startåterkoppling</translation>
+    </message>
+    <message>
+        <source>the launch feedback of applications (klaunchrc)</source>
+        <translation>programmens startåterkoppling (klaunchrc)</translation>
+    </message>
+    <message>
+        <source>icons only</source>
+        <translation>bara ikoner</translation>
+    </message>
+    <message>
+        <source>text only</source>
+        <translation>bara text</translation>
+    </message>
+    <message>
+        <source>text beside icons</source>
+        <translation>text bredvid ikoner</translation>
+    </message>
+    <message>
+        <source>text below icons</source>
+        <translation>text under ikoner</translation>
+    </message>
+    <message>
+        <source>none</source>
+        <translation>ingen</translation>
+    </message>
+    <message>
+        <source>static</source>
+        <translation>statisk</translation>
+    </message>
+    <message>
+        <source>blinking</source>
+        <translation>blinkande</translation>
+    </message>
+    <message>
+        <source>bouncing</source>
+        <translation>studsande</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation>ja</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>nej</translation>
+    </message>
+    <message>
+        <source>main toolbar: {style}</source>
+        <translation>huvudverktygsfält: {style}</translation>
+    </message>
+    <message>
+        <source>other toolbars: {style}</source>
+        <translation>övriga verktygsfält: {style}</translation>
+    </message>
+    <message>
+        <source>icons on buttons: {on}</source>
+        <translation>ikoner på knappar: {on}</translation>
+    </message>
+    <message>
+        <source>icons in menus: {on}</source>
+        <translation>ikoner i menyer: {on}</translation>
+    </message>
+    <message>
+        <source>cursor: {kind}</source>
+        <translation>pekare: {kind}</translation>
+    </message>
+    <message>
+        <source>cursor stops after {seconds} s</source>
+        <translation>pekaren slutar efter {seconds} s</translation>
+    </message>
+    <message>
+        <source>Task Manager: {on}</source>
+        <translation>Aktivitetshanteraren: {on}</translation>
+    </message>
+    <message>
+        <source>Task Manager stops after {seconds} s</source>
+        <translation>Aktivitetshanteraren slutar efter {seconds} s</translation>
+    </message>
+    <message>
+        <source>the window frame</source>
+        <translation>fönsterramen</translation>
+    </message>
+    <message>
+        <source>the application style</source>
+        <translation>programstilen</translation>
+    </message>
+    <message>
+        <source>the GTK files</source>
+        <translation>GTK-filerna</translation>
+    </message>
+    <message>
+        <source>the Rofi theme</source>
+        <translation>Rofi-temat</translation>
+    </message>
+    <message>
+        <source>Light and dark theme</source>
+        <translation>Ljust och mörkt tema</translation>
+    </message>
+    <message>
+        <source>Plasma switches between the light and the dark variant by itself. The colors and the panel and popup style follow the switch.</source>
+        <translation>Plasma växlar mellan den ljusa och den mörka varianten av sig självt. Färgerna och stilen för panel och popupfönster följer med.</translation>
+    </message>
+    <message>
+        <source>{stays} keep the variant of the last Apply until the next one.</source>
+        <translation>{stays} behåller varianten från senaste verkställning tills nästa.</translation>
+    </message>
+    <message>
+        <source>the Global Themes of the switch at night: {light} by day, {dark} at night (kdeglobals)</source>
+        <translation>de globala teman som växlingen på natten använder: {light} på dagen, {dark} på natten (kdeglobals)</translation>
+    </message>
+    <message>
+        <source>The Global Theme</source>
+        <translation>Det globala temat</translation>
+    </message>
 </context>
 <context>
     <name>fields</name>
@@ -1572,6 +1860,10 @@
     <message>
         <source>Rofi</source>
         <translation>Rofi</translation>
+    </message>
+    <message>
+        <source>Panel {number} position</source>
+        <translation>Placering av panel {number}</translation>
     </message>
     <message>
         <source>These values are the starting point for Applications, Windows, Panel, Popups and tooltips, GTK applications and Rofi: each follows them until it gets values of its own. They reach the desktop through those pages, for every part that is not left as it is.</source>
@@ -1881,6 +2173,114 @@
         <source>Breeze Dark</source>
         <translation>Breeze mörk</translation>
     </message>
+    <message>
+        <source>Own artwork</source>
+        <translation>Egen bild</translation>
+    </message>
+    <message>
+        <source>Panel picture</source>
+        <translation>Panelbild</translation>
+    </message>
+    <message>
+        <source>Popups picture</source>
+        <translation>Bild för popupfönster</translation>
+    </message>
+    <message>
+        <source>Tooltips picture</source>
+        <translation>Bild för verktygstips</translation>
+    </message>
+    <message>
+        <source>Widget backgrounds picture</source>
+        <translation>Bild för modulbakgrunder</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Ingen</translation>
+    </message>
+    <message>
+        <source>Text only</source>
+        <translation>Bara text</translation>
+    </message>
+    <message>
+        <source>Beside icons</source>
+        <translation>Bredvid ikoner</translation>
+    </message>
+    <message>
+        <source>Below icon</source>
+        <translation>Under ikonen</translation>
+    </message>
+    <message>
+        <source>Static</source>
+        <translation>Statisk</translation>
+    </message>
+    <message>
+        <source>Blinking</source>
+        <translation>Blinkande</translation>
+    </message>
+    <message>
+        <source>Bouncing</source>
+        <translation>Studsande</translation>
+    </message>
+    <message>
+        <source>Icons and toolbars</source>
+        <translation>Ikoner och verktygsfält</translation>
+    </message>
+    <message>
+        <source>Launch feedback</source>
+        <translation>Startåterkoppling</translation>
+    </message>
+    <message>
+        <source>Title bar height</source>
+        <translation>Namnlistens höjd</translation>
+    </message>
+    <message>
+        <source>Button size</source>
+        <translation>Knappstorlek</translation>
+    </message>
+    <message>
+        <source>Space between buttons</source>
+        <translation>Avstånd mellan knappar</translation>
+    </message>
+    <message>
+        <source>Shadow offset sideways</source>
+        <translation>Skuggans förskjutning åt sidan</translation>
+    </message>
+    <message>
+        <source>Shadow offset downwards</source>
+        <translation>Skuggans förskjutning nedåt</translation>
+    </message>
+    <message>
+        <source>Main toolbar label</source>
+        <translation>Text i huvudverktygsfältet</translation>
+    </message>
+    <message>
+        <source>Secondary toolbar label</source>
+        <translation>Text i övriga verktygsfält</translation>
+    </message>
+    <message>
+        <source>Icons on buttons</source>
+        <translation>Ikoner på knappar</translation>
+    </message>
+    <message>
+        <source>Icons in menus</source>
+        <translation>Ikoner i menyer</translation>
+    </message>
+    <message>
+        <source>Cursor feedback</source>
+        <translation>Pekaråterkoppling</translation>
+    </message>
+    <message>
+        <source>Stop cursor feedback after</source>
+        <translation>Avsluta pekaråterkoppling efter</translation>
+    </message>
+    <message>
+        <source>Task Manager feedback</source>
+        <translation>Återkoppling i Aktivitetshanteraren</translation>
+    </message>
+    <message>
+        <source>Stop Task Manager feedback after</source>
+        <translation>Avsluta återkoppling i Aktivitetshanteraren efter</translation>
+    </message>
 </context>
 <context>
     <name>pickers</name>
@@ -1989,7 +2389,7 @@
     </message>
     <message>
         <source>Search…</source>
-        <translation>Sök …</translation>
+        <translation>Sök…</translation>
     </message>
     <message>
         <source>Files</source>
@@ -2047,8 +2447,8 @@
         <translation>redan aktuell</translation>
     </message>
     <message>
-        <source>exists and was not made by this app</source>
-        <translation>finns och skapades inte av det här programmet</translation>
+        <source>already there, made by something else</source>
+        <translation>finns redan, gjord av något annat</translation>
     </message>
     <message>
         <source>Files</source>
@@ -2155,6 +2555,154 @@
         <translation>Panel</translation>
     </message>
     <message>
+        <source>Popups</source>
+        <translation>Popupfönster</translation>
+    </message>
+    <message>
+        <source>Tooltips</source>
+        <translation>Verktygstips</translation>
+    </message>
+    <message>
+        <source>Widget backgrounds</source>
+        <translation>Modulbakgrunder</translation>
+    </message>
+    <message>
+        <source>The frame drawn at two sizes</source>
+        <translation>Ramen ritad i två storlekar</translation>
+    </message>
+    <message>
+        <source>Slices</source>
+        <translation>Delning</translation>
+    </message>
+    <message>
+        <source>Keeps content away</source>
+        <translation>Håller innehållet borta</translation>
+    </message>
+    <message>
+        <source>Shadow reaches</source>
+        <translation>Skuggans räckvidd</translation>
+    </message>
+    <message>
+        <source>Frames</source>
+        <translation>Ramar</translation>
+    </message>
+    <message>
+        <source>Plasma draws the panel, popups, tooltips and widget backgrounds from these pictures. They are made from the values above until you draw one yourself.</source>
+        <translation>Plasma ritar panelen, popupfönster, verktygstips och modulbakgrunder från de här bilderna. De görs från värdena ovan tills du ritar en själv.</translation>
+    </message>
+    <message>
+        <source>Corner radius</source>
+        <translation>Hörnradie</translation>
+    </message>
+    <message>
+        <source>Border</source>
+        <translation>Kant</translation>
+    </message>
+    <message>
+        <source>Fill</source>
+        <translation>Fyllning</translation>
+    </message>
+    <message>
+        <source>Opacity</source>
+        <translation>Ogenomskinlighet</translation>
+    </message>
+    <message>
+        <source>Shadow</source>
+        <translation>Skugga</translation>
+    </message>
+    <message>
+        <source>Open in Inkscape…</source>
+        <translation>Öppna i Inkscape…</translation>
+    </message>
+    <message>
+        <source>Back to the generated frame</source>
+        <translation>Tillbaka till den skapade ramen</translation>
+    </message>
+    <message>
+        <source>Show how the frame is cut into nine parts</source>
+        <translation>Visa hur ramen delas i nio delar</translation>
+    </message>
+    <message>
+        <source>Own artwork</source>
+        <translation>Egen bild</translation>
+    </message>
+    <message>
+        <source>Own artwork, not usable</source>
+        <translation>Egen bild, går inte att använda</translation>
+    </message>
+    <message>
+        <source>Made from the values</source>
+        <translation>Gjord från värdena</translation>
+    </message>
+    <message>
+        <source>{value}, same as Shapes</source>
+        <translation>{value}, samma som Former</translation>
+    </message>
+    <message>
+        <source>{value}, same as the panel</source>
+        <translation>{value}, samma som panelen</translation>
+    </message>
+    <message>
+        <source>From the picture</source>
+        <translation>Från bilden</translation>
+    </message>
+    <message>
+        <source>The window color of the color scheme</source>
+        <translation>Färgschemats fönsterfärg</translation>
+    </message>
+    <message>
+        <source>Soft, reaching 10 px (the same on every side)</source>
+        <translation>Mjuk, räcker 10 px (lika på alla sidor)</translation>
+    </message>
+    <message>
+        <source>Inkscape is not installed on this computer, so a frame cannot be drawn by hand.</source>
+        <translation>Inkscape är inte installerat på den här datorn, så en ram kan inte ritas för hand.</translation>
+    </message>
+    <message>
+        <source>Opens this frame as a picture in Inkscape.</source>
+        <translation>Öppnar den här ramen som en bild i Inkscape.</translation>
+    </message>
+    <message>
+        <source>The picture stays on your disk. The theme just stops using it.</source>
+        <translation>Bilden ligger kvar på disken. Temat slutar bara använda den.</translation>
+    </message>
+    <message>
+        <source>Own artwork: {name}</source>
+        <translation>Egen bild: {name}</translation>
+    </message>
+    <message>
+        <source>The generated frame is used for now.</source>
+        <translation>Den skapade ramen används tills vidare.</translation>
+    </message>
+    <message>
+        <source>Change the values above, or open it in Inkscape.</source>
+        <translation>Ändra värdena ovan, eller öppna den i Inkscape.</translation>
+    </message>
+    <message>
+        <source>Save the theme first</source>
+        <translation>Spara temat först</translation>
+    </message>
+    <message>
+        <source>The artwork is kept in a folder next to the theme file, so the theme has to be saved first. Save it now?</source>
+        <translation>Bilden sparas i en mapp intill temafilen, så temat måste sparas först. Spara det nu?</translation>
+    </message>
+    <message>
+        <source>Could not write the picture</source>
+        <translation>Det gick inte att skriva bilden</translation>
+    </message>
+    <message>
+        <source>{file} could not be written: {detail}</source>
+        <translation>{file} kunde inte skrivas: {detail}</translation>
+    </message>
+    <message>
+        <source>Save the picture in Inkscape and this page picks it up.</source>
+        <translation>Spara bilden i Inkscape så läser den här sidan in den.</translation>
+    </message>
+    <message>
+        <source>The picture stays on your disk: {file}</source>
+        <translation>Bilden ligger kvar på disken: {file}</translation>
+    </message>
+    <message>
         <source>Menu</source>
         <translation>Meny</translation>
     </message>
@@ -2236,15 +2784,15 @@
     </message>
     <message>
         <source>&amp;Import Theme…</source>
-        <translation>&amp;Importera tema …</translation>
+        <translation>&amp;Importera tema…</translation>
     </message>
     <message>
         <source>&amp;Export Theme…</source>
-        <translation>&amp;Exportera tema …</translation>
+        <translation>&amp;Exportera tema…</translation>
     </message>
     <message>
         <source>Export as &amp;Global Theme…</source>
-        <translation>Exportera som &amp;globalt tema …</translation>
+        <translation>Exportera som &amp;globalt tema…</translation>
     </message>
     <message>
         <source>Show &amp;themes folder</source>
@@ -2384,7 +2932,23 @@
     </message>
     <message>
         <source>Show &amp;files…</source>
-        <translation>Visa &amp;filer …</translation>
+        <translation>Visa &amp;filer…</translation>
+    </message>
+    <message>
+        <source>Add the dark variant</source>
+        <translation>Lägg till den mörka varianten</translation>
+    </message>
+    <message>
+        <source>Add the light variant</source>
+        <translation>Lägg till den ljusa varianten</translation>
+    </message>
+    <message>
+        <source>Remove the dark variant</source>
+        <translation>Ta bort den mörka varianten</translation>
+    </message>
+    <message>
+        <source>Remove the light variant</source>
+        <translation>Ta bort den ljusa varianten</translation>
     </message>
     <message>
         <source>…and {count} more.</source>
@@ -2539,6 +3103,10 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Teman</translation>
     </message>
     <message>
+        <source>A theme is a set of colors, icons, pointers and more that belong together, and you have not saved one yet.</source>
+        <translation>Ett tema är en uppsättning färger, ikoner, pekare och mer som hör ihop, och du har inte sparat något än.</translation>
+    </message>
+    <message>
         <source>Saved theme</source>
         <translation>Sparat tema</translation>
     </message>
@@ -2557,10 +3125,6 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
         <source>Color schemes</source>
         <translation>Färgscheman</translation>
-    </message>
-    <message>
-        <source>You have no saved themes yet.</source>
-        <translation>Du har inga sparade teman än.</translation>
     </message>
     <message>
         <source>No Global Themes are installed. “Open in System Settings…” gets some.</source>
@@ -2615,12 +3179,12 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Värden för ”Det här temat”</translation>
     </message>
     <message>
-        <source>Configure Icons and Toolbars in System Settings…</source>
-        <translation>Ställ in ikoner och verktygsfält i Systeminställningar…</translation>
+        <source>Configure Icons and Toolbars…</source>
+        <translation>Anpassa ikoner och verktygsfält…</translation>
     </message>
     <message>
-        <source>Opens the icon and toolbar settings of System Settings.</source>
-        <translation>Öppnar inställningarna för ikoner och verktygsfält i Systeminställningar.</translation>
+        <source>Sets how toolbars show their buttons, and the icon sizes, in this theme.</source>
+        <translation>Anger hur verktygsfält visar sina knappar, och ikonstorlekarna, i det här temat.</translation>
     </message>
     <message>
         <source>Sample</source>
@@ -2659,16 +3223,28 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Importera färger…</translation>
     </message>
     <message>
+        <source>From color scheme</source>
+        <translation>Från färgschemat</translation>
+    </message>
+    <message>
+        <source>Chosen color</source>
+        <translation>Vald färg</translation>
+    </message>
+    <message>
+        <source>From wallpaper</source>
+        <translation>Från skrivbordsunderlägget</translation>
+    </message>
+    <message>
+        <source>Where the accent color comes from</source>
+        <translation>Varifrån accentfärgen kommer</translation>
+    </message>
+    <message>
         <source>Accent colors from the wallpaper</source>
         <translation>Accentfärger från skrivbordsunderlägget</translation>
     </message>
     <message>
         <source>From the wallpaper:</source>
         <translation>Från skrivbordsunderlägget:</translation>
-    </message>
-    <message>
-        <source>Plasma then takes the accent from the wallpaper and follows it when the wallpaper changes. The dots above are only the accent this theme starts with.</source>
-        <translation>Plasma hämtar då accentfärgen från skrivbordsunderlägget och följer den när underlägget byts. Prickarna ovan är bara den accentfärg som det här temat börjar med.</translation>
     </message>
     <message>
         <source>Accent color:</source>
@@ -2693,6 +3269,42 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
         <source>Accents and states</source>
         <translation>Accentfärger och lägen</translation>
+    </message>
+    <message>
+        <source>The colors from {source} are matched to the colors of the theme. Choose another color for any of them. Nothing changes until you choose Use These Colors.</source>
+        <translation>Färgerna från {source} har matchats mot temats färger. Välj en annan färg för någon av dem. Inget ändras förrän du väljer Använd de här färgerna.</translation>
+    </message>
+    <message>
+        <source>Light theme</source>
+        <translation>Ljust tema</translation>
+    </message>
+    <message>
+        <source>Dark theme</source>
+        <translation>Mörkt tema</translation>
+    </message>
+    <message>
+        <source>Make a light or a dark theme</source>
+        <translation>Gör ett ljust eller ett mörkt tema</translation>
+    </message>
+    <message>
+        <source>Use These Colors</source>
+        <translation>Använd de här färgerna</translation>
+    </message>
+    <message>
+        <source>Made a little lighter or darker so that it can be read.</source>
+        <translation>Gjord något ljusare eller mörkare så att den går att läsa.</translation>
+    </message>
+    <message>
+        <source>Some colors were moved a little to keep the text easy to read.</source>
+        <translation>Några färger flyttades lite för att texten ska vara lätt att läsa.</translation>
+    </message>
+    <message>
+        <source>All text on these colors is easy to read.</source>
+        <translation>All text på de här färgerna är lätt att läsa.</translation>
+    </message>
+    <message>
+        <source>The accent color comes from the color scheme.</source>
+        <translation>Accentfärgen kommer från färgschemat.</translation>
     </message>
     <message>
         <source>Choose accent color</source>
@@ -2743,6 +3355,34 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Från en fil…</translation>
     </message>
     <message>
+        <source>the picture {name}</source>
+        <translation>bilden {name}</translation>
+    </message>
+    <message>
+        <source>Colors from the picture {name}</source>
+        <translation>Färger från bilden {name}</translation>
+    </message>
+    <message>
+        <source>Save Colors in pywal’s Format</source>
+        <translation>Spara färger i pywals format</translation>
+    </message>
+    <message>
+        <source>pywal colors (*.json)</source>
+        <translation>pywal-färger (*.json)</translation>
+    </message>
+    <message>
+        <source>The colors could not be saved: {problem}</source>
+        <translation>Färgerna kunde inte sparas: {problem}</translation>
+    </message>
+    <message>
+        <source>The colors are saved in {name}.</source>
+        <translation>Färgerna är sparade i {name}.</translation>
+    </message>
+    <message>
+        <source>the wallpaper</source>
+        <translation>skrivbordsunderlägget</translation>
+    </message>
+    <message>
         <source>Import Colors</source>
         <translation>Importera färger</translation>
     </message>
@@ -2755,8 +3395,68 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>ett färgschema</translation>
     </message>
     <message>
+        <source>You chose this accent color. “From color scheme” goes back to the color scheme’s own.</source>
+        <translation>Du valde den här accentfärgen. ”Från färgschemat” går tillbaka till färgschemats egen.</translation>
+    </message>
+    <message>
+        <source>Plasma takes the accent color from the wallpaper and follows it when the wallpaper changes. The dots are only the accent this theme starts with.</source>
+        <translation>Plasma tar accentfärgen från skrivbordsunderlägget och följer den när underlägget byts. Prickarna är bara den accentfärg som det här temat börjar med.</translation>
+    </message>
+    <message>
+        <source>Use the accent color of the color scheme</source>
+        <translation>Använd färgschemats accentfärg</translation>
+    </message>
+    <message>
+        <source>Colors from a Picture…</source>
+        <translation>Färger från en bild…</translation>
+    </message>
+    <message>
+        <source>Save Colors in pywal’s Format…</source>
+        <translation>Spara färger i pywals format…</translation>
+    </message>
+    <message>
         <source>Import colors from {name}</source>
         <translation>Importera färger från {name}</translation>
+    </message>
+    <message>
+        <source>Colors from a Picture</source>
+        <translation>Färger från en bild</translation>
+    </message>
+    <message>
+        <source>Choose the picture the colors are taken from. You see the colors and can change them before anything is used.</source>
+        <translation>Välj bilden som färgerna tas från. Du ser färgerna och kan ändra dem innan något används.</translation>
+    </message>
+    <message>
+        <source>The wallpaper</source>
+        <translation>Skrivbordsunderlägget</translation>
+    </message>
+    <message>
+        <source>Another picture</source>
+        <translation>En annan bild</translation>
+    </message>
+    <message>
+        <source>Built in</source>
+        <translation>Inbyggd</translation>
+    </message>
+    <message>
+        <source>Always available.</source>
+        <translation>Alltid tillgänglig.</translation>
+    </message>
+    <message>
+        <source>{tool} is not installed on this computer.</source>
+        <translation>{tool} är inte installerat på den här datorn.</translation>
+    </message>
+    <message>
+        <source>Find Colors</source>
+        <translation>Hitta färger</translation>
+    </message>
+    <message>
+        <source>Picture</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <source>Find the colors with</source>
+        <translation>Hitta färgerna med</translation>
     </message>
     <message>
         <source>Choose a Picture</source>
@@ -2765,6 +3465,14 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
         <source>Pictures</source>
         <translation>Bilder</translation>
+    </message>
+    <message>
+        <source>Choose a picture first.</source>
+        <translation>Välj en bild först.</translation>
+    </message>
+    <message>
+        <source>Finding colors…</source>
+        <translation>Hittar färger…</translation>
     </message>
     <message>
         <source>Use wallpaper colors as light theme</source>
@@ -2788,11 +3496,11 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>Configure Titlebar Buttons…</source>
-        <translation>Anpassa titelradens knappar…</translation>
+        <translation>Anpassa namnlistens knappar…</translation>
     </message>
     <message>
         <source>Choose which buttons the title bar of windows has, and on which side.</source>
-        <translation>Välj vilka knappar fönstrens titelrad har och på vilken sida.</translation>
+        <translation>Välj vilka knappar fönstrens namnlist har och på vilken sida.</translation>
     </message>
     <message>
         <source>Window border size</source>
@@ -2823,8 +3531,16 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Hur tjock kanten runt fönster är, med vilken fönsterdekoration som helst.</translation>
     </message>
     <message>
+        <source>Not installed</source>
+        <translation>Inte installerat</translation>
+    </message>
+    <message>
+        <source>Klassy is a separate window decoration that is not installed on this computer.</source>
+        <translation>Klassy är en separat fönsterdekoration som inte är installerad på den här datorn.</translation>
+    </message>
+    <message>
         <source>Change the title bar buttons</source>
-        <translation>Ändra titelradens knappar</translation>
+        <translation>Ändra namnlistens knappar</translation>
     </message>
     <message>
         <source>General</source>
@@ -2880,7 +3596,7 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>Choose…</source>
-        <translation>Välj …</translation>
+        <translation>Välj…</translation>
     </message>
     <message>
         <source>Choose {font}</source>
@@ -3064,15 +3780,15 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>How the panel, menus, popups and tooltips are drawn.</source>
-        <translation>Hur panelen, menyer, popuprutor och verktygstips ritas.</translation>
+        <translation>Hur panelen, menyer, popupfönster och verktygstips ritas.</translation>
     </message>
     <message>
         <source>Popups and tooltips</source>
-        <translation>Popuprutor och verktygstips</translation>
+        <translation>Popupfönster och verktygstips</translation>
     </message>
     <message>
         <source>Preview of the panel and its popups</source>
-        <translation>Förhandsgranskning av panelen och dess popuprutor</translation>
+        <translation>Förhandsgranskning av panelen och dess popupfönster</translation>
     </message>
     <message>
         <source>Switches the pointer theme.</source>
@@ -3083,12 +3799,12 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Muspekaren.</translation>
     </message>
     <message>
-        <source>Configure Launch Feedback in System Settings…</source>
-        <translation>Ställ in startåterkoppling i Systeminställningar…</translation>
+        <source>Configure Launch Feedback…</source>
+        <translation>Anpassa startåterkoppling…</translation>
     </message>
     <message>
-        <source>Opens the pointer page of System Settings.</source>
-        <translation>Öppnar pekarsidan i Systeminställningar.</translation>
+        <source>Sets the busy pointer and the taskbar feedback when a program starts.</source>
+        <translation>Anger upptagetpekaren och aktivitetsfältets återkoppling när ett program startar.</translation>
     </message>
     <message>
         <source>Size</source>
@@ -3132,7 +3848,7 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>Corners and borders. Applications, windows, panels and popups follow these.</source>
-        <translation>Hörn och kanter. Program, fönster, paneler och popuprutor följer dessa.</translation>
+        <translation>Hörn och kanter. Program, fönster, paneler och popupfönster följer dessa.</translation>
     </message>
     <message>
         <source>Switches the sound theme.</source>
@@ -3171,24 +3887,52 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Används inte ännu</translation>
     </message>
     <message>
-        <source>{pair}: {ratio}, should be at least {minimum}:1</source>
-        <translation>{pair}: {ratio}, bör vara minst {minimum}:1</translation>
+        <source>Fix Contrast…</source>
+        <translation>Åtgärda kontrasten…</translation>
+    </message>
+    <message>
+        <source>Shows which colors would change, as little as possible, before it changes them.</source>
+        <translation>Visar vilka färger som skulle ändras, så lite som möjligt, innan något ändras.</translation>
+    </message>
+    <message>
+        <source>Some text is hard to read on its background.</source>
+        <translation>Viss text är svår att läsa mot sin bakgrund.</translation>
     </message>
     <message>
         <source>All text is readable.</source>
         <translation>All text är läsbar.</translation>
     </message>
     <message>
-        <source>Fix contrast</source>
+        <source>Fix Contrast</source>
         <translation>Åtgärda kontrasten</translation>
     </message>
     <message>
-        <source>Changes the colors that are hard to read, as little as possible.</source>
-        <translation>Ändrar de färger som är svåra att läsa, så lite som möjligt.</translation>
+        <source>These colors are hard to read on their background. They will be changed as little as possible and keep their hue.</source>
+        <translation>De här färgerna är svåra att läsa mot sin bakgrund. De ändras så lite som möjligt och behåller sin nyans.</translation>
     </message>
     <message>
-        <source>And {count} more.</source>
-        <translation>Och {count} till.</translation>
+        <source>Hard to read on the {background}.</source>
+        <translation>Svår att läsa mot {background}.</translation>
+    </message>
+    <message>
+        <source>Contrast: {old} now, {new} after.</source>
+        <translation>Kontrast: {old} nu, {new} efteråt.</translation>
+    </message>
+    <message>
+        <source>{color} now</source>
+        <translation>{color} nu</translation>
+    </message>
+    <message>
+        <source>{color} after</source>
+        <translation>{color} efteråt</translation>
+    </message>
+    <message>
+        <source>Fix</source>
+        <translation>Åtgärda</translation>
+    </message>
+    <message>
+        <source>Fix contrast</source>
+        <translation>Åtgärda kontrasten</translation>
     </message>
     <message>
         <source>The desktop settings cannot be read.</source>
@@ -3215,10 +3959,6 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Använd som mörkt tema</translation>
     </message>
     <message>
-        <source>Choose a picture…</source>
-        <translation>Välj en bild…</translation>
-    </message>
-    <message>
         <source>Reading the picture…</source>
         <translation>Läser bilden…</translation>
     </message>
@@ -3236,7 +3976,7 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>Title bar buttons</source>
-        <translation>Titelradens knappar</translation>
+        <translation>Namnlistens knappar</translation>
     </message>
     <message>
         <source>On the left</source>
@@ -3260,15 +4000,11 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>Configure Titlebar Buttons</source>
-        <translation>Anpassa titelradens knappar</translation>
+        <translation>Anpassa namnlistens knappar</translation>
     </message>
     <message>
         <source>Drag buttons between the title bar and the pool below, or choose a button and use the buttons under it.</source>
-        <translation>Dra knappar mellan titelraden och förrådet nedanför, eller välj en knapp och använd knapparna under den.</translation>
-    </message>
-    <message>
-        <source>Leave the buttons as they are</source>
-        <translation>Lämna knapparna som de är</translation>
+        <translation>Dra knappar mellan namnlisten och förrådet nedanför, eller välj en knapp och använd knapparna under den.</translation>
     </message>
     <message>
         <source>Move left</source>
@@ -3311,20 +4047,60 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Inloggningsskärmen tillhör hela datorn, inte ditt konto, och för att ändra den krävs administratörsrättigheter. Därför ändrar den här appen den inte. Systeminställningar kan göra det och ber om ditt lösenord när det behövs.</translation>
     </message>
     <message>
-        <source>Where the main panel sits and how it behaves.</source>
-        <translation>Var huvudpanelen sitter och hur den beter sig.</translation>
+        <source>Leave this one as it is</source>
+        <translation>Lämna den här som den är</translation>
+    </message>
+    <message>
+        <source>As it is now</source>
+        <translation>Som det är nu</translation>
+    </message>
+    <message>
+        <source>{setting}: leave this one as it is</source>
+        <translation>{setting}: lämna den här som den är</translation>
+    </message>
+    <message>
+        <source>Where the panels sit and how they behave.</source>
+        <translation>Var panelerna sitter och hur de beter sig.</translation>
+    </message>
+    <message>
+        <source>Moves and shapes the panels when you apply.</source>
+        <translation>Flyttar och formar panelerna när du verkställer.</translation>
+    </message>
+    <message>
+        <source>Set this panel from the theme</source>
+        <translation>Ställ in den här panelen från temat</translation>
+    </message>
+    <message>
+        <source>Screens</source>
+        <translation>Skärmar</translation>
+    </message>
+    <message>
+        <source>This desktop has no panel {number}. This part is skipped when you apply.</source>
+        <translation>Det här skrivbordet har ingen panel {number}. Den här delen hoppas över när du verkställer.</translation>
+    </message>
+    <message>
+        <source>The panels are left as they are. The preview shows this desktop&apos;s panels.</source>
+        <translation>Panelerna lämnas som de är. Förhandsgranskningen visar det här skrivbordets paneler.</translation>
+    </message>
+    <message>
+        <source>The panels are left as they are. The preview shows a usual panel.</source>
+        <translation>Panelerna lämnas som de är. Förhandsgranskningen visar en vanlig panel.</translation>
+    </message>
+    <message>
+        <source>Panel {number}</source>
+        <translation>Panel {number}</translation>
+    </message>
+    <message>
+        <source>Set the panels from this theme</source>
+        <translation>Ställ in panelerna från det här temat</translation>
+    </message>
+    <message>
+        <source>Leave the panels as they are</source>
+        <translation>Lämna panelerna som de är</translation>
     </message>
     <message>
         <source>Leave the panel where it is</source>
         <translation>Lämna panelen där den är</translation>
-    </message>
-    <message>
-        <source>Moves and shapes the main panel when you apply.</source>
-        <translation>Flyttar och formar huvudpanelen när du verkställer.</translation>
-    </message>
-    <message>
-        <source>The panel is left as it is. The preview shows a usual panel.</source>
-        <translation>Panelen lämnas som den är. Förhandsgranskningen visar en vanlig panel.</translation>
     </message>
     <message>
         <source>Set the panel from this theme</source>
@@ -3351,8 +4127,16 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Panelens skärmkant</translation>
     </message>
     <message>
+        <source>Panel {number}: {edge}</source>
+        <translation>Panel {number}: {edge}</translation>
+    </message>
+    <message>
         <source>No edge chosen</source>
         <translation>Ingen kant vald</translation>
+    </message>
+    <message>
+        <source>Looking for what is installed…</source>
+        <translation>Letar efter vad som är installerat…</translation>
     </message>
     <message>
         <source>Play</source>
@@ -3411,20 +4195,8 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Plasma växlar mellan sitt ljusa och sitt mörka globala tema efter tid på dygnet. Vilka två som används väljs i Systeminställningar. Det ställs in när du väljer Verkställ på skrivbordet.</translation>
     </message>
     <message>
-        <source>Apply to Desktop loads this into the editor first and then applies the editor theme. The package&apos;s own panel layout and widgets are not installed.</source>
-        <translation>Verkställ på skrivbordet läser först in detta i redigeraren och verkställer sedan redigerarens tema. Paketets egen panellayout och egna widgetar installeras inte.</translation>
-    </message>
-    <message>
         <source>{name} by {author}</source>
         <translation>{name} av {author}</translation>
-    </message>
-    <message>
-        <source>Reading what it sets…</source>
-        <translation>Läser vad det bestämmer…</translation>
-    </message>
-    <message>
-        <source>It sets none of the parts this app can change.</source>
-        <translation>Det bestämmer ingen av de delar som den här appen kan ändra.</translation>
     </message>
     <message>
         <source>{part}: {value}</source>
@@ -3459,10 +4231,6 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Verkställ på skrivbordet</translation>
     </message>
     <message>
-        <source>Apply “{name}”? Its settings are loaded into the editor first, and then the editor theme is applied to the desktop. The Global Theme itself is not installed as the desktop&apos;s, so its panel layout and widgets stay as they are. Undo last apply takes you back.</source>
-        <translation>Verkställa ”{name}”? Dess inställningar läses först in i redigeraren och sedan verkställs redigerarens tema på skrivbordet. Själva globala temat installeras inte som skrivbordets, så dess panellayout och widgetar förblir som de är. Ångra senaste verkställande tar dig tillbaka.</translation>
-    </message>
-    <message>
         <source>This is a new theme made from what the desktop uses now. Nothing was applied. Undo brings the theme you had back. Change it on the pages, then choose Apply to Desktop.</source>
         <translation>Det här är ett nytt tema gjort av det skrivbordet använder nu. Inget tillämpades. Ångra tar tillbaka temat du hade. Ändra det på sidorna och välj sedan Verkställ på skrivbordet.</translation>
     </message>
@@ -3471,8 +4239,108 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Mitt skrivbord</translation>
     </message>
     <message>
+        <source>This theme has a light and a dark variant. Turn the switch on and Plasma changes between them by itself; until then Apply puts the variant you see on the desktop.</source>
+        <translation>Det här temat har en ljus och en mörk variant. Slå på växlingen så byter Plasma mellan dem av sig självt; tills dess lägger Verkställ varianten du ser på skrivbordet.</translation>
+    </message>
+    <message>
+        <source>Apply to Desktop first copies these settings into the editor and then applies them. The theme&apos;s own panel layout and widgets are left as they are.</source>
+        <translation>Verkställ på skrivbordet kopierar först de här inställningarna till redigeraren och verkställer dem sedan. Temats egen panelplacering och moduler lämnas som de är.</translation>
+    </message>
+    <message>
+        <source>Looking at what this theme changes…</source>
+        <translation>Tittar på vad det här temat ändrar…</translation>
+    </message>
+    <message>
+        <source>This theme changes nothing that this app can edit.</source>
+        <translation>Det här temat ändrar inget som det här programmet kan redigera.</translation>
+    </message>
+    <message>
+        <source>Apply “{name}”? Its settings are copied into the editor first, and then applied to the desktop. Its panel layout and widgets stay as they are. Undo last apply takes you back.</source>
+        <translation>Verkställ ”{name}”? Dess inställningar kopieras först till redigeraren och verkställs sedan på skrivbordet. Dess panelplacering och moduler lämnas som de är. Ångra senaste verkställning tar dig tillbaka.</translation>
+    </message>
+    <message>
         <source>New theme from the desktop</source>
         <translation>Nytt tema från skrivbordet</translation>
+    </message>
+    <message>
+        <source>the built-in way</source>
+        <translation>det inbyggda sättet</translation>
+    </message>
+    <message>
+        <source>{tool} did not give any colors for this picture.</source>
+        <translation>{tool} gav inga färger för den här bilden.</translation>
+    </message>
+    <message>
+        <source> s</source>
+        <translation> s</translation>
+    </message>
+    <message>
+        <source>Configure Icons and Toolbars</source>
+        <translation>Anpassa ikoner och verktygsfält</translation>
+    </message>
+    <message>
+        <source>How applications label their toolbars, and where they show icons.</source>
+        <translation>Hur program märker sina verktygsfält, och var de visar ikoner.</translation>
+    </message>
+    <message>
+        <source>On buttons</source>
+        <translation>På knappar</translation>
+    </message>
+    <message>
+        <source>In menus</source>
+        <translation>I menyer</translation>
+    </message>
+    <message>
+        <source>Configure Launch Feedback</source>
+        <translation>Anpassa startåterkoppling</translation>
+    </message>
+    <message>
+        <source>What shows that an application is starting.</source>
+        <translation>Vad som visar att ett program startar.</translation>
+    </message>
+    <message>
+        <source>Show a button in the Task Manager</source>
+        <translation>Visa en knapp i Aktivitetshanteraren</translation>
+    </message>
+    <message>
+        <source>Change icons and toolbars</source>
+        <translation>Ändra ikoner och verktygsfält</translation>
+    </message>
+    <message>
+        <source>Change launch feedback</source>
+        <translation>Ändra startåterkoppling</translation>
+    </message>
+    <message>
+        <source>Variant</source>
+        <translation>Variant</translation>
+    </message>
+    <message>
+        <source>Variant:</source>
+        <translation>Variant:</translation>
+    </message>
+    <message>
+        <source>Remove the Dark Variant</source>
+        <translation>Ta bort den mörka varianten</translation>
+    </message>
+    <message>
+        <source>Remove the Light Variant</source>
+        <translation>Ta bort den ljusa varianten</translation>
+    </message>
+    <message>
+        <source>The colors on this page are those of the variant above. Shapes, fonts and everything else are the same in both. Apply puts the variant you see on the desktop.</source>
+        <translation>Färgerna på den här sidan hör till varianten ovan. Former, typsnitt och allt annat är lika i båda. Verkställ lägger den variant du ser på skrivbordet.</translation>
+    </message>
+    <message>
+        <source>Add a Dark Variant</source>
+        <translation>Lägg till en mörk variant</translation>
+    </message>
+    <message>
+        <source>Add a Light Variant</source>
+        <translation>Lägg till en ljus variant</translation>
+    </message>
+    <message>
+        <source>This theme has one set of colors. A second one is made from it: the same hues, with the lightness turned around and the text colors corrected.</source>
+        <translation>Det här temat har en uppsättning färger. En andra görs från den: samma nyanser, med ljusheten omvänd och textfärgerna korrigerade.</translation>
     </message>
 </context>
 <context>
@@ -3547,7 +4415,7 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>Show files…</source>
-        <translation>Visa filer …</translation>
+        <translation>Visa filer…</translation>
     </message>
     <message>
         <source>Snapshots…</source>

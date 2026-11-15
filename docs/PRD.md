@@ -63,7 +63,7 @@ A single design decision, such as "8 px corners everywhere", has to be made five
 - **Center: workspace** with three tabs.
   - **Preview**: sample window, widgets, menu and panel rendered with the theme.
   - **SVG editor**: edits frame graphics for the panel, popups and widgets.
-  - **Files written**: lists every file the next apply will create or change, and how each target is reloaded.
+  - **Show files…** (a dialog, no tab): lists every file the next apply will create or change, and how each target is reloaded.
 - **Right: inspector.** Controls for the selected section.
 - **Bottom: status and actions.** What will change, *Undo last apply*, *Apply to desktop*.
 
@@ -105,7 +105,7 @@ Priorities: **P0** = required for the milestone, **P1** = should have, **P2** = 
 | TF-3 | A theme can define a light and a dark variant that share shape tokens. | P1 |
 | TF-4 | Older schema versions are migrated automatically on load. The original file is kept as a backup. | P0 |
 | TF-5 | Invalid files produce an error that names the key and the problem. The app does not crash or apply partial themes. | P0 |
-| TF-7 | Themes are stored in `~/.local/share/plasma-theme-studio/themes/`. The app shows the path and has an *Open themes folder* action, and each row in *Files written* links to its folder. | P0 |
+| TF-7 | Themes are stored in `~/.local/share/plasma-theme-studio/themes/`. The app shows the path and has an *Open themes folder* action, and each row in *Show files…* links to its folder. | P0 |
 | TF-6 | Custom SVG artwork made in the editor is stored next to the theme file and referenced from it. | P0 (M3) |
 
 Draft format, to be finalized in milestone 1:
@@ -156,7 +156,7 @@ radius = 12         # overrides shape.radius for the panel only
 | AP-2 | Before each apply, the app saves a snapshot of every file it is about to change, plus the active theme settings. | P0 |
 | AP-3 | *Undo last apply* restores the latest snapshot. Any snapshot can be restored from the Snapshots section. | P0 |
 | AP-4 | The app only writes inside its own theme folders, except for a documented list of shared files (`gtk.css`, Klassy config). Shared files are always snapshotted first. | P0 |
-| AP-5 | The *Files written* tab shows the exact list before the user applies. | P0 |
+| AP-5 | *Show files…* shows the exact list before the user applies. | P0 |
 | AP-6 | If one target fails, the others still apply, and the failure is reported with the reason. | P0 |
 | AP-7 | Targets whose backend is not installed (for example Klassy) are disabled with an explanation, not hidden. | P0 |
 | AP-8 | A command-line mode applies a theme file without the GUI: `plasma-theme-studio apply my-theme.toml`. | P1 |
@@ -216,7 +216,7 @@ The goal is one consistent place for everything that affects how the desktop loo
 | ID | Requirement | Priority |
 |---|---|---|
 | DL-1 | Each shape value (corner radius, border width) can be set separately for windows and for the panel; unset values follow the global one. | P0 (M1; applied to windows, the panel and app widgets in 0.1) |
-| DL-2 | Panel layout: screen edge, height, length and alignment, floating, visibility mode and opacity, for each panel, changed from the app and shown in the preview. | P0 (M3; the main panel in 0.1) |
+| DL-2 | Panel layout: screen edge, height, length and alignment, floating, visibility mode and opacity, for each panel, changed from the app and shown in the preview. | P0 (M3; up to six panels in 0.1) |
 | DL-3 | The Themes tab lists installed color schemes and saved themes with thumbnails and switches between them. | P0 (M1) |
 | DL-4 | Switch between installed Global Themes, Plasma styles, window decorations, application styles, icon themes and cursor themes from the Themes tab. Everything a switch changes is covered by the snapshot. | P1 (M4) |
 | DL-5 | Fonts, title bar button layout and window border size can be set in the app. | P1 (M4) |
@@ -347,7 +347,7 @@ Each milestone ends with a tagged release that is usable on its own.
 - First PKGBUILD (`-git` variant).
 - Runs from a source checkout on any distro with PySide6 installed.
 - The `restore` recovery command.
-- Brought forward from milestones 2 and 3 (see section 15): window frame through Breeze's settings or a generated Aurorae frame, a generated panel background, and the layout of the main panel.
+- Brought forward from milestones 2 and 3 (see section 15): window frame through Breeze's settings or a generated Aurorae frame, a generated panel background, and the layout of up to six panels.
 
 **Done when**
 - A user can create a theme, change colors, apply it, see all Qt/KDE apps recolor without logging out, and undo it.
@@ -359,10 +359,10 @@ Each milestone ends with a tagged release that is usable on its own.
 **Delivers**
 - Kvantum generator (config + SVG from templates): radius, border, shadows, opacity.
 - Klassy as an optional window decoration backend: radius, border, shadow, button style.
-- Basic backends: Breeze / Darkly / Klassy application style settings. (The Breeze decoration settings shipped in 0.1.)
+- Basic backends: Breeze / Darkly / Klassy application style settings. (The Breeze decoration settings and the application style page shipped in 0.1.)
 - Preview rendered with the real Kvantum style.
-- Light and dark variants.
-- pywal and matugen import with editable color mapping, and generating a palette from a wallpaper.
+- Light and dark variants. (Shipped in 0.1: *Add a Dark Variant* on the Colors page and `--variant light|dark`.)
+- pywal and matugen import with editable color mapping, and generating a palette from a wallpaper. (Import and colors from a picture shipped in 0.1.)
 
 **Done when**
 - Changing the corner radius once changes buttons, fields, menus and window corners after one apply.
@@ -373,7 +373,7 @@ Each milestone ends with a tagged release that is usable on its own.
 **Delivers**
 - Plasma style generator: dialogs, tooltips, widget backgrounds. (The panel background shipped in 0.1.)
 - SVG frame editor with validation.
-- SVG draw mode and *Open in Inkscape*.
+- SVG draw mode and *Open in Inkscape*. (Open in Inkscape and the frame editor shipped in 0.1; the embedded draw mode did not.)
 
 **Done when**
 - A user can restyle the panel and popups (radius, border, opacity, shadow) and move and resize the panel (DL-2) without leaving the app.

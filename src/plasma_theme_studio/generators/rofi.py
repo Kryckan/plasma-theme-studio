@@ -69,9 +69,13 @@ def desktop_font() -> str:
 
 
 def font_of(theme: Theme) -> str:
-    """The font the Rofi theme names. Text that is empty counts as not set."""
+    """The font the Rofi theme names. Text that is empty counts as not set; then it is the general
+    font the theme sets (the apply puts it on the desktop first), else the one the desktop has."""
     chosen = (theme.get("rofi", "font") or "").strip()
-    return chosen or desktop_font()
+    if chosen:
+        return chosen
+    general = theme.get("fonts", "general")
+    return pango_font(general) if general else desktop_font()
 
 
 def _string(text: str) -> str:

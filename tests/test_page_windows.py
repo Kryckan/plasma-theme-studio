@@ -10,6 +10,7 @@ from PySide6.QtCore import QPoint, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
 from plasma_theme_studio.model.theme import FIELD_BY_ID  # noqa: E402
+from plasma_theme_studio.pickers.base import Item  # noqa: E402
 from plasma_theme_studio.ui.main_window import MainWindow  # noqa: E402
 from plasma_theme_studio.ui.pages import panel as panel_module  # noqa: E402
 from plasma_theme_studio.ui.pages.base import BREEZE_ADJUSTED, THIS_THEME  # noqa: E402
@@ -70,13 +71,16 @@ def test_the_frame_tuning_and_the_large_preview_show_for_this_theme_and_breeze_o
     assert not page.frame_box.isVisible()
     click(page.grid.card(THIS_THEME))
     window.refresh()
-    assert page.frame_box.isVisible() and page.frame_preview.isVisible()
+    assert page.frame_box.isVisible() and page.own_preview.isVisible()
+    assert not page.frame_preview.isVisible()
     assert window.editors[("window", "radius")].isEnabled()
+    assert window.editors[("window", "title_height")].isEnabled()
     assert not page.frame_hint.isVisible()
     click(page.grid.card(BREEZE_ADJUSTED))
     window.refresh()
-    assert page.frame_box.isVisible() and page.frame_hint.isVisible()
+    assert page.frame_box.isVisible() and page.frame_hint.isVisible() and page.frame_preview.isVisible()
     assert not window.editors[("window", "radius")].isEnabled()
+    assert not window.editors[("shadow", "offset_x")].isEnabled()
     other = next(i for i in page.grid.ids() if i not in (THIS_THEME, BREEZE_ADJUSTED))
     click(page.grid.card(other))
     window.refresh()
@@ -214,7 +218,7 @@ def open_dialog(window):
 
 def test_the_dialog_starts_from_the_desktop_and_leaving_stores_nothing(window):
     _page, dialog = open_dialog(window)
-    assert dialog.leave.isChecked() and not dialog.board.isEnabled()
+    assert dialog.leave.isChecked() and dialog.board.isEnabled()
     assert dialog.values() == (None, None)
     dialog.accept()
     assert window.theme.get("window", "buttons_left") is None
@@ -224,7 +228,6 @@ def test_the_dialog_starts_from_the_desktop_and_leaving_stores_nothing(window):
 def test_the_dialog_stores_both_sides_as_one_undo_step(window):
     _page, dialog = open_dialog(window)
     steps = window.undo_stack.count()
-    dialog.leave.setChecked(False)
     assert dialog.board.isEnabled()
     dialog.board.select("left", 0)
     click(dialog.buttons["move_right"])
@@ -245,7 +248,6 @@ def test_the_dialog_stores_both_sides_as_one_undo_step(window):
 
 def test_the_dialog_buttons_follow_the_choice(window):
     _page, dialog = open_dialog(window)
-    dialog.leave.setChecked(False)
     assert not any(b.isEnabled() for b in dialog.buttons.values())
     dialog.board.select("left", 0)
     assert dialog.buttons["move_right"].isEnabled() and not dialog.buttons["move_left"].isEnabled()
@@ -256,7 +258,6 @@ def test_the_dialog_buttons_follow_the_choice(window):
 
 def test_the_defaults_button_and_cancel(window):
     _page, dialog = open_dialog(window)
-    dialog.leave.setChecked(False)
     dialog.board.select("left", 0)
     dialog.board.remove()
     click(dialog.defaults)
@@ -266,13 +267,26 @@ def test_the_defaults_button_and_cancel(window):
     assert window.undo_stack.count() == 0
 
 
+def test_a_change_on_the_board_turns_the_choice_to_set_and_leaving_goes_back(window):
+    _page, dialog = open_dialog(window)
+    desktop = (dialog.board.text("left"), dialog.board.text("right"))
+    dialog.board.select("left", 0)
+    dialog.board.remove()
+    assert dialog.own.isChecked() and not dialog.leave.isChecked()
+    assert dialog.values() != (None, None)
+    dialog.leave.setChecked(True)
+    assert (dialog.board.text("left"), dialog.board.text("right")) == desktop
+    assert dialog.values() == (None, None)
+    dialog.reject()
+
+
 def test_the_dialog_starts_from_the_buttons_of_the_theme(window):
     window.edit_many(
         "Buttons",
         {FIELD_BY_ID[("window", "buttons_left")]: "M", FIELD_BY_ID[("window", "buttons_right")]: "X"},
     )
     _page, dialog = open_dialog(window)
-    assert not dialog.leave.isChecked()
+    assert not dialog.leave.isChecked() and dialog.own.isChecked()
     assert dialog.values() == ("M", "X")
     dialog.reject()
 
@@ -354,9 +368,8 @@ def test_the_switch_starts_from_what_the_desktop_has(window):
 def test_the_desktop_is_asked_off_the_gui_thread(window, monkeypatch):
     from plasma_theme_studio.generators import panellayout
 
-    state = {"found": True, "location": "left", "height": 52}
-    monkeypatch.setattr(panellayout, "_read", lambda runner: state)
-    monkeypatch.setattr(panellayout, "_live_state", lambda runner, s: (s, True))
+    state = {"id": 7, "screen": 0, "location": "left", "height": 52}
+    monkeypatch.setattr(panellayout, "live_panels", lambda runner: [state])
     page = page_of(window, "panel")
     page.read_desktop()
     page.settle()
@@ -416,3 +429,40 @@ def test_the_panel_form_edits_the_height_and_the_note_follows(window):
     window.refresh()
     assert window.theme.get("panel_layout", "height") == 70
     assert page.preview.theme.get("panel_layout", "height") == 70
+
+
+def test_the_new_frame_values_edit_the_theme_and_the_drawn_window(window):
+    page = page_of(window, "decorations")
+    click(page.grid.card(THIS_THEME))
+    window.refresh()
+    for key, value in (("title_height", 40), ("button_size", 26), ("button_spacing", 8)):
+        window.edit(FIELD_BY_ID[("window", key)], value)
+        assert window.theme.get("window", key) == value
+    window.edit(FIELD_BY_ID[("shadow", "offset_x")], 6)
+    window.edit(FIELD_BY_ID[("shadow", "offset_y")], 12)
+    window.refresh()
+    look = page.own_preview.look()
+    assert (look.title_total, look.button_size, look.button_spacing) == (40, 26, 8)
+    assert (look.shadow_x, look.shadow_y) == (6, 12)
+    assert page.own_preview.grab().width() > 0  # it paints
+    window.undo_stack.undo()
+    assert window.theme.get("shadow", "offset_y") is None
+
+
+def test_the_drawn_window_follows_the_title_bar_buttons_of_the_theme(window):
+    page = page_of(window, "decorations")
+    assert page.own_preview.layout_buttons() == ("MSE", "HIAX")
+    window.edit_many(
+        "Buttons",
+        {FIELD_BY_ID[("window", "buttons_left")]: "X", FIELD_BY_ID[("window", "buttons_right")]: "I"},
+    )
+    assert page.own_preview.layout_buttons() == ("X", "I")
+
+
+def test_klassy_is_a_switched_off_choice_with_a_reason_when_it_is_not_installed(window):
+    page = page_of(window, "decorations")
+    card = page.grid.card("klassy")
+    assert card is not None and not card.isEnabled() and card.toolTip()
+    page.show_items([Item("org.kde.klassy:Klassy", "Klassy", "")])
+    assert page.grid.card("klassy") is None
+    assert page.grid.card("org.kde.klassy:Klassy").isEnabled()  # offered like any installed decoration

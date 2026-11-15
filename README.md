@@ -40,10 +40,18 @@ makepkg -si
 
 Use the distribution's PySide6, not the one from pip. Only the distribution's build loads the KDE widget styles.
 
+## Features
+
+- A page for every part of System Settings' Colors & Themes, and for the panel, GTK applications and Rofi, with preview cards and a live preview.
+- Colors from a scheme, a chosen accent, the wallpaper, any picture, or an import (pywal, matugen, `.colors`); a contrast check that fixes hard-to-read text.
+- Light and dark variants: *Add a Dark Variant* on the Colors page makes the second set from the first; `apply FILE --variant light|dark` picks one.
+- Window frames, panel position and style, fonts, title bar buttons, pointers, sounds and splash screen, each with *Leave as it is* | *Set by this theme*.
+- Overview of what an apply does to every part, *Show files…*, snapshots and *Undo last apply*.
+
 ## Safety
 
 - The app writes only inside your home folder and never asks for root.
-- The **Files written** tab shows every file and its content before you apply.
+- *Show files…* lists every file before you apply.
 - It also lists the desktop settings an apply changes. The window frame, the panel style and the panel position are only touched when the theme asks for them, except that a window frame made by this app is recolored when a theme or color scheme with other colors is put on the desktop.
 - A snapshot is taken before every apply. **Undo last apply** puts the files and settings back, one apply at a time. Restoring an older snapshot undoes every apply made after it as well.
 - If the desktop becomes hard to use, switch to a text console (Ctrl+Alt+F3), log in and run:
@@ -60,6 +68,8 @@ Themes are stored in `~/.local/share/plasma-theme-studio/themes/` and snapshots 
 plasma-theme-studio [FILE]           open the editor
 plasma-theme-studio validate FILE    check a theme file
 plasma-theme-studio apply FILE       apply a theme file to the desktop
+plasma-theme-studio apply FILE --variant light|dark   apply one variant of a theme that has both
+plasma-theme-studio status FILE      show what the desktop has now and what the theme would change
 plasma-theme-studio restore          undo the latest apply (repeat to go further back)
 plasma-theme-studio restore ID       go back to a chosen snapshot, undoing the applies after it
 plasma-theme-studio restore --list   list the snapshots
@@ -80,8 +90,8 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 
 ## Planned features
 
-- Built-in SVG editor for panel, popup and widget frames
-- Wallpaper-based colors through pywal and matugen
+- Draw mode inside the frame editor (today the editor opens the frame in Inkscape)
+- Klassy as a window decoration
 
 ## Targets
 
@@ -90,7 +100,7 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 | Colors | Plasma color scheme | Works |
 | Window decoration | Generated frame (exact radius, border and shadow); Breeze (its fixed steps) | Works |
 | Panel background | Plasma style (SVG) | Works |
-| Panel position | Plasma's scripting interface | Works for the main panel |
+| Panel position | Plasma's scripting interface | Works for up to six panels |
 | App widgets | Kvantum (generated theme) | Works in tests and the rig |
 | Popups, tooltips, widgets | Plasma style (SVG) | Works in tests |
 | GTK 3 / GTK 4 apps | CSS overrides | Works in tests |
@@ -114,8 +124,8 @@ The first packages target Arch Linux (AUR). Packages for Fedora, openSUSE, Debia
 |---|---|
 | v0.1 | Theme file, colors, window frame, panel look and position, apply, undo, translations, first Arch package |
 | v0.2 | Shapes for app widgets, real-style preview, pywal and matugen import |
-| v0.3 | SVG editor, popups and widgets |
-| v1.0 | GTK, Rofi, export and import, command line, packages for more distributions |
+| v0.3 | Frame editor with Open in Inkscape, popups and widgets (in 0.1), draw mode |
+| v1.0 | GTK, Rofi, export and import and the command line (in 0.1), packages for more distributions |
 
 ## Design
 
@@ -127,6 +137,19 @@ The first packages target Arch Linux (AUR). Packages for Fedora, openSUSE, Debia
 ## Technology
 
 Python with PySide6 (Qt 6 Widgets), Jinja2 templates, and Qt Linguist for translations. The UI follows the system language; English and Swedish are included.
+
+## Developer tools
+
+`scripts/rig_roundtrip.py` applies a theme inside a throwaway desktop (the rig), undoes it, and compares the rig's home before and after. Start a rig, run the script through the memory cap, then stop the rig:
+
+```sh
+/usr/bin/python3 scripts/desktop_rig.py start /tmp/pts-rig-x --plasmashell
+scripts/capped /usr/bin/python3 scripts/rig_roundtrip.py /tmp/pts-rig-x --list
+scripts/capped /usr/bin/python3 scripts/rig_roundtrip.py /tmp/pts-rig-x
+/usr/bin/python3 scripts/desktop_rig.py stop /tmp/pts-rig-x
+```
+
+It never touches your real session.
 
 ## Contributing
 

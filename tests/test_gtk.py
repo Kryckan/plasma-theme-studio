@@ -177,14 +177,14 @@ def test_apply_and_undo_leave_gtk_css_byte_for_byte(home, runner, before):
     assert not GENERATOR.is_active(look(), runner)
 
 
-def test_undo_keeps_what_kded_added_meanwhile(home, runner):
+def test_undo_puts_back_gtk_css_as_it_was_whatever_kded_wrote_meanwhile(home, runner):
     result = engine.apply(look(), runner)
     for v in (3, 4):
         with gtk_css(v).open("a") as f:
             f.write("@import 'colors.css';\n")
     engine.restore(result.snapshot, runner, consume=True)
     for v in (3, 4):
-        assert raw(v) == "@import 'colors.css';\n"
+        assert raw(v) is None  # there was no gtk.css before the apply
 
 
 def test_undo_of_second_apply_keeps_line_first_undo_removes_it(home, runner):

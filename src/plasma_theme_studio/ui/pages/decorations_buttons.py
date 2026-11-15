@@ -8,12 +8,13 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, QEvent, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPalette, QPen
 from PySide6.QtWidgets import (
-    QCheckBox,
+    QButtonGroup,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QRadioButton,
     QSizePolicy,
     QToolTip,
     QVBoxLayout,
@@ -448,6 +449,7 @@ class TitlebarButtonsDialog(QDialog):
     def __init__(self, left: str | None, right: str | None, desktop: dict, parent=None):
         super().__init__(parent)
         self.setWindowTitle(translate("ui", "Configure Titlebar Buttons"))
+        self._loading = False
         self.desktop = {side: desktop.get(side) or DEFAULT_BUTTONS[side] for side in SIDES}
         intro = QLabel(
             translate(
@@ -457,7 +459,16 @@ class TitlebarButtonsDialog(QDialog):
             )
         )
         intro.setWordWrap(True)
-        self.leave = QCheckBox(translate("ui", "Leave the buttons as they are"))
+        self.leave = QRadioButton(translate("ui", "Leave as it is"))
+        self.own = QRadioButton(translate("ui", "Set by this theme"))
+        group = QButtonGroup(self)
+        group.addButton(self.leave)
+        group.addButton(self.own)
+        choice = QHBoxLayout()
+        choice.setSpacing(LARGE_SPACING)
+        choice.addWidget(self.leave)
+        choice.addWidget(self.own)
+        choice.addStretch(1)
         self.board = ButtonBoard()
         self.selected = QLabel()
         self.selected.setForegroundRole(QPalette.ColorRole.PlaceholderText)
@@ -493,7 +504,7 @@ class TitlebarButtonsDialog(QDialog):
         layout.setContentsMargins(24, 20, 24, 16)
         layout.setSpacing(LARGE_SPACING)
         layout.addWidget(intro)
-        layout.addWidget(self.leave)
+        layout.addLayout(choice)
         layout.addWidget(self.board)
         layout.addWidget(self.selected)
         layout.addLayout(actions)
@@ -501,28 +512,41 @@ class TitlebarButtonsDialog(QDialog):
         layout.addWidget(self.box)
 
         self.leave.setChecked(left is None and right is None)
-        self.board.set_buttons(
+        self.own.setChecked(not self.leave.isChecked())
+        self._show(
             left if left is not None else self.desktop["left"],
             right if right is not None else self.desktop["right"],
         )
         self.board.selected = None
         self.leave.toggled.connect(self._leave_toggled)
+        self.board.changed.connect(self._board_changed)
         self.board.selection_changed.connect(self._sync)
         self._leave_toggled(self.leave.isChecked())
         self.setMinimumWidth(640)
 
     def _leave_toggled(self, leave: bool) -> None:
-        self.board.setEnabled(not leave)
-        self.defaults.setEnabled(not leave)
+        """The board is always usable and shows the desktop's layout while the choice is to leave it."""
         if leave:
-            self.board.set_buttons(self.desktop["left"], self.desktop["right"])
+            self._show(self.desktop["left"], self.desktop["right"])
         self._sync()
 
+    def _show(self, left: str, right: str) -> None:
+        self._loading = True
+        try:
+            self.board.set_buttons(left, right)
+        finally:
+            self._loading = False
+
+    def _board_changed(self) -> None:
+        if self.leave.isChecked() and not self._loading:
+            self.own.setChecked(True)
+
     def use_defaults(self) -> None:
-        self.board.set_buttons(DEFAULT_BUTTONS["left"], DEFAULT_BUTTONS["right"])
+        self.own.setChecked(True)
+        self._show(DEFAULT_BUTTONS["left"], DEFAULT_BUTTONS["right"])
 
     def _sync(self) -> None:
-        board, free = self.board, not self.leave.isChecked()
+        board, free = self.board, True
         letter = board.selected_letter()
         self.buttons["move_left"].setEnabled(free and board.can_move(-1))
         self.buttons["move_right"].setEnabled(free and board.can_move(1))

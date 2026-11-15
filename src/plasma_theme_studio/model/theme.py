@@ -9,6 +9,7 @@ its controls from it and the file format follows it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -61,10 +62,54 @@ class Field:
 PANEL_LOCATIONS = ("top", "bottom", "left", "right")
 PANEL_VISIBILITIES = ("none", "autohide", "dodgewindows", "windowsgobelow")
 PANEL_OPACITIES = ("adaptive", "opaque", "translucent")
+TOOLBAR_STYLES = ("NoText", "TextOnly", "TextBesideIcon", "TextUnderIcon")  # as kdeglobals names them
+FEEDBACK_CURSORS = ("none", "static", "blinking", "bouncing")
 BORDER_SIZE_KEYS = tuple(key for key, _name in BORDER_SIZES)
 MAX_ID_LENGTH = 200
 # The fonts the theme can set: key -> what it is called on the desktop.
 FONT_KEYS = ("general", "fixed", "small", "toolbar", "menu", "window_title")
+
+# The frames of the Plasma style that can be drawn by hand: the file (relative to the theme file) of
+# each one's own artwork, in the section "artwork".
+ARTWORK_KEYS = ("panel", "popups", "tooltips", "widgets")
+_ARTWORK_NAME = re.compile(r"\w[\w .-]*(/\w[\w .-]*)*\.svg")
+
+
+def artwork_name_ok(text: str) -> bool:
+    """Whether `text` is a name the theme file may give to a frame's artwork."""
+    return len(text) <= MAX_ID_LENGTH and ".." not in text and bool(_ARTWORK_NAME.fullmatch(text))
+
+
+def artwork_folder(theme_file: Path) -> Path:
+    """The folder next to a theme file that holds its own artwork: "my.toml" has "my-artwork".
+    A file name with characters a theme file's artwork name cannot hold ("it's.toml") gets a safe name."""
+    name = f"{theme_file.stem}-artwork"
+    if artwork_name_ok(f"{name}/panel.svg"):
+        return theme_file.with_name(name)
+    stem = re.sub(r"[^\w]+", "-", theme_file.stem[:80]).strip("-") or "theme"
+    # Two names can come to the same safe one ("it's" and "it-s"): the hash keeps them apart.
+    digest = hashlib.sha1(theme_file.stem.encode("utf-8", "replace")).hexdigest()[:6]
+    return theme_file.with_name(f"{stem}-{digest}-artwork")
+
+
+ARTWORK_LIMIT = 2 * 1024 * 1024  # bytes of one own artwork file
+PANEL_SECTION = "panel_layout"
+MAX_PANELS = 6  # the main panel and five more
+PANEL_FIELDS: tuple[Field, ...] = (
+    Field(PANEL_SECTION, "location", "choice", None, choices=PANEL_LOCATIONS, optional=True),
+    Field(PANEL_SECTION, "height", "int", None, 20, 120, optional=True),
+    Field(PANEL_SECTION, "alignment", "choice", None, choices=("left", "center", "right"), optional=True),
+    Field(PANEL_SECTION, "length_mode", "choice", None, choices=("fill", "fit"), optional=True),
+    Field(PANEL_SECTION, "floating", "bool", None, optional=True),
+    Field(PANEL_SECTION, "visibility", "choice", None, choices=PANEL_VISIBILITIES, optional=True),
+    Field(PANEL_SECTION, "opacity_mode", "choice", None, choices=PANEL_OPACITIES, optional=True),
+)
+
+
+def panel_section(number: int) -> str:
+    """The theme section of panel `number` (1 is the main panel)."""
+    return PANEL_SECTION if number == 1 else f"{PANEL_SECTION}_{number}"
+
 
 FIELDS: tuple[Field, ...] = (
     Field("meta", "name", "str", "My Theme"),
@@ -106,8 +151,15 @@ FIELDS: tuple[Field, ...] = (
     Field("window", "border_size", "choice", None, choices=BORDER_SIZE_KEYS, optional=True),
     Field("window", "buttons_left", "str", None, optional=True, form="buttons"),
     Field("window", "buttons_right", "str", None, optional=True, form="buttons"),
+    # The generated frame only; unset they are the frame's usual 30 px bar, 22 px buttons, 4 px apart.
+    Field("window", "title_height", "int", None, 20, 60, optional=True),
+    Field("window", "button_size", "int", None, 12, 40, optional=True),
+    Field("window", "button_spacing", "int", None, 0, 16, optional=True),
     Field("shadow", "size", "int", 24, 0, 64),
     Field("shadow", "strength", "float", 0.35, 0.0, 1.0),
+    # Which way the shadow falls, in pixels (generated frame only); unset it falls evenly on all sides.
+    Field("shadow", "offset_x", "int", None, -32, 32, optional=True),
+    Field("shadow", "offset_y", "int", None, -32, 32, optional=True),
     Field("panel", "style", "choice", "unchanged", choices=("unchanged", "generated", "installed")),
     Field("panel", "style_id", "str", None, optional=True, form="id"),
     Field("panel", "radius", "int", None, 0, 24, inherits=("shape", "radius")),
@@ -116,15 +168,35 @@ FIELDS: tuple[Field, ...] = (
     Field("popup", "radius", "int", None, 0, 24, inherits=("panel", "radius")),
     Field("popup", "border_width", "int", None, 0, 4, inherits=("panel", "border_width")),
     Field("popup", "opacity", "float", None, 0.2, 1.0, inherits=("panel", "opacity")),
-    Field("panel_layout", "location", "choice", None, choices=PANEL_LOCATIONS, optional=True),
-    Field("panel_layout", "height", "int", None, 20, 120, optional=True),
-    Field("panel_layout", "alignment", "choice", None, choices=("left", "center", "right"), optional=True),
-    Field("panel_layout", "length_mode", "choice", None, choices=("fill", "fit"), optional=True),
-    Field("panel_layout", "floating", "bool", None, optional=True),
-    Field("panel_layout", "visibility", "choice", None, choices=PANEL_VISIBILITIES, optional=True),
-    Field("panel_layout", "opacity_mode", "choice", None, choices=PANEL_OPACITIES, optional=True),
+    *PANEL_FIELDS,
+    # Further panels, in the order the desktop lists them after the main one ("panel 2", "panel 3"):
+    # one section each, `panel_layout_2` and so on, with the values of the main panel's section.
+    *(
+        Field(
+            f"{PANEL_SECTION}_{number}",
+            field.key,
+            field.kind,
+            None,
+            field.minimum,
+            field.maximum,
+            choices=field.choices,
+            optional=True,
+        )
+        for number in range(2, MAX_PANELS + 1)
+        for field in PANEL_FIELDS
+    ),
     # True: Plasma switches between the light and the dark Global Theme chosen in System Settings
     # with the sun; False: it does not; unset: left as it is.
+    # Icons and Toolbars (System Settings > Application Style) and Launch Feedback (> Pointers).
+    Field("toolbars", "main_style", "choice", None, choices=TOOLBAR_STYLES, optional=True),
+    Field("toolbars", "other_style", "choice", None, choices=TOOLBAR_STYLES, optional=True),
+    Field("toolbars", "icons_on_buttons", "bool", None, optional=True),
+    Field("toolbars", "icons_in_menus", "bool", None, optional=True),
+    Field("feedback", "cursor", "choice", None, choices=FEEDBACK_CURSORS, optional=True),
+    Field("feedback", "cursor_timeout", "int", None, 1, 60, optional=True),
+    Field("feedback", "taskbar", "bool", None, optional=True),
+    Field("feedback", "taskbar_timeout", "int", None, 1, 60, optional=True),
+    *(Field("artwork", key, "str", None, optional=True, form="artwork") for key in ARTWORK_KEYS),
     Field("desktop", "dark_at_night", "bool", None, optional=True),
     Field("desktop", "icons", "str", None, optional=True, form="id"),
     Field("desktop", "cursors", "str", None, optional=True, form="id"),
@@ -235,6 +307,13 @@ def _check_form(field: Field, value: str) -> tuple[object, Msg | None]:
                 key=field.path
             )
         return spec.short(), None
+    if field.form == "artwork":
+        # A file inside the folder of the theme file: relative, no "..", an SVG.
+        if not artwork_name_ok(text):
+            return value, translate(
+                "core", "{key} must be the name of an .svg file next to the theme file."
+            ).format(key=field.path)
+        return text, None
     if field.form == "buttons":
         if parse_buttons(text) is None:
             return value, translate(
@@ -248,9 +327,37 @@ def _check_form(field: Field, value: str) -> tuple[object, Msg | None]:
     return text, None
 
 
+# The colors a second (light or dark) variant of a theme has of its own. Everything else is shared.
+VARIANT_KEYS = (
+    "accent",
+    "scheme_id",
+    "window",
+    "view",
+    "button",
+    "header",
+    "text",
+    "text_muted",
+    "link",
+    "visited",
+    "negative",
+    "neutral",
+    "positive",
+)
+VARIANT_NAMES = ("light", "dark")
+
+
 class Theme:
     def __init__(self, values: dict[tuple[str, str], object] | None = None):
         self._values: dict[tuple[str, str], object] = {f.id: f.default for f in FIELDS}
+        # Where the theme file is (set by `load` and `save`): own artwork is found relative to it.
+        self.base_dir: Path | None = None
+        # Artwork that came with an imported archive, written next to the theme file on its first save.
+        self.pending_artwork: dict[str, bytes] = {}
+        # The second variant's colors (keys of VARIANT_KEYS), and which variant `_values` holds.
+        # `shown` is the variant the editor works on; it is a view, not part of the theme.
+        self._other: dict[str, object] | None = None
+        self._main: str | None = None
+        self.shown: str | None = None
         for (section, key), value in (values or {}).items():
             self.set(section, key, value)
 
@@ -258,8 +365,16 @@ class Theme:
     def from_preset(cls, preset: str) -> Theme:
         return cls(PRESETS[preset])
 
+    def _slot(self, section: str, key: str) -> dict:
+        """The table that holds the value: the other variant's colors while that one is shown."""
+        if section == "colors" and key in VARIANT_KEYS and self._other is not None:
+            if self.shown is not None and self.shown != self._main:
+                return self._other
+        return self._values
+
     def get(self, section: str, key: str):
-        return self._values[(section, key)]
+        slot = self._slot(section, key)
+        return slot[key] if slot is self._other else slot[(section, key)]
 
     def set(self, section: str, key: str, value) -> None:
         field = FIELD_BY_ID.get((section, key))
@@ -268,12 +383,15 @@ class Theme:
         stored, problem = check_value(field, value)
         if problem:
             raise ThemeError([problem])
-        self._values[field.id] = stored
+        if self._slot(section, key) is self._other:
+            self._other[key] = stored
+        else:
+            self._values[field.id] = stored
 
     def resolved(self, section: str, key: str):
         """The value in effect: the field's own value, or the one it follows
         (which may itself follow another field)."""
-        value = self._values[(section, key)]
+        value = self.get(section, key)
         field = FIELD_BY_ID[(section, key)]
         if value is None and field.inherits:
             return self.resolved(*field.inherits)
@@ -297,7 +415,92 @@ class Theme:
         ]
 
     def color(self, key: str) -> Color:
-        return Color.parse(self._values[("colors", key)])
+        return Color.parse(self.get("colors", key))
+
+    # ---- light and dark variants --------------------------------------
+
+    @property
+    def has_both(self) -> bool:
+        return self._other is not None
+
+    @property
+    def main_variant(self) -> str:
+        """The variant the theme file's own [colors] hold."""
+        from .variants import kind_of
+
+        return self._main or kind_of(self._values[("colors", "window")])
+
+    @property
+    def shown_variant(self) -> str:
+        """The variant the editor shows and an apply puts on the desktop."""
+        return self.shown if self._other is not None and self.shown else self.main_variant
+
+    @property
+    def variants(self) -> tuple[str, ...]:
+        """The variants the theme has, light first."""
+        if self._other is None:
+            return (self.main_variant,)
+        return VARIANT_NAMES
+
+    def show(self, variant: str | None) -> None:
+        """Make the editor work on `variant`; a variant the theme does not have is ignored."""
+        self.shown = variant if variant in self.variants else None
+
+    def colors_of(self, variant: str) -> dict[str, object]:
+        """The colors of one variant (keys of VARIANT_KEYS); empty when the theme has no such variant."""
+        if variant == self.main_variant:
+            return {key: self._values[("colors", key)] for key in VARIANT_KEYS}
+        return dict(self._other) if self._other is not None else {}
+
+    def for_variant(self, variant: str) -> Theme | None:
+        """A copy of the theme that has only `variant`, or None when it has no such variant."""
+        if variant not in self.variants:
+            return None
+        single = self.copy()
+        single.shown = None
+        if variant != self.main_variant:
+            for key, value in (self._other or {}).items():
+                single._values[("colors", key)] = value
+        single._other = None
+        single._main = None
+        return single
+
+    def add_variant(self) -> str:
+        """Make the missing variant from the one the theme has, by the automatic conversion, and
+        return its name. Does nothing and returns "" when the theme has both."""
+        from .variants import convert, opposite
+
+        if self._other is not None:
+            return ""
+        main = self.main_variant
+        made = convert(
+            {key: self._values[("colors", key)] for key in VARIANT_KEYS if key != "scheme_id"}, opposite(main)
+        )
+        other = {key: self._values[("colors", key)] for key in VARIANT_KEYS}
+        other.update(made)
+        other["scheme_id"] = None
+        self._other, self._main = other, main
+        return opposite(main)
+
+    def remove_variant(self, variant: str) -> None:
+        """Drop `variant`; the theme keeps the other one, which becomes its only colors."""
+        if self._other is None or variant not in VARIANT_NAMES:
+            return
+        if variant == self._main:
+            for key, value in self._other.items():
+                self._values[("colors", key)] = value
+        self._other = self._main = self.shown = None
+
+    @property
+    def scheme_title(self) -> str:
+        """The name of the color scheme of the variant that is shown."""
+        if self._other is None or self.shown_variant == self._main:
+            return self.name
+        return f"{self.name} {'Dark' if self.shown_variant == 'dark' else 'Light'}"
+
+    @property
+    def scheme_slug(self) -> str:
+        return slugify(self.scheme_title)
 
     @property
     def name(self) -> str:
@@ -310,10 +513,21 @@ class Theme:
     def copy(self) -> Theme:
         other = Theme()
         other._values = dict(self._values)
+        other._other = dict(self._other) if self._other is not None else None
+        other._main = self._main
+        other.shown = self.shown
+        other.base_dir = self.base_dir
+        other.pending_artwork = dict(self.pending_artwork)
         return other
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, Theme) and self._values == other._values
+        return (
+            isinstance(other, Theme)
+            and self._values == other._values
+            and self._other == other._other
+            and (self._main if self._other is not None else None)
+            == (other._main if other._other is not None else None)
+        )
 
     def problems(self) -> list[Msg]:
         """Problems that make the theme unusable even though each value is valid."""
@@ -342,6 +556,14 @@ class Theme:
             ]
             if values:  # a section where everything is left unset is not written
                 lines += ["", f"[{section}]", *values]
+            if section == "colors" and self._other is not None:
+                lines += ["", "[variant]", f"main = {_toml_value(self._main)}"]
+                lines += ["", "[colors_other]"]
+                lines += [
+                    f"{key} = {_toml_value(self._other[key])}"
+                    for key in VARIANT_KEYS
+                    if self._other[key] is not None
+                ]
         return "\n".join(lines) + "\n"
 
     @classmethod
@@ -363,6 +585,8 @@ class Theme:
         for section, table in data.items():
             if section == "schema_version":
                 continue
+            if section in ("variant", "colors_other") and isinstance(table, dict):
+                continue  # read below, after the main colors
             if section not in SECTIONS or not isinstance(table, dict):
                 problems.append(translate("core", "Unknown section {key}.").format(key=section))
                 continue
@@ -376,10 +600,50 @@ class Theme:
                     problems.append(problem)
                 else:
                     theme._values[field.id] = stored
+        problems += theme._read_variants(data.get("variant"), data.get("colors_other"))
         problems += theme.problems()
         if problems:
             raise ThemeError(problems)
         return theme
+
+    def _read_variants(self, variant, other) -> list[Msg]:
+        """The optional `[variant]` and `[colors_other]` tables: the second variant of the colors."""
+        problems: list[Msg] = []
+        for section, table in (("variant", variant), ("colors_other", other)):
+            if table is None:
+                continue
+            allowed = ("main",) if section == "variant" else VARIANT_KEYS
+            for key in table:
+                if key not in allowed:
+                    problems.append(translate("core", "Unknown key {key}.").format(key=f"{section}.{key}"))
+        if problems or other is None:
+            return problems  # a main variant without a second one means nothing
+        from .variants import convert, kind_of, opposite
+
+        main = (variant or {}).get("main")
+        if main is None:
+            main = kind_of(self._values[("colors", "window")])
+        elif main not in VARIANT_NAMES:
+            return [translate("core", "{key} must be light or dark.").format(key="variant.main")]
+        colors: dict[str, object] = {}
+        for key, value in other.items():
+            stored, problem = check_value(FIELD_BY_ID[("colors", key)], value)
+            if problem:
+                problems.append(problem)
+            else:
+                colors[key] = stored
+        if problems:
+            return problems
+        made = convert(
+            {key: self._values[("colors", key)] for key in VARIANT_KEYS if key != "scheme_id"},
+            opposite(main),
+        )
+        full = {key: self._values[("colors", key)] for key in VARIANT_KEYS}
+        full.update(made)
+        full["scheme_id"] = None
+        full.update(colors)
+        self._other, self._main = full, main
+        return []
 
     @classmethod
     def load(cls, path: Path) -> Theme:
@@ -412,13 +676,70 @@ class Theme:
             ) from error
         original_version = data.get("schema_version")
         theme = cls.from_data(migrate(data))
+        theme.base_dir = path.parent
         if original_version != SCHEMA_VERSION:
             shutil.copy2(path, path.with_name(f"{path.name}.v{original_version}.bak"))
             theme.save(path)
         return theme
 
     def save(self, path: Path) -> None:
+        self._place_artwork(path)
         write_atomic(path, self.to_toml())
+        self.base_dir = path.parent
+
+    def _place_artwork(self, path: Path) -> None:
+        """Put the artwork of the theme where the file at `path` expects it: what an archive brought
+        into the folder of the file, and what a theme saved in another folder had next to the old file."""
+        folder = artwork_folder(path)
+        for key, data in self.pending_artwork.items():
+            name = self._free_artwork_name(folder, key, data)
+            self._values[("artwork", key)] = f"{folder.name}/{name}"
+        self.pending_artwork = {}
+        if self.base_dir is None or self.base_dir == path.parent:
+            return
+        from ..safefile import read_regular  # safefile needs kconfig, which needs this module
+
+        base = self.base_dir.resolve()
+        for key in ARTWORK_KEYS:
+            name = self._values[("artwork", key)]
+            if name is None:
+                continue
+            try:
+                source = (base / name).resolve()
+            except (OSError, RuntimeError):
+                continue
+            if not source.is_relative_to(base):  # a link must not lead the copy out of the folder
+                continue
+            data = read_regular(source, ARTWORK_LIMIT)
+            if data is None:
+                continue
+            target = path.parent / name
+            if not target.exists():
+                write_atomic(target, data)
+            elif read_regular(target, ARTWORK_LIMIT) != data:
+                # Another picture of that name is there already: this one gets a free name.
+                new_folder = artwork_folder(path)
+                self._values[("artwork", key)] = (
+                    f"{new_folder.name}/{self._free_artwork_name(new_folder, key, data)}"
+                )
+
+    @staticmethod
+    def _free_artwork_name(folder: Path, key: str, data: bytes) -> str:
+        """Write `data` as the artwork of `key` in `folder` and return the file name. A file that is
+        already there with other content is never replaced: the new one gets the next free name."""
+        number = 1
+        while True:
+            name = f"{key}.svg" if number == 1 else f"{key}-{number}.svg"
+            target = folder / name
+            if not target.exists():
+                write_atomic(target, data)
+                return name
+            try:
+                if target.is_file() and target.read_bytes() == data:
+                    return name
+            except OSError:
+                pass
+            number += 1
 
 
 def _toml_value(value) -> str:
@@ -472,7 +793,7 @@ def write_atomic(path: Path, content: str | bytes) -> None:
         mask = os.umask(0)
         os.umask(mask)
         mode = 0o666 & ~mask  # what any newly made file gets
-    handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name[:50]}.", suffix=".tmp")
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(data)

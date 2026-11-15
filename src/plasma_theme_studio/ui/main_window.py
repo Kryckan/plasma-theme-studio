@@ -15,6 +15,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QCoreApplication,
+    QEventLoop,
     QObject,
     QRunnable,
     QSettings,
@@ -50,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import APP_DIR, APP_NAME, __version__, archive, globaltheme, library, paths
-from ..apply import engine
+from ..apply import desktop, engine
 from ..apply import snapshot as snapshots
 from ..apply.runner import SystemRunner
 from ..apply.status import BLOCKED, CHANGE, LEAVE
@@ -64,6 +65,7 @@ from .banner import INFORMATION, POSITIVE, Banner
 from .files_dialog import FilesDialog
 from .labels import FIELD_LABELS, PRESET_TITLES, SECTION_TITLES
 from .library_view import Entry
+from .variant_view import VariantSwitch
 from .widgets import CHANGED, OFF, DesktopBar, InlineNote, NavList
 
 translate = QCoreApplication.translate
@@ -118,12 +120,23 @@ class SetValueCommand(QUndoCommand):
         self.window, self.field = window, field
         self.old, self.new = window.theme.get(*field.id), value
         self.time = time.monotonic()
+        # A color belongs to the variant that was shown when it was edited, whatever is shown on undo.
+        self.variant = window.theme.shown_variant if field.section == "colors" else None
+
+    def _in_variant(self) -> None:
+        theme = self.window.theme
+        if self.variant and theme.has_both and theme.shown_variant != self.variant:
+            self.window.show_variant(self.variant)
 
     def id(self) -> int:
         return FIELDS.index(self.field) + 1
 
     def mergeWith(self, other) -> bool:
-        if other.field is not self.field or other.time - self.time > MERGE_SECONDS:
+        if (
+            other.field is not self.field
+            or other.variant != self.variant
+            or other.time - self.time > MERGE_SECONDS
+        ):
             return False
         if self.field.kind not in CONTINUOUS_KINDS or (self.field.kind == "str" and self.field.form):
             return False
@@ -131,9 +144,11 @@ class SetValueCommand(QUndoCommand):
         return True
 
     def redo(self) -> None:
+        self._in_variant()
         self.window.store(self.field, self.new)
 
     def undo(self) -> None:
+        self._in_variant()
         self.window.store(self.field, self.old)
 
 
@@ -298,6 +313,10 @@ class MainWindow(QMainWindow):
         names.setSpacing(0)
         names.addWidget(self.theme_name)
         names.addWidget(self.theme_state)
+        # The variant the editor shows; only there while the theme has both.
+        self.variant_switch = VariantSwitch()
+        self.variant_switch.chosen.connect(self.show_variant)
+        self.variant_switch.hide()
         block = QHBoxLayout()
         block.setContentsMargins(12, 8, 4, 4)
         block.addLayout(names, 1)
@@ -308,6 +327,11 @@ class MainWindow(QMainWindow):
         side.setContentsMargins(0, 4, 0, 0)
         side.setSpacing(0)
         side.addLayout(block)
+        switch_row = QHBoxLayout()
+        switch_row.setContentsMargins(12, 0, 8, 6)
+        switch_row.addWidget(self.variant_switch)
+        switch_row.addStretch(1)
+        side.addLayout(switch_row)
         side.addWidget(self.nav, 1)
 
         self.stack = QStackedWidget()
@@ -562,6 +586,52 @@ class MainWindow(QMainWindow):
                 )
             )
 
+    def show_variant(self, variant: str) -> None:
+        """Make the editor show `variant` (a theme with both): the page, the switches and every preview
+        follow it. Not a step of the undo stack."""
+        if not self.theme.has_both or variant == self.theme.shown_variant:
+            self._update_variant_switch()
+            return
+        self.theme.show(variant)
+        for field_id, control in self.editors.items():
+            control.set_value(self.theme.get(*field_id))
+        self.sync_editors()
+        self.refresh()
+
+    def add_variant(self) -> None:
+        """Make the missing variant by the automatic conversion and show it, as one undo step."""
+        if self.theme.has_both:
+            return
+        new = self.theme.copy()
+        made = new.add_variant()
+        new.show(made)
+        text = (
+            translate("ui", "Add the dark variant")
+            if made == "dark"
+            else translate("ui", "Add the light variant")
+        )
+        self.replace_theme(text, new, self.path)
+
+    def remove_variant(self, variant: str | None = None) -> None:
+        """Remove `variant` (the one that is shown by default), as one undo step."""
+        if not self.theme.has_both:
+            return
+        variant = variant or self.theme.shown_variant
+        new = self.theme.copy()
+        new.remove_variant(variant)
+        text = (
+            translate("ui", "Remove the dark variant")
+            if variant == "dark"
+            else translate("ui", "Remove the light variant")
+        )
+        self.replace_theme(text, new, self.path)
+
+    def _update_variant_switch(self) -> None:
+        both = self.theme.has_both
+        self.variant_switch.setVisible(both)
+        if both:
+            self.variant_switch.set_variant(self.theme.shown_variant)
+
     def replace_theme(self, text: str, theme: Theme, path: Path | None = None) -> None:
         """Make `theme` the one the editor holds, as one step of the undo stack: Undo brings the
         theme that was in the editor back."""
@@ -570,6 +640,7 @@ class MainWindow(QMainWindow):
     def show_theme(self, theme: Theme, path: Path | None) -> None:
         """Put `theme` into the editor and every control, keeping the undo stack."""
         self.theme, self.path = theme, path
+        theme.base_dir = path.parent if path else None
         for field_id, control in self.editors.items():
             control.set_value(theme.get(*field_id))
         self.sync_editors()
@@ -578,6 +649,7 @@ class MainWindow(QMainWindow):
 
     def _load_into_window(self, theme: Theme, path: Path | None) -> None:
         self.theme, self.path = theme, path
+        theme.base_dir = path.parent if path else None
         self.undo_stack.clear()
         for field_id, control in self.editors.items():
             control.set_value(theme.get(*field_id))
@@ -620,6 +692,7 @@ class MainWindow(QMainWindow):
         self.update_apply_button()
         self.undo_apply_button.setEnabled(snapshots.latest() is not None)
         self._update_title()
+        self._update_variant_switch()
         self.status_timer.start()
 
     def update_status(self) -> None:
@@ -920,12 +993,23 @@ class MainWindow(QMainWindow):
         folder.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
+    def stop_page_workers(self) -> None:
+        for page in self.pages.values():
+            stop = getattr(page, "stop_workers", None)
+            if stop is not None:
+                stop()
+
+    def hideEvent(self, event) -> None:
+        self.stop_page_workers()
+        super().hideEvent(event)
+
     def closeEvent(self, event) -> None:
         if not self._discard_ok():
             event.ignore()
             return
         QSettings().setValue("window/geometry", self.saveGeometry())
         self.loader.shutdown()
+        self.stop_page_workers()
         self.status_generation += 1  # nobody listens to a job that is still running
         self.status_pool.waitForDone(3000)
         event.accept()
@@ -1008,7 +1092,10 @@ class MainWindow(QMainWindow):
         file, or the color scheme that an apply wrote from it."""
         if entry.is_saved_theme:
             return entry.path == self.path
-        return entry.scheme.made_here and entry.scheme_id == self.theme.slug
+        from ..generators.variants import of_variant
+
+        own = {of_variant(self.theme, variant).scheme_slug for variant in self.theme.variants}
+        return entry.scheme.made_here and entry.scheme_id in own
 
     def _switch_scheme(self, entry: Entry) -> snapshots.Snapshot | bool:
         """Make an installed color scheme the one in use. Returns the snapshot,
@@ -1139,11 +1226,16 @@ class MainWindow(QMainWindow):
         present = {item.id for item in snapshots.list_snapshots()}
         self.switches = {key: value for key, value in self.switches.items() if key in present}
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        # The undo waits for the desktop's daemons now and then: keep the window painting meanwhile.
+        desktop.keep_alive = lambda: QApplication.processEvents(
+            QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents
+        )
         try:
             reached, failures = engine.restore_to(snapshot, self.runner)
         except OSError as error:
             failures = [str(error)]
         finally:
+            desktop.keep_alive = None
             QApplication.restoreOverrideCursor()
         editor_went_back = self._undo_switches()
         self.refresh()

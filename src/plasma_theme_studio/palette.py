@@ -47,6 +47,7 @@ DEFAULT_ACCENT = "#3daee9"  # Breeze blue, for an image without any color
 SAMPLE_SIDE = 96  # an image is read at about this many pixels on the long side
 MAX_FILE_BYTES = 1_000_000  # a palette or color scheme file is a few KB
 MAX_SWATCHES = 8
+MAX_SOURCE = 40  # colors of a source that a chooser lists
 MIN_SWATCHES = 5
 # Fills the accent candidates of an image that has few colors (Breeze's and Plasma's accent hues).
 _PRESETS = ("#3daee9", "#e93a9a", "#f67400", "#27ae60", "#9b59b6", "#da4453", "#1abc9c", "#c9a800")
@@ -70,6 +71,8 @@ class PaletteResult:
     # Which variant(s) the source itself had ("light", "dark", "both"); None: made from an image.
     given: str | None = None
     error: Msg | None = None
+    # The colors the source itself had (pywal's sixteen, matugen's roles), for a chooser; empty for an image.
+    source: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -475,6 +478,11 @@ def _surface_labels() -> dict[str, Msg]:
     }
 
 
+def surface_label(role: str) -> Msg:
+    """The words for a background role in a sentence: "window background"."""
+    return _surface_labels()[role]
+
+
 def contrast_report(colors: dict[str, str]) -> list[ContrastPair]:
     """Every text color on every background, and the accent on the window, with the ratio and the
     minimum it must reach. Roles that are missing or not colors are left out."""
@@ -590,6 +598,12 @@ def _read_json(path: Path) -> dict | Msg:
     text = _read_text(path)
     if isinstance(text, Msg):
         return text
+    return _parse_json(text)
+
+
+def _parse_json(text: str) -> dict | Msg:
+    if len(text) > MAX_FILE_BYTES:
+        return translate("core", "The file is too large to be a color file.")
     try:
         data = json.loads(text)
     except (ValueError, RecursionError):
@@ -689,18 +703,40 @@ def _map_pywal(special: dict, colors: dict) -> PaletteResult:
     }
     fixed = ensure_contrast({role: c.hex for role, c in roles.items()})
     corrected = {role: Color.parse(fixed[role]) for role in ROLES}
-    return _complete(corrected, dark, "dark" if dark else "light", [c for c in hues if _hsv(c)[1] >= 0.2][:8])
+    result = _complete(
+        corrected, dark, "dark" if dark else "light", [c for c in hues if _hsv(c)[1] >= 0.2][:8]
+    )
+    own = [background, foreground, *(_color(colors.get(f"color{i}")) for i in range(16))]
+    result.source = _unique(c.hex for c in own if c is not None)
+    return result
 
 
-def from_pywal(path: str | Path) -> PaletteResult:
-    """Colors from pywal's `colors.json` (`special` and `color0` to `color15`)."""
-    data = _read_json(Path(path))
+def _unique(colors, limit: int = MAX_SOURCE) -> list[str]:
+    """The colors without repeats, in order, at most `limit`."""
+    seen: list[str] = []
+    for color in colors:
+        if color not in seen:
+            seen.append(color)
+    return seen[:limit]
+
+
+def _pywal_result(data: dict | Msg) -> PaletteResult:
     if isinstance(data, Msg):
         return _failure(data)
     special, colors = data.get("special"), data.get("colors")
     if not isinstance(colors, dict):
         return _failure(translate("core", "The file is not a pywal color file."))
     return _map_pywal(special if isinstance(special, dict) else {}, colors)
+
+
+def from_pywal(path: str | Path) -> PaletteResult:
+    """Colors from pywal's `colors.json` (`special` and `color0` to `color15`)."""
+    return _pywal_result(_read_json(Path(path)))
+
+
+def from_pywal_text(text: str) -> PaletteResult:
+    """The same from the text of that file."""
+    return _pywal_result(_parse_json(text))
 
 
 def _matugen_modes(colors: dict) -> dict[str, dict[str, Color]]:
@@ -754,7 +790,15 @@ def _map_matugen(m: dict[str, Color], dark: bool) -> dict[str, Color] | None:
 
 def from_matugen(path: str | Path) -> PaletteResult:
     """Colors from matugen's JSON output, either layout (`colors.<role>.<mode>` or `colors.<mode>.<role>`)."""
-    data = _read_json(Path(path))
+    return _matugen_result(_read_json(Path(path)))
+
+
+def from_matugen_text(text: str) -> PaletteResult:
+    """The same from the text matugen printed."""
+    return _matugen_result(_parse_json(text))
+
+
+def _matugen_result(data: dict | Msg) -> PaletteResult:
     if isinstance(data, Msg):
         return _failure(data)
     colors = data.get("colors") if isinstance(data.get("colors"), dict) else data
@@ -768,6 +812,8 @@ def from_matugen(path: str | Path) -> PaletteResult:
     extra = [c for name in ("secondary", "tertiary") if (c := next(iter(mapped.values()), {}).get(name))]
     keep = "dark" if "dark" in mapped else "light"
     result = _complete(mapped[keep], keep == "dark", keep, extra)
+    raw = _matugen_modes(colors).get(keep, {})
+    result.source = _unique(c.hex for c in raw.values())
     if len(mapped) == 2:
         result.light = {r: c.hex for r, c in mapped["light"].items()}
         result.dark = {r: c.hex for r, c in mapped["dark"].items()}
@@ -827,7 +873,40 @@ def from_colors_file(path: str | Path) -> PaletteResult:
         "positive": _breeze("positive"),
     }
     roles = {role: found.get(role) or defaults[role] for role in ROLES}
-    return _complete(roles, dark, "dark" if dark else "light", [])
+    result = _complete(roles, dark, "dark" if dark else "light", [])
+    result.source = _unique(c.hex for c in found.values())
+    return result
+
+
+def candidates(result: PaletteResult, variant: str) -> list[str]:
+    """The colors a person can choose a role from: the source's own colors, the accent candidates and
+    the colors of the variant ("light" or "dark"), without repeats."""
+    chosen = result.light if variant == "light" else result.dark
+    return _unique([*result.source, *result.swatches, *chosen.values()], 2 * MAX_SOURCE)
+
+
+def pywal_colors(colors: dict[str, str]) -> dict:
+    """The twelve colors of a theme as the content of pywal's `colors.json`: the background is the window,
+    the foreground the text, the six hues are the states, links and accent, and the bright row is the
+    same hues moved towards the text."""
+    window, text = Color.parse(colors["window"]), Color.parse(colors["text"])
+    hues = [
+        Color.parse(colors[role]) for role in ("negative", "positive", "neutral", "link", "visited", "accent")
+    ]
+    ansi = [
+        window,
+        *hues,
+        text.mix(window, 0.1),
+        Color.parse(colors["text_muted"]),
+        *(c.mix(text, 0.25) for c in hues),
+        text,
+    ]
+    return {
+        "wallpaper": "",
+        "alpha": "100",
+        "special": {"background": window.hex, "foreground": text.hex, "cursor": text.hex},
+        "colors": {f"color{i}": c.hex for i, c in enumerate(ansi)},
+    }
 
 
 def available_sources() -> list[PaletteFile]:

@@ -13,7 +13,8 @@ can tell the files of items that are gone (or changed) by their first part.
 `key(item, size, dpr, colors)` -> name without ".png"
 `get(kind_key, name, dpr)` -> QImage or None (a corrupt file is deleted and counts as a miss)
 `put(kind_key, name, image)` writes through a temporary file and renames it (atomic)
-`prune(kind_key, items)` deletes the files that belong to no current item.
+`prune(kind_key, items)` deletes the files that belong to no current item, and all but the newest few
+of one item.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ import tempfile
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QLocale, QSize
 from PySide6.QtGui import QImage
 
 from .. import APP_DIR, images, paths
@@ -64,7 +65,10 @@ def pixel_size(size: QSize, dpr: float) -> tuple[int, int]:
 
 
 def key(item: Item, size: QSize, dpr: float, colors: Mapping[str, str] | None) -> str:
-    variant = _sha1(pixel_size(size, dpr), round(dpr, 3), sorted(dict(colors or {}).items()))
+    # The language is part of the key: the sample texts in a picture are translated.
+    variant = _sha1(
+        pixel_size(size, dpr), round(dpr, 3), sorted(dict(colors or {}).items()), QLocale().name()
+    )
     return f"{item_hash(item)}-{variant}"
 
 
@@ -107,6 +111,9 @@ def put(kind_key: str, name: str, image: QImage) -> bool:
         return False
 
 
+MAX_VARIANTS = 6  # files kept per item: sizes, colors and languages multiply them
+
+
 def prune(kind_key: str, items: Iterable[Item]) -> int:
     """Delete the files of items that no longer exist or have changed, and
     leftover temporary files. Returns how many files were removed."""
@@ -116,8 +123,20 @@ def prune(kind_key: str, items: Iterable[Item]) -> int:
         files = list(directory(kind_key).iterdir())
     except OSError:
         return 0
+    kept: dict[str, list[tuple[int, Path]]] = {}
     for file in files:
-        if file.name.startswith(".tmp-") or file.name.partition("-")[0] not in keep:
+        item = file.name.partition("-")[0]
+        if file.name.startswith(".tmp-") or item not in keep:
+            with contextlib.suppress(OSError):
+                file.unlink()
+                removed += 1
+        else:
+            try:
+                kept.setdefault(item, []).append((file.stat().st_mtime_ns, file))
+            except OSError:
+                pass
+    for variants in kept.values():  # of one item only the newest few stay
+        for _stamp_ns, file in sorted(variants, reverse=True)[MAX_VARIANTS:]:
             with contextlib.suppress(OSError):
                 file.unlink()
                 removed += 1

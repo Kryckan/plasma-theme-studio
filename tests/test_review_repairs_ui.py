@@ -79,7 +79,7 @@ def test_the_group_my_themes_with_no_theme_says_so_and_keeps_its_size(window, ap
     app.processEvents()
     assert not grid.visible_cards()
     assert grid.message.isVisible()
-    assert grid.message.text() == "You have no saved themes yet."
+    assert grid.message.text().startswith("A theme is a set of colors")
     assert grid.message.height() >= 96
 
 

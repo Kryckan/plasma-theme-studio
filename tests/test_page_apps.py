@@ -44,23 +44,17 @@ def test_the_application_style_page_has_the_cards_and_the_action(window):
     window.show_page("app_style")
     page = window.page("app_style")
     assert page.grid.ids()[0] == THIS_THEME
-    assert page.configure_button.text() == "Configure Icons and Toolbars in System Settings…"
+    assert page.configure_button.text() == "Configure Icons and Toolbars…"
     assert page.configure_button in page.header.findChildren(type(page.configure_button))
 
 
-def test_configure_icons_and_toolbars_opens_the_style_module(window):
+def test_configure_icons_and_toolbars_opens_the_dialog_in_the_app(window):
     window.show_page("app_style")
     window.page("app_style").configure_button.click()
-    assert window.runner.launched == [["systemsettings", "kcm_style"]]
-    assert not window.banner.isVisible()
-
-
-def test_configure_says_so_when_system_settings_is_missing(window):
-    window.runner.missing |= {"systemsettings", "kcmshell6"}
-    window.show_page("app_style")
-    window.page("app_style").configure_button.click()
-    assert window.runner.launched == []
-    assert window.banner.isVisible() and "System Settings is not installed" in window.banner.text()
+    dialog = window.small_dialog
+    assert dialog.isVisible() and dialog.windowTitle() == "Configure Icons and Toolbars"
+    assert window.runner.launched == []  # nothing of System Settings is started
+    dialog.reject()
 
 
 def test_the_card_this_theme_and_an_installed_style_set_the_part(window, app):
@@ -114,7 +108,7 @@ def test_a_note_says_what_to_install_when_kvantum_is_missing(window, monkeypatch
     assert not page.kvantum_note.isHidden()
     assert "kvantum" in page.kvantum_note.text() and "qt6-style-kvantum" in page.kvantum_note.text()
     window.runner.missing.discard("kvantummanager")
-    window.refresh()
+    page.read_desktop()  # whether Kvantum is there is read with what the desktop has
     assert page.kvantum_note.isHidden()
 
 

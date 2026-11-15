@@ -308,3 +308,23 @@ def test_an_old_file_loads_unchanged_and_a_new_one_is_still_schema_one():
     assert old.get("window", "border_size") is None and old.get("fonts", "general") is None
     assert old.part_state("window", "decoration") == "generated"
     assert "schema_version = 1" in Theme(NAMED_PARTS).to_toml()
+
+
+def test_the_frame_extras_are_optional_and_checked():
+    from plasma_theme_studio.model.theme import Theme, ThemeError
+
+    theme = Theme()
+    for section, key, good, bad in (
+        ("window", "title_height", 40, 10),
+        ("window", "button_size", 24, 60),
+        ("window", "button_spacing", 8, 40),
+        ("shadow", "offset_x", -10, 99),
+        ("shadow", "offset_y", 10, -99),
+    ):
+        assert theme.get(section, key) is None  # left as it is until the theme sets it
+        theme.set(section, key, good)
+        assert theme.get(section, key) == good
+        with pytest.raises(ThemeError):
+            theme.set(section, key, bad)
+        theme.set(section, key, None)
+        assert theme.get(section, key) is None

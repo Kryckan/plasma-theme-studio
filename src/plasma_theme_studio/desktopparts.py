@@ -203,7 +203,7 @@ class Part:
         """Write one setting and read it back."""
         file, groups, key = self.settings[name]
         if value is None or not self.notify:
-            kconfig.write_value(runner, file, groups, key, value)
+            kconfig.write_value(runner, file, groups, key, value, notify=self.notify)
             return
         argv = ["kwriteconfig6", "--notify", "--file", file]
         for group in groups:
@@ -744,6 +744,9 @@ class Accent(Part):
         "last": ("kdeglobals", ["General"], "LastUsedCustomAccentColor"),
     }
     tools = ("plasma-apply-colorscheme",)
+    # Plasma watches these keys: only when it is told does it take the accent from the wallpaper
+    # (and then it writes AccentColor itself), as it does for System Settings.
+    notify = True
     SCHEME = ("kdeglobals", ["General"], "ColorScheme")
 
     @staticmethod
@@ -767,21 +770,21 @@ class Accent(Part):
     def apply(self, value, runner) -> None:
         what = str(translate("core", "The accent color"))
         if value == "wallpaper":
-            # Plasma pushes the wallpaper's color when the wallpaper changes; nothing asks for it.
+            # Told with --notify, Plasma takes the wallpaper's color at once (and writes AccentColor).
             self._put(runner, "wallpaper", "true")
             return
         color = self.parse_color(value)
         if color is None:
             raise _error("{what} is not a valid name.", what=what)
         text = ",".join(map(str, color))
-        self._put(runner, "wallpaper", "false")
+        self._put(runner, "wallpaper", None)  # false is the default: System Settings removes the key
         self._put(runner, "color", text)
         self._put(runner, "last", text)
         self._reload(runner, color)
 
     def clear(self, runner) -> None:
         """Let the color scheme's own accent show: no custom color, not from the wallpaper."""
-        self._put(runner, "wallpaper", "false")
+        self._put(runner, "wallpaper", None)
         self._put(runner, "color", None)
         self._reload(runner, None)
 
@@ -835,6 +838,7 @@ class NightMode(Part):
     key = "night_mode"
     title = translate("core", "Dark mode at night")
     settings = {"on": ("kdeglobals", ["KDE"], "AutomaticLookAndFeel")}
+    notify = True  # the settings daemon of Plasma watches the key
 
     def current(self, runner) -> bool:
         return self._get(runner, "on", "false").lower() == "true"
@@ -842,7 +846,7 @@ class NightMode(Part):
     def apply(self, value, runner) -> None:
         if not isinstance(value, bool):
             raise _error("{what} is not a valid name.", what=str(translate("core", "The dark mode switch")))
-        self._put(runner, "on", "true" if value else "false")
+        self._put(runner, "on", "true" if value else None)  # false is the default: the key goes
 
 
 PARTS: dict[str, Part] = {

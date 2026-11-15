@@ -7,20 +7,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QElapsedTimer, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from .. import library, pickers
 from ..generators.colorscheme import scheme_groups
 from ..model.theme import Theme
 from ..pickers.base import Item
 from .preview import _rgb
-from .widgets import THUMB_SIZE, CardGrid, FlowLayout, Segmented, themed_icon
+from .widgets import THUMB_SIZE, CardGrid, JustifiedFlow, Segmented, themed_icon
 
 translate = QCoreApplication.translate
 
 THUMBNAIL = THUMB_SIZE
+DRAW_SLICE = 8  # milliseconds of drawing pictures before the window gets its turn
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,26 @@ def global_entries() -> list[GlobalEntry]:
 
 
 def thumbnail(theme: Theme, ratio: float = 1.0, active: bool = False) -> QPixmap:
+    """The card of a theme. A theme with both variants shows the light one above the diagonal and the
+    dark one below it."""
+    if not theme.has_both:
+        return _thumbnail(theme, ratio, active)
+    light = _thumbnail(theme.for_variant("light"), ratio, active)
+    dark = _thumbnail(theme.for_variant("dark"), ratio, active)
+    width, height = THUMBNAIL.width(), THUMBNAIL.height()
+    p = QPainter(light)
+    below = QPainterPath()
+    below.moveTo(width, 0)
+    below.lineTo(width, height)
+    below.lineTo(0, height)
+    below.closeSubpath()
+    p.setClipPath(below)
+    p.drawPixmap(0, 0, dark)
+    p.end()
+    return light
+
+
+def _thumbnail(theme: Theme, ratio: float, active: bool) -> QPixmap:
     groups = {name: dict(values) for name, values in scheme_groups(theme)}
     window, view, button = groups["Colors:Window"], groups["Colors:View"], groups["Colors:Button"]
     header, selection = groups["Colors:Header"], groups["Colors:Selection"]
@@ -135,35 +156,6 @@ def thumbnail(theme: Theme, ratio: float = 1.0, active: bool = False) -> QPixmap
     return pixmap
 
 
-class JustifiedFlow(FlowLayout):
-    """A flow of equal cards that shares the room left in a row between the gaps, so that the first
-    column sits at the left edge and the last at the right edge. A row that is not full keeps the
-    ordinary gap, and the cards of the last row stand in the same columns."""
-
-    def _flow(self, rect, place):
-        m = self.contentsMargins()
-        inner = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
-        items = [item for item in self._items if not item.isEmpty()]
-        if not items:
-            return m.top() + m.bottom()
-        cell_w = max(item.sizeHint().width() for item in items)
-        cell_h = max(item.sizeHint().height() for item in items)
-        columns = max(1, (inner.width() + self._h) // (cell_w + self._h))
-        gap = self._h
-        if columns > 1 and len(items) >= columns:
-            gap = max(self._h, (inner.width() - columns * cell_w) // (columns - 1))
-        parent = self.parentWidget()
-        rtl = parent is not None and parent.layoutDirection() == Qt.LayoutDirection.RightToLeft
-        for number, item in enumerate(items):
-            row, column = divmod(number, columns)
-            x = column * (cell_w + gap)
-            left = inner.right() + 1 - x - cell_w if rtl else inner.x() + x
-            if place:
-                item.setGeometry(QRect(QPoint(left, inner.y() + row * (cell_h + self._v)), item.sizeHint()))
-        rows = -(-len(items) // columns)
-        return rows * cell_h + (rows - 1) * self._v + m.top() + m.bottom()
-
-
 class ThemeGrid(CardGrid):
     """The grid of the Themes page. The filter is chosen with chips (`LibraryView.chips`), so the combo
     that holds the groups stays hidden, and the cards fill the width."""
@@ -187,6 +179,8 @@ class LibraryView(QWidget):
 
     selection_changed = Signal()
     edit_requested = Signal(object)
+    new_requested = Signal()  # the empty "My themes" asks for a theme from the desktop
+    save_requested = Signal()  # ... or for the one in the editor to be saved
 
     GROUPS = ("", "mine", "global", "schemes")  # the chips, in order; "" is All
 
@@ -215,13 +209,29 @@ class LibraryView(QWidget):
                 ("schemes", translate("ui", "Color schemes")),
             ],
             empty={
-                "mine": translate("ui", "You have no saved themes yet."),
+                "mine": translate(
+                    "ui",
+                    "A theme is a set of colors, icons, pointers and more that belong together, "
+                    "and you have not saved one yet.",
+                ),
                 "global": translate(
                     "ui", "No Global Themes are installed. “Open in System Settings…” gets some."
                 ),
                 "schemes": translate("ui", "No color schemes are installed."),
             },
         )
+        self.mine_buttons = QWidget()
+        row = QHBoxLayout(self.mine_buttons)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.mine_new = QPushButton(
+            themed_icon("document-new"), translate("ui", "New Theme from the Desktop")
+        )
+        self.mine_new.clicked.connect(lambda _=False: self.new_requested.emit())
+        self.mine_save = QPushButton(themed_icon("document-save"), translate("ui", "Save Current Theme…"))
+        self.mine_save.clicked.connect(lambda _=False: self.save_requested.emit())
+        row.addWidget(self.mine_new)
+        row.addWidget(self.mine_save)
+        self.grid.add_empty_extra("mine", self.mine_buttons)
         self.chips = Segmented(
             [
                 translate("widgets", "All"),
@@ -239,6 +249,9 @@ class LibraryView(QWidget):
         self.grid.search.textChanged.connect(lambda _text: self._update_buttons())
         self.grid.filter.currentIndexChanged.connect(lambda _index: self._update_buttons())
         self.grid.thumbnail_requested.connect(self._draw)
+        self._to_draw: list = []  # cards that wait for their drawn picture
+        self._draw_timer = QTimer(self, singleShot=True, interval=0)
+        self._draw_timer.timeout.connect(self._draw_some)
         if loader is not None:
             loader.ready.connect(self._picture_ready)
         self.edit_button = QPushButton(themed_icon("document-edit"), "")
@@ -308,7 +321,9 @@ class LibraryView(QWidget):
         if entry is None:
             return
         if not entry.is_global:
-            self.grid.set_thumbnail(item_id, thumbnail(entry.theme, self.devicePixelRatioF()))
+            # drawn a few at a time, so that a page full of cards never holds the window for long
+            self._to_draw.append(item_id)
+            self._draw_timer.start()
             return
         picker = pickers.kind("global_theme")
         if self.loader is None or picker is None:
@@ -317,6 +332,23 @@ class LibraryView(QWidget):
         image = self.loader.request(picker, entry.item, QSize(THUMBNAIL), self.devicePixelRatioF())
         if image is not None:
             self._set_picture(item_id, image)
+
+    def _draw_some(self) -> None:
+        clock = QElapsedTimer()
+        clock.start()
+        while self._to_draw and clock.elapsed() < DRAW_SLICE:
+            item_id = self._to_draw.pop(0)
+            entry = self.entries.get(item_id)
+            if entry is not None and self.grid.card(item_id) is not None:
+                self.grid.set_thumbnail(item_id, thumbnail(entry.theme, self.devicePixelRatioF()))
+        if self._to_draw:
+            self._draw_timer.start()
+
+    def draw_all(self) -> None:
+        """Draw every picture that waits now (tests)."""
+        self._draw_timer.stop()
+        while self._to_draw:
+            self._draw_some()
 
     def _picture_ready(self, kind_key: str, item_id: str, image) -> None:
         if kind_key == "global_theme" and self.grid.card(("global", item_id)) is not None:
@@ -332,6 +364,7 @@ class LibraryView(QWidget):
         """The page is not shown: stop drawing pictures, and ask again when it is."""
         if self.loader is not None:
             self.loader.cancel("global_theme")
+        self._to_draw.clear()
         self.grid.ask_again_for_thumbnails()
 
     def current(self) -> Entry | None:

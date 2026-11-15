@@ -201,6 +201,7 @@ class Page(QWidget):
         """A form of the controls of these (section, key) fields, each labelled as the field is."""
         form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)  # label above the control when narrow
         form.setVerticalSpacing(SPACING)
         form.setHorizontalSpacing(SPACING)
         for section, key in fields:
@@ -298,7 +299,7 @@ class ValuePage(Page):
         )
         hint.setWordWrap(True)
         hint.setForegroundRole(hint.palette().ColorRole.PlaceholderText)
-        right = QVBoxLayout()
+        right = self.preview_column = QVBoxLayout()
         right.setSpacing(SPACING)
         right.addLayout(bar)
         right.addWidget(self.preview, 1)
@@ -406,7 +407,11 @@ class PickerPage(Page):
         return self.mode_field is not None and "generated" in FIELD_BY_ID[self.mode_field].choices
 
     def load_items(self) -> None:
-        found = self.kind.items() if self.kind is not None else []
+        self.show_items(self.kind.items() if self.kind is not None else [])
+
+    def show_items(self, found) -> None:
+        """Make the cards of what the picker found (a page that reads the list in a worker calls this
+        when the list is there, see `pickers_common.LoadsInBackground`)."""
         self.items = {item.id: item for item in found}
         cards = []
         if self.generates():

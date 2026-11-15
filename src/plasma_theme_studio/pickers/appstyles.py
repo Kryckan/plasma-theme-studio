@@ -132,8 +132,9 @@ def list_styles() -> list[Item]:
 
 def _union_styles(present: bool) -> list[Item]:
     """ "Breeze (Union)" and its sisters: the id is "union/<style>", what the editor writes as
-    widgetStyle Union and unionStyle <style>. Union draws the style set in the configuration,
-    so only the default one has a picture."""
+    widgetStyle Union and unionStyle <style>. A style whose metadata.json says `"hidden": true`
+    (Breeze Mobile and Breeze Right-to-Left are) is made for other devices and is not offered.
+    Union draws the style set in the configuration, so only the default one has a picture."""
     if not present:
         return []
     items = []
@@ -143,10 +144,27 @@ def _union_styles(present: bool) -> list[Item]:
         except OSError:
             continue
         for child in children:
-            name = child.name.replace("-", " ").title()
+            meta = _union_metadata(child)
+            if meta.get("hidden") is True:
+                continue
+            name = meta.get("name")
+            if not isinstance(name, str) or not name.strip():
+                name = f"{child.name.replace('-', ' ').title()} (Union)"
             extra = {"in_process": False, "style": "Union", "drawn": child.name == "breeze"}
-            items.append(Item(f"union/{child.name}", f"{name} (Union)", "", child, user, extra))
+            items.append(Item(f"union/{child.name}", name.strip(), "", child, user, extra))
     return items
+
+
+def _union_metadata(folder: Path) -> dict:
+    """The metadata.json of a Union style, or an empty dict."""
+    import json
+
+    try:
+        with (folder / "metadata.json").open(encoding="utf-8") as handle:
+            data = json.loads(handle.read(65536))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 # Drawing -------------------------------------------------------------------

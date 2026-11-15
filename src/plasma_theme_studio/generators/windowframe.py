@@ -66,8 +66,8 @@ AURORAE_BORDERS = (("Tiny", 4), ("Normal", 6), ("Large", 8), ("VeryLarge", 12))
 # Geometry of the generated frame, in pixels.
 TITLE_HEIGHT = 22
 TITLE_EDGE = 4
-TITLE_TOTAL = TITLE_HEIGHT + 2 * TITLE_EDGE
-BUTTON_SIZE = 22
+TITLE_TOTAL = TITLE_HEIGHT + 2 * TITLE_EDGE  # the title bar's height unless the theme sets one
+BUTTON_SIZE = 22  # also the size the button pictures are drawn in; other sizes scale them
 BUTTON_SPACING = 4
 # A corner of the window can only be as round as the border lets the square
 # window content stay inside it: radius <= border * (2 + sqrt(2)); a little
@@ -147,10 +147,25 @@ class Look:
     muted: Color
     accent: Color
     negative: Color
+    # The title bar's whole height, the button size and the space between buttons, the shadow's offset.
+    title_total: int = TITLE_TOTAL
+    button_size: int = BUTTON_SIZE
+    button_spacing: int = BUTTON_SPACING
+    shadow_x: int = 0
+    shadow_y: int = 0
 
     @classmethod
     def of(cls, theme: Theme) -> Look:
+        def own(section: str, key: str, default: int) -> int:
+            value = theme.get(section, key)
+            return default if value is None else int(value)
+
         return cls(
+            title_total=own("window", "title_height", TITLE_TOTAL),
+            button_size=own("window", "button_size", BUTTON_SIZE),
+            button_spacing=own("window", "button_spacing", BUTTON_SPACING),
+            shadow_x=own("shadow", "offset_x", 0),
+            shadow_y=own("shadow", "offset_y", 0),
             radius=int(theme.resolved("window", "radius")),
             border=int(theme.resolved("window", "border_width")),
             shadow=int(theme.get("shadow", "size")),
@@ -181,6 +196,34 @@ class Look:
     @property
     def title_edge(self) -> int:
         return 6 + self.radius // 4
+
+    # The title bar: the row the buttons and the title sit in, between the edges above and below it.
+    @property
+    def title_row(self) -> int:
+        return max(self.title_total - 2 * TITLE_EDGE, 1)
+
+    @property
+    def button(self) -> int:
+        """The size buttons really get: they cannot be taller than the row."""
+        return min(self.button_size, self.title_row)
+
+    # How far the shadow reaches on each side: the size, moved by the offset. A side the shadow moves
+    # away from can have none left.
+    @property
+    def shadow_left(self) -> int:
+        return max(self.shadow - self.shadow_x, 0) if self.shadow else 0
+
+    @property
+    def shadow_right(self) -> int:
+        return max(self.shadow + self.shadow_x, 0) if self.shadow else 0
+
+    @property
+    def shadow_top(self) -> int:
+        return max(self.shadow - self.shadow_y, 0) if self.shadow else 0
+
+    @property
+    def shadow_bottom(self) -> int:
+        return max(self.shadow + self.shadow_y, 0) if self.shadow else 0
 
 
 def _n(value: float) -> str:
@@ -226,13 +269,26 @@ class _Pieces:
         )
         return f'<rect x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(h)}" fill="url(#{name})"/>'
 
-    def shadow_corner(self, x, y, w, h, cx, cy, radius, extent, alpha: float) -> str:
-        reach = radius + extent
+    def shadow_corner(self, x, y, w, h, cx, cy, radius, extent, alpha: float, extent_y=None) -> str:
+        """A corner whose shadow reaches `extent` sideways and `extent_y` (the same when not given) up or
+        down; different reaches make the gradient an ellipse."""
+        extent_y = extent if extent_y is None else extent_y
+        reach = radius + min(extent, extent_y)
         offsets = [(0.0, alpha)] if radius else []
-        offsets += [((radius + k / self.STOPS * extent) / reach, a) for k, a in enumerate(self._fade(alpha))]
+        offsets += [
+            ((radius + k / self.STOPS * min(extent, extent_y)) / reach, a)
+            for k, a in enumerate(self._fade(alpha))
+        ]
+        stretch = ""
+        if extent != extent_y:  # the other direction reaches further (or less far) by this factor
+            kx, ky = (radius + extent) / reach, (radius + extent_y) / reach
+            stretch = (
+                f' gradientTransform="translate({_n(cx)} {_n(cy)}) scale({_n(round(kx, 4))} '
+                f'{_n(round(ky, 4))}) translate({_n(-cx)} {_n(-cy)})"'
+            )
         name = self._gradient(
             "radialGradient",
-            f'cx="{_n(cx)}" cy="{_n(cy)}" r="{_n(reach)}" fx="{_n(cx)}" fy="{_n(cy)}"',
+            f'cx="{_n(cx)}" cy="{_n(cy)}" r="{_n(reach)}" fx="{_n(cx)}" fy="{_n(cy)}"{stretch}',
             offsets,
         )
         return f'<rect x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(h)}" fill="url(#{name})"/>'
@@ -258,13 +314,14 @@ def _piece(
 
     Inside a piece the window's edge is where the shadow ends; the shadow runs
     along the outside. `p` is the shadow size, `r` the radius of the corner."""
-    p, side, base, top = look.shadow, look.side, look.base, TITLE_TOTAL
+    side, base, top = look.side, look.base, look.title_total
+    el, er, et, eb = look.shadow_left, look.shadow_right, look.shadow_top, look.shadow_bottom
     fc = look.window.hex
     tc = title.hex
     column = {"topleft": 0, "left": 0, "bottomleft": 0, "top": 1, "center": 1, "bottom": 1}.get(part, 2)
     row = {"topleft": 0, "top": 0, "topright": 0, "left": 1, "center": 1, "right": 1}.get(part, 2)
-    w = SLICE if column == 1 else p + side
-    h = SLICE if row == 1 else (p + top if row == 0 else p + base)
+    w = SLICE if column == 1 else (el if column == 0 else er) + side
+    h = SLICE if row == 1 else (et + top if row == 0 else eb + base)
     shapes: list[str] = []
 
     def rect(rx, ry, rw, rh, color):
@@ -276,12 +333,17 @@ def _piece(
         shapes.append(f'<path d="{d}" fill="{color}"/>')
 
     def strip(rx, ry, rw, rh, inner):
-        if p and rw > 0 and rh > 0:
+        if rw > 0 and rh > 0:
             shapes.append(pieces.shadow_strip(x + rx, y + ry, rw, rh, inner, alpha))
 
-    def corner(rx, ry, rw, rh, cx, cy, radius):
-        if p and rw > 0 and rh > 0:
-            shapes.append(pieces.shadow_corner(x + rx, y + ry, rw, rh, x + cx, y + cy, radius, p, alpha))
+    def corner(rx, ry, rw, rh, cx, cy, radius, ex, ey, left, upper):
+        """The shadow of a corner: an ellipse that fades out; where one side has no shadow, a strip."""
+        if ex > 0 and ey > 0:
+            shapes.append(pieces.shadow_corner(x + rx, y + ry, rw, rh, x + cx, y + cy, radius, ex, alpha, ey))
+        elif ey > 0:  # only above or below the corner
+            strip(rx, ry if upper else ry + rh - ey, rw, ey, "bottom" if upper else "top")
+        elif ex > 0:  # only beside the corner
+            strip(rx if left else rx + rw - ex, ry, ex, rh, "right" if left else "left")
 
     def arc(radius, to):
         # Always clockwise on the screen: every corner is traced that way.
@@ -289,51 +351,45 @@ def _piece(
 
     r, rb = look.radius, look.bottom_radius
     if part == "topleft":
-        corner(0, 0, p + r, p + r, p + r, p + r, r)
-        strip(
-            p + r,
-            0,
-            side - r,
-            p,
-            "bottom",
-        )
-        strip(0, p + r, p, top - r, "right")
-        d = f"M{_n(x + p)} {_n(y + p + r)} "
-        d += arc(r, (p + r, p)) + " " if r else f"L{_n(x + p)} {_n(y + p)} "
-        path(d + f"H{_n(x + p + side)} V{_n(y + p + top)} H{_n(x + p)} Z", tc)
+        corner(0, 0, el + r, et + r, el + r, et + r, r, el, et, True, True)
+        strip(el + r, 0, side - r, et, "bottom")
+        strip(0, et + r, el, top - r, "right")
+        d = f"M{_n(x + el)} {_n(y + et + r)} "
+        d += arc(r, (el + r, et)) + " " if r else f"L{_n(x + el)} {_n(y + et)} "
+        path(d + f"H{_n(x + el + side)} V{_n(y + et + top)} H{_n(x + el)} Z", tc)
     elif part == "topright":
-        corner(side - r, 0, p + r, p + r, side - r, p + r, r)
-        strip(0, 0, side - r, p, "bottom")
-        strip(side, p + r, p, top - r, "left")
-        d = f"M{_n(x)} {_n(y + p)} H{_n(x + side - r)} "
-        d += arc(r, (side, p + r)) + " " if r else f"L{_n(x + side)} {_n(y + p)} "
-        path(d + f"V{_n(y + p + top)} H{_n(x)} Z", tc)
+        corner(side - r, 0, er + r, et + r, side - r, et + r, r, er, et, False, True)
+        strip(0, 0, side - r, et, "bottom")
+        strip(side, et + r, er, top - r, "left")
+        d = f"M{_n(x)} {_n(y + et)} H{_n(x + side - r)} "
+        d += arc(r, (side, et + r)) + " " if r else f"L{_n(x + side)} {_n(y + et)} "
+        path(d + f"V{_n(y + et + top)} H{_n(x)} Z", tc)
     elif part == "bottomleft":
-        corner(0, base - rb, p + rb, rb + p, p + rb, base - rb, rb)
-        strip(p + rb, base, side - rb, p, "top")
-        strip(0, 0, p, base - rb, "right")
-        d = f"M{_n(x + p)} {_n(y)} H{_n(x + p + side)} V{_n(y + base)} "
-        d += f"H{_n(x + p + rb)} " + arc(rb, (p, base - rb)) if rb else f"H{_n(x + p)} "
+        corner(0, base - rb, el + rb, rb + eb, el + rb, base - rb, rb, el, eb, True, False)
+        strip(el + rb, base, side - rb, eb, "top")
+        strip(0, 0, el, base - rb, "right")
+        d = f"M{_n(x + el)} {_n(y)} H{_n(x + el + side)} V{_n(y + base)} "
+        d += f"H{_n(x + el + rb)} " + arc(rb, (el, base - rb)) if rb else f"H{_n(x + el)} "
         path(d + " Z", fc)
     elif part == "bottomright":
-        corner(side - rb, base - rb, p + rb, rb + p, side - rb, base - rb, rb)
-        strip(0, base, side - rb, p, "top")
-        strip(side, 0, p, base - rb, "left")
+        corner(side - rb, base - rb, er + rb, rb + eb, side - rb, base - rb, rb, er, eb, False, False)
+        strip(0, base, side - rb, eb, "top")
+        strip(side, 0, er, base - rb, "left")
         d = f"M{_n(x)} {_n(y)} H{_n(x + side)} V{_n(y + base - rb)} "
         d += arc(rb, (side - rb, base)) + " " if rb else f"V{_n(y + base)} "
         path(d + f"H{_n(x)} Z", fc)
     elif part == "top":
-        strip(0, 0, w, p, "bottom")
-        rect(0, p, w, top, tc)
+        strip(0, 0, w, et, "bottom")
+        rect(0, et, w, top, tc)
     elif part == "bottom":
         rect(0, 0, w, base, fc)
-        strip(0, base, w, p, "top")
+        strip(0, base, w, eb, "top")
     elif part == "left":
-        strip(0, 0, p, h, "right")
-        rect(p, 0, side, h, fc)
+        strip(0, 0, el, h, "right")
+        rect(el, 0, side, h, fc)
     elif part == "right":
         rect(0, 0, side, h, fc)
-        strip(side, 0, p, h, "left")
+        strip(side, 0, er, h, "left")
     else:
         rect(0, 0, w, h, fc)
     return _group(ident, x, y, w, h, shapes)
@@ -341,9 +397,9 @@ def _piece(
 
 def _decoration_svg(look: Look) -> str:
     pieces = _Pieces()
-    p, side, base = look.shadow, look.side, look.base
-    column = [p + side, SLICE, p + side]
-    row = [p + TITLE_TOTAL, SLICE, p + base]
+    side, base, top = look.side, look.base, look.title_total
+    column = [look.shadow_left + side, SLICE, look.shadow_right + side]
+    row = [look.shadow_top + top, SLICE, look.shadow_bottom + base]
     total_w, total_h = sum(column), sum(row)
     variants = (
         ("decoration", look.header, look.strength),
@@ -362,9 +418,9 @@ def _decoration_svg(look: Look) -> str:
         (("decoration-maximized", look.header), ("decoration-maximized-inactive", look.window))
     ):
         x = index * (total_w + 4)
-        shape = f'<rect x="{x}" y="{flat_y}" width="16" height="{TITLE_TOTAL}" fill="{color.hex}"/>'
-        groups.append(_group(f"{prefix}-center", x, flat_y, 16, TITLE_TOTAL, [shape]))
-    width, height = 2 * total_w + 4, flat_y + TITLE_TOTAL
+        shape = f'<rect x="{x}" y="{flat_y}" width="16" height="{top}" fill="{color.hex}"/>'
+        groups.append(_group(f"{prefix}-center", x, flat_y, 16, top, [shape]))
+    width, height = 2 * total_w + 4, flat_y + top
     return _svg(width, height, pieces.defs, groups)
 
 
@@ -420,7 +476,7 @@ def _glyph(name: str, x: float, y: float, color: Color) -> str:
 
 
 def _button_svg(look: Look, name: str) -> str:
-    cell = BUTTON_SIZE
+    cell = look.button
     close = name == "close"
     toggle = name in TOGGLE_BUTTONS
     text, muted, header = look.text, look.muted, look.header
@@ -448,9 +504,29 @@ def _button_svg(look: Look, name: str) -> str:
                 f'<circle cx="{x + cell / 2:g}" cy="{cell / 2:g}" r="{cell / 2 - 1:g}" '
                 f'fill="{background.hex}"/>'
             )
-        shapes.append(_glyph(name, x, 0, glyph))
+        if cell == BUTTON_SIZE:
+            shapes.append(_glyph(name, x, 0, glyph))
+        else:  # the picture is drawn in a 22 px cell and scaled to the button
+            scale = _n(round(cell / BUTTON_SIZE, 4))
+            picture = _glyph(name, 0, 0, glyph)
+            shapes.append(f'<g transform="translate({_n(x)} 0) scale({scale})">{picture}</g>')
         groups.append(_group(f"{state}-center", x, 0, cell, cell, shapes))
     return _svg(len(BUTTON_STATES) * (cell + 2), cell, [], groups)
+
+
+# The values of the shape that only the newer frames have, as the rc group names them. A frame that
+# leaves one at its usual value does not write it, so such a frame is the same as it always was.
+EXTRA_SHAPE = (
+    ("TitleBar", "title_total", TITLE_TOTAL),
+    ("ButtonSize", "button_size", BUTTON_SIZE),
+    ("ButtonSpacing", "button_spacing", BUTTON_SPACING),
+    ("ShadowX", "shadow_x", 0),
+    ("ShadowY", "shadow_y", 0),
+)
+
+
+def _extra_shape(look: Look) -> list[tuple[str, int]]:
+    return [(key, getattr(look, name)) for key, name, usual in EXTRA_SHAPE if getattr(look, name) != usual]
 
 
 def _rc(look: Look) -> str:
@@ -478,17 +554,17 @@ def _rc(look: Look) -> str:
         ("TitleEdgeRightMaximized", 6),
         ("TitleBorderLeft", 6),
         ("TitleBorderRight", 6),
-        ("TitleHeight", TITLE_HEIGHT),
-        ("ButtonWidth", BUTTON_SIZE),
-        ("ButtonHeight", BUTTON_SIZE),
-        ("ButtonSpacing", BUTTON_SPACING),
-        ("ButtonMarginTop", 0),
-        ("ButtonMarginTopMaximized", 0),
+        ("TitleHeight", look.title_row),
+        ("ButtonWidth", look.button),
+        ("ButtonHeight", look.button),
+        ("ButtonSpacing", look.button_spacing),
+        ("ButtonMarginTop", (look.title_row - look.button) // 2),
+        ("ButtonMarginTopMaximized", (look.title_row - look.button) // 2),
         ("ExplicitButtonSpacer", 10),
-        ("PaddingLeft", look.shadow),
-        ("PaddingRight", look.shadow),
-        ("PaddingTop", look.shadow),
-        ("PaddingBottom", look.shadow),
+        ("PaddingLeft", look.shadow_left),
+        ("PaddingRight", look.shadow_right),
+        ("PaddingTop", look.shadow_top),
+        ("PaddingBottom", look.shadow_bottom),
         ("", None),
         # The shape, for the next apply: a theme that leaves the frame alone recolors it.
         # Aurorae ignores groups it does not know.
@@ -497,6 +573,7 @@ def _rc(look: Look) -> str:
         ("Border", look.border),
         ("ShadowSize", look.shadow),
         ("ShadowStrength", repr(float(look.strength))),
+        *_extra_shape(look),
     ]
     lines = [MARKER]
     for key, value in values:
@@ -552,7 +629,15 @@ def frame_to_generate(theme: Theme) -> tuple[Look, str] | None:
     if shape is None:
         return None
     radius, border, shadow, strength = shape
-    look = replace(Look.of(theme), radius=radius, border=border, shadow=shadow, strength=strength)
+    usual = {name: default for _key, name, default in EXTRA_SHAPE}  # a frame without them has the usual
+    look = replace(
+        Look.of(theme),
+        radius=radius,
+        border=border,
+        shadow=shadow,
+        strength=strength,
+        **{**usual, **frame_in_use_extras()},
+    )
     return look, _folder_name(theme, look)
 
 
@@ -605,6 +690,27 @@ def frame_in_use_shape() -> tuple[int, int, int, float] | None:
     if shape is None or not _shape_ok(*shape):
         return None
     return shape
+
+
+def frame_in_use_extras() -> dict[str, int]:
+    """The title bar, button and shadow offset values (`Look` fields) of the frame of ours in use; only
+    those that differ from the usual ones. Empty when none is in use or it cannot be read."""
+    path = _frame_folder_in_use()
+    if path is None:
+        return {}
+    try:
+        group = _read_rc(path)[SHAPE_GROUP]
+        found = {name: int(group[key]) for key, name, _usual in EXTRA_SHAPE if key in group}
+    except (OSError, UnicodeDecodeError, ValueError, configparser.Error, KeyError):
+        return {}
+    limits = {
+        "title_total": ("window", "title_height"),
+        "button_size": ("window", "button_size"),
+        "button_spacing": ("window", "button_spacing"),
+        "shadow_x": ("shadow", "offset_x"),
+        "shadow_y": ("shadow", "offset_y"),
+    }
+    return {name: value for name, value in found.items() if _in_range(value, *limits[name])}
 
 
 def _read_rc(path: Path) -> configparser.ConfigParser:
@@ -736,6 +842,8 @@ class WindowFrameGenerator(Generator):
             ]
         if mode == "breeze":
             return self._breeze_shadow_notes(theme)
+        if theme.get("shadow", "offset_x") or theme.get("shadow", "offset_y"):
+            return []  # the note about the offset says how the shadow falls
         return [translate("core", "The generated window frame draws this shadow, the same on all sides.")]
 
     def _breeze_shadow_notes(self, theme: Theme) -> list[Msg]:
@@ -801,6 +909,21 @@ class WindowFrameGenerator(Generator):
                     "corners can only be rounded by {bottom} px. The top corners get the radius "
                     "{radius} px. A wider border allows rounder bottom corners.",
                 ).format(border=look.border, bottom=look.bottom_radius, radius=look.radius)
+            )
+        if theme.get("window", "button_size") is not None and look.button < look.button_size:
+            notes.append(
+                translate(
+                    "core",
+                    "The buttons are {size} px at most in a title bar that is {height} px high. Make the "
+                    "title bar higher for larger buttons.",
+                ).format(size=look.button, height=look.title_total)
+            )
+        if look.shadow_x or look.shadow_y:
+            notes.append(
+                translate(
+                    "core",
+                    "The shadow falls {x} px sideways and {y} px downwards, so it is thicker on that side.",
+                ).format(x=look.shadow_x, y=look.shadow_y)
             )
         notes.append(
             translate(

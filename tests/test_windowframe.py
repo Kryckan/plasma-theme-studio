@@ -1018,3 +1018,100 @@ def test_a_shape_group_with_a_missing_key_is_not_ours(kwin, runner, key):
     lines = [line for line in rc.read_text().splitlines() if not line.startswith(key + "=")]
     rc.write_text("\n".join(lines) + "\n")
     assert wf.frame_in_use_shape() is None
+
+
+# ---- the title bar, the buttons and the shadow's direction
+
+
+def rc_parsed(look):
+    import configparser
+
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.optionxform = str
+    parser.read_string(wf._rc(look))
+    return parser
+
+
+def test_the_defaults_are_the_frame_they_always_were():
+    look = wf.Look.of(theme(window__radius=8, window__border_width=2, shadow__size=16))
+    assert (look.title_total, look.button_size, look.button_spacing) == (wf.TITLE_TOTAL, wf.BUTTON_SIZE, 4)
+    assert (look.shadow_x, look.shadow_y) == (0, 0)
+    assert look.shadow_left == look.shadow_right == look.shadow_top == look.shadow_bottom == 16
+    assert "ShadowX" not in wf._rc(look) and "TitleBar" not in wf._rc(look)
+
+
+def test_the_title_bar_height_button_size_and_spacing_reach_the_rc_file():
+    look = wf.Look.of(
+        theme(window__title_height=44, window__button_size=30, window__button_spacing=9, shadow__size=10)
+    )
+    rc = rc_parsed(look)
+    row = 44 - 2 * wf.TITLE_EDGE
+    assert rc["Layout"]["TitleHeight"] == str(row)
+    assert rc["Layout"]["ButtonWidth"] == rc["Layout"]["ButtonHeight"] == "30"
+    assert rc["Layout"]["ButtonSpacing"] == "9"
+    assert rc["Layout"]["ButtonMarginTop"] == str((row - 30) // 2)
+    assert rc[wf.SHAPE_GROUP]["TitleBar"] == "44"
+
+
+def test_a_button_cannot_be_taller_than_the_title_row():
+    look = wf.Look.of(theme(window__title_height=20, window__button_size=40))
+    assert look.button == look.title_row
+
+
+def test_the_shadow_offset_moves_the_reach_to_one_side():
+    look = wf.Look.of(theme(shadow__size=20, shadow__offset_x=8, shadow__offset_y=-12))
+    assert (look.shadow_left, look.shadow_right) == (12, 28)
+    assert (look.shadow_top, look.shadow_bottom) == (32, 8)
+    rc = rc_parsed(look)
+    assert rc["Layout"]["PaddingLeft"] == "12" and rc["Layout"]["PaddingRight"] == "28"
+    assert rc[wf.SHAPE_GROUP]["ShadowX"] == "8" and rc[wf.SHAPE_GROUP]["ShadowY"] == "-12"
+
+
+def test_an_offset_larger_than_the_shadow_leaves_none_on_that_side():
+    look = wf.Look.of(theme(shadow__size=6, shadow__offset_y=30))
+    assert look.shadow_top == 0 and look.shadow_bottom == 36
+
+
+def test_every_file_of_a_changed_frame_passes_the_checks(runner):
+    values = {
+        "window__radius": 12,
+        "window__border_width": 3,
+        "window__title_height": 40,
+        "window__button_size": 28,
+        "window__button_spacing": 8,
+        "shadow__size": 24,
+        "shadow__offset_x": 10,
+        "shadow__offset_y": 16,
+    }
+    generator = WindowFrameGenerator()
+    planned = generator.files(theme(**values))
+    assert planned
+    for file in planned:
+        assert generator.check_output(file) == [], file.path.name
+
+
+def test_a_frame_of_ours_in_use_keeps_its_title_bar_and_shadow_when_the_theme_leaves_the_frame(kwin, runner):
+    apply_generated(
+        runner,
+        window__title_height=40,
+        window__button_size=26,
+        shadow__size=16,
+        shadow__offset_x=4,
+        shadow__offset_y=9,
+    )
+    extras = wf.frame_in_use_extras()
+    assert extras == {"title_total": 40, "button_size": 26, "shadow_x": 4, "shadow_y": 9}
+    kept = wf.frame_to_generate(theme("unchanged", window__radius=7))
+    assert kept is not None
+    look, _folder = kept
+    assert (look.title_total, look.button_size, look.shadow_y) == (40, 26, 9)
+
+
+def test_no_frame_of_ours_in_use_gives_no_extras(kwin, runner):
+    assert wf.frame_in_use_extras() == {}
+
+
+def test_the_folder_changes_with_the_new_values():
+    plain = wf.frame_to_generate(theme())[1]
+    assert wf.frame_to_generate(theme(window__title_height=44))[1] != plain
+    assert wf.frame_to_generate(theme(shadow__offset_y=6))[1] != plain

@@ -42,17 +42,17 @@ class PartStatus:
 # key, title, the targets (by id) that make up the part
 PARTS: tuple[tuple[str, Msg, tuple[str, ...]], ...] = (
     ("colors", translate("core", "Colors"), ("colors", "accent")),
-    ("app_style", translate("core", "Application Style"), ("apps", "app_style")),
+    ("app_style", translate("core", "Application Style"), ("apps", "app_style", "toolbars")),
     ("plasma_style", translate("core", "Plasma Style"), ("panel", "plasma_style")),
     ("panel", translate("core", "Panel"), ("panel_layout",)),
     ("decoration", translate("core", "Window Decorations"), ("window", "decoration")),
     ("borders", translate("core", "Window Borders and Buttons"), ("border_size", "buttons")),
     ("icons", translate("core", "Icons"), ("icons",)),
-    ("pointers", translate("core", "Pointers"), ("cursors", "cursor_size")),
+    ("pointers", translate("core", "Pointers"), ("cursors", "cursor_size", "launch_feedback")),
     ("fonts", translate("core", "Fonts"), ("fonts",)),
     ("splash", translate("core", "Splash Screen"), ("splash",)),
     ("sounds", translate("core", "System Sounds"), ("sounds",)),
-    ("night_mode", translate("core", "Dark mode at night"), ("night_mode",)),
+    ("night_mode", translate("core", "Dark mode at night"), ("night_mode", "night_variants")),
     ("gtk", translate("core", "GTK Apps"), ("gtk",)),
     ("rofi", translate("core", "Rofi"), ("rofi",)),
 )
@@ -72,7 +72,7 @@ def _leave() -> str:
 
 
 def _not_checked() -> str:
-    return str(translate("core", "Not checked"))
+    return str(translate("core", "Not looked at, the theme leaves it"))
 
 
 class _Names:
@@ -141,7 +141,7 @@ class _Status:
         return None
 
     def made_here(self) -> str:
-        return str(translate("core", "{name} (made by this app)").format(name=self.theme.name))
+        return str(translate("core", "{name} (made from this theme)").format(name=self.theme.name))
 
     # ---- the verdict --------------------------------------------------------------------------
     def state(self, ids: tuple[str, ...]) -> str:
@@ -171,6 +171,27 @@ class _Status:
         scheme = current_scheme(self.runner)
         desktop = self.names("color_scheme", scheme) if scheme else str(translate("core", "Breeze"))
         theme = self.theme.name
+        if self.theme.has_both:
+            from ..generators.colorscheme import scheme_name
+            from ..generators.variants import of_variant
+
+            dark = self.theme.shown_variant == "dark"
+            theme = str(
+                (
+                    translate("core", "{name}, dark variant")
+                    if dark
+                    else translate("core", "{name}, light variant")
+                ).format(name=self.theme.scheme_title)
+            )
+            for variant in self.theme.variants:
+                if scheme and scheme == scheme_name(of_variant(self.theme, variant)):
+                    desktop = str(
+                        (
+                            translate("core", "{name}, dark variant")
+                            if variant == "dark"
+                            else translate("core", "{name}, light variant")
+                        ).format(name=desktop)
+                    )
         if self.theme.get("colors", "accent_from_wallpaper"):
             theme = str(translate("core", "{name}, accent from the wallpaper").format(name=theme))
         return desktop, theme
@@ -202,7 +223,7 @@ class _Status:
         wants_buttons = left is not None or right is not None
         desktop, theme = [], []
         if wants_size is not None or not wants_buttons:
-            own = translate("core", "The decoration's own")
+            own = translate("core", "Size from the decoration")
             desktop.append(str(sizes.get(size, own)) if size else str(own))
         if wants_size is not None:
             theme.append(str(sizes[wants_size]))
@@ -215,7 +236,21 @@ class _Status:
                     right if right is not None else buttons["right"],
                 )
             )
-        return ", ".join(desktop), ", ".join(theme) if theme else _leave()
+        return "; ".join(desktop), "; ".join(theme) if theme else _leave()
+
+    def with_extra(self, base: tuple[str, str], target_id: str) -> tuple[str, str]:
+        """`base` with the words of a small settings target (see `generators/extras.py`) added."""
+        from ..generators import extras
+
+        target = self.targets[target_id]
+        if not target.wanted(self.theme):
+            return base
+        desktop, theme = extras.status_texts(target, self.theme, self.runner)
+        desktop_text, theme_text = base
+        return (
+            f"{desktop_text}; {desktop}" if desktop_text else desktop,
+            f"{theme_text}; {theme}" if theme_text != _leave() else theme,
+        )
 
     def pointers(self, wanted: bool) -> tuple[str, str]:
         size = self.current("cursor_size")
@@ -271,7 +306,7 @@ class _Status:
         if not wanted:
             return _not_checked(), _leave()
         active = self.is_active(generator)
-        desktop = translate("core", "This theme's") if active else translate("core", "Something else")
+        desktop = translate("core", "This theme's own") if active else translate("core", "Something else")
         return str(desktop), self.made_here()
 
     def panel(self, wanted: bool) -> tuple[str, str]:
@@ -279,21 +314,7 @@ class _Status:
 
         if not wanted:  # reading the panel asks Plasma, so it is done only for a theme that names one
             return _not_checked(), _leave()
-        state = panellayout._read(self.runner)
-        if state.get("found"):
-            desktop = str(
-                translate("core", "{place}, {size} px").format(
-                    place=state.get("location", "?"), size=state.get("height", "?")
-                )
-            )
-        else:
-            desktop = str(translate("core", "No panel was found"))
-        theme = [
-            str(self.theme.get("panel_layout", key))
-            for key in ("location", "height")
-            if self.theme.get("panel_layout", key) is not None
-        ]
-        return desktop, ", ".join(theme) if theme else _leave()
+        return panellayout.status_texts(self.theme, self.runner)
 
     def texts(self, key: str, ids: tuple[str, ...]) -> tuple[str, str]:
         wanted = any(self.targets[i].wanted(self.theme) for i in ids)
@@ -301,9 +322,17 @@ class _Status:
             case "colors":
                 return self.colors(wanted)
             case "app_style":
-                return self.named("app_style", "app_style", "apps", "style", wanted)
+                return self.with_extra(
+                    self.named("app_style", "app_style", "apps", "style", wanted), "toolbars"
+                )
             case "plasma_style":
-                return self.named("plasma_style", "plasma_style", "panel", "style", wanted)
+                desktop, theme = self.named("plasma_style", "plasma_style", "panel", "style", wanted)
+                if self.theme.part_state("panel", "style") == "generated":
+                    from ..generators import plasmastyle
+
+                    own = plasmastyle.status_words(self.theme)
+                    theme = f"{theme}, {own}" if own else theme
+                return desktop, theme
             case "panel":
                 return self.panel(wanted)
             case "decoration":
@@ -313,7 +342,7 @@ class _Status:
             case "icons":
                 return self.simple("icons", "icons", "desktop", "icons")
             case "pointers":
-                return self.pointers(wanted)
+                return self.with_extra(self.pointers(wanted), "launch_feedback")
             case "fonts":
                 return self.fonts(wanted)
             case "splash":
@@ -330,7 +359,9 @@ def _buttons_text(left: str | None, right: str | None) -> str:
     def side(text: str | None) -> str:
         return ", ".join(str(name) for name in describe_buttons(text or "")) or "-"
 
-    return str(translate("core", "buttons {left} | {right}").format(left=side(left), right=side(right)))
+    return str(
+        translate("core", "Buttons: left {left}; right {right}").format(left=side(left), right=side(right))
+    )
 
 
 def parts_status(theme: Theme, runner) -> list[PartStatus]:

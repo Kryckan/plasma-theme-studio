@@ -20,7 +20,7 @@ Run these before opening a pull request. CI runs the same three commands.
 ```sh
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest
+QT_QPA_PLATFORM=offscreen flock /tmp/pts-suite.lock scripts/capped .venv/bin/python -m pytest -q -p no:cacheprovider
 ```
 
 The tests use a temporary home folder and a stand-in for the KDE tools. They never change your desktop.

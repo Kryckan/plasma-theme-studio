@@ -20,6 +20,7 @@ from ..messages import Msg, translate
 from ..model.parts import FontSpec
 from ..model.theme import FONT_KEYS, Theme
 from .base import ApplyError, Generator, PlannedFile
+from .colorscheme import installed_scheme_of
 from .kvantum import selected_theme, selection_file, stale_themes
 from .plasmastyle import stale_packages
 from .windowframe import AURORAE_LIBRARY, AURORAE_THEME_PREFIX, stale_frames
@@ -324,6 +325,29 @@ class NightModeTarget(PartTarget):
     def reload_command(self, theme: Theme) -> str:
         return ""
 
+    # What the switch to the other Global Theme changes: Plasma makes it at once when the switch is
+    # turned on at night. An undo puts all of it back, not only the switch.
+    SWITCHED = ("plasma_style", "app_style", "decoration", "icons", "cursor_theme", "splash")
+
+    def capture_settings(self, runner) -> dict:
+        captured = self.part.capture(runner)
+        captured["switched"] = {key: _part(key).capture(runner) for key in self.SWITCHED}
+        return captured
+
+    def restore_settings(self, settings: dict, runner) -> None:
+        failure = None
+        try:
+            self.part.restore(settings, runner)
+        except ApplyError as error:
+            failure = error
+        for key, captured in (settings.get("switched") or {}).items():
+            try:
+                _part(key).restore(captured, runner)
+            except ApplyError as error:
+                failure = failure or error
+        if failure:
+            raise failure
+
     def describe(self, theme: Theme) -> list[Msg]:
         if self.value(theme):
             return [translate("core", "the switch to dark mode at night: on (kdeglobals)")]
@@ -416,6 +440,8 @@ class AccentTarget(PartTarget):
     def wanted(self, theme: Theme) -> bool:
         if self.follows_wallpaper(theme):
             return True
+        if installed_scheme_of(theme) is not None:
+            return False  # an installed scheme is applied by name; its accent is not overridden here
         settings = self.part.settings
         flag = kconfig.user_value(*settings["wallpaper"]) or ""
         # a value that is no color is not an override: Plasma ignores it, so it is left as it is
