@@ -71,6 +71,7 @@ def system_state(desktop):
         and own not in path.parents
         and cache not in path.parents
         and path not in (own, cache)
+        and path not in cache.parents  # the folder above the cache appears with it (seen on CI)
     )
     return files, folders, desktop.runner.settings["ColorScheme"], desktop.shell.state()
 
