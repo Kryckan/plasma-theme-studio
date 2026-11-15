@@ -402,10 +402,8 @@ class SoundRow(QAbstractButton):
         def where(rect: QRectF) -> QRectF:  # laid out left to right, mirrored for right to left
             return _flip(self.width(), rect) if rtl else rect
 
-        p.setOpacity(0.55 if self.dimmed else 1.0)
         if self.badge is not None:
             p.drawImage(where(QRectF(self.PAD, self.PAD, side, side)), self.badge)
-        p.setOpacity(1.0)
         left = self.PAD + side + 12
         room = max(0, self.width() - self.PAD - self.play.width() - 12 - left)
         align = (

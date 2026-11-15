@@ -32,3 +32,43 @@ jobs:
         run: pytest
         env:
           QT_QPA_PLATFORM: offscreen
+
+  reuse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: REUSE lint
+        run: |
+          pip install reuse
+          reuse lint
+
+  data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
+      - name: Validate the desktop file and the AppStream data
+        run: |
+          desktop-file-validate data/io.github.kryckan.PlasmaThemeStudio.desktop
+          appstreamcli validate --no-net data/io.github.kryckan.PlasmaThemeStudio.metainfo.xml
+      - name: Check that the package recipes agree
+        run: python3 scripts/check-packaging.py
+
+  arch-package:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install what the package needs to build and its launcher to run
+        run: pacman -Syu --noconfirm git python pyside6 python-jinja qt6-tools
+      - uses: actions/checkout@v4
+      - name: Build both Arch packages and run the launcher from the release one
+        run: |
+          useradd -m builder
+          chown -R builder .
+          su builder -c "git config --global --add safe.directory '*' && scripts/check-arch-package.sh /tmp/arch-package"

@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+# SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+export LRELEASE := /usr/lib/qt6/bin/lrelease
+
+%:
+	dh $@ --with python3
+
+# The same install script as the Arch and RPM packages, so all of them
+# install the same files. debian/install then moves them into the package.
+override_dh_auto_install:
+	packaging/install.sh $(CURDIR)/debian/tmp /usr
+	find debian/tmp -name '__pycache__' -type d -prune -exec rm -r {} +
+
+override_dh_auto_test:
+	desktop-file-validate debian/tmp/usr/share/applications/io.github.kryckan.PlasmaThemeStudio.desktop
+	appstreamcli validate --no-net debian/tmp/usr/share/metainfo/io.github.kryckan.PlasmaThemeStudio.metainfo.xml
+
+# The program lives in a private folder: have its bytecode compiled on install.
+override_dh_python3:
+	dh_python3 /usr/share/plasma-theme-studio

@@ -385,6 +385,12 @@ def home(tmp_path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def runtime_folder(tmp_path_factory, monkeypatch):
+    """The folder of the lock files (`writelock`, the follow watcher): never the real runtime folder."""
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path_factory.mktemp("runtime")))
+
+
 @pytest.fixture
 def runner(home):
     return FakeRunner(schemes_dir=home / ".local/share/color-schemes")

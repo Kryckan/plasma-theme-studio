@@ -9,6 +9,7 @@ desktop (apply, switch, undo, snapshots). The pages (`ui/pages`) only show the t
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -44,6 +45,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -51,14 +53,14 @@ from PySide6.QtWidgets import (
 )
 
 from .. import APP_DIR, APP_NAME, __version__, archive, globaltheme, library, paths
-from ..apply import desktop, engine
+from ..apply import engine
 from ..apply import snapshot as snapshots
 from ..apply.runner import SystemRunner
 from ..apply.status import BLOCKED, CHANGE, LEAVE
-from ..generators import ApplyError
+from ..generators import ApplyError, artwork, plasmastyle
 from ..generators.colorscheme import current_scheme
 from ..model.color import contrast
-from ..model.theme import FIELD_BY_ID, FIELDS, PRESETS, SECTIONS, Field, Theme, ThemeError
+from ..model.theme import ARTWORK_KEYS, FIELD_BY_ID, FIELDS, PRESETS, SECTIONS, Field, Theme, ThemeError
 from ..pickers.loader import ThumbnailLoader
 from . import pages
 from .banner import INFORMATION, POSITIVE, Banner
@@ -236,7 +238,36 @@ class _StatusJob(QRunnable):
             pass
 
 
+class _WorkAnswer(QObject):
+    """Carries the end of a `_Work` (and its progress) from the worker thread to the window."""
+
+    done = Signal(object, object)  # the result, and the exception that ended it instead (or None)
+    progress = Signal(int, int)
+
+
+class _Work(QRunnable):
+    """Runs `work(progress)` off the GUI thread. The exception it ends with travels to the caller."""
+
+    def __init__(self, work: Callable, answer: _WorkAnswer):
+        super().__init__()
+        self.work, self.answer = work, answer
+
+    def run(self) -> None:
+        result = error = None
+        try:
+            result = self.work(self.answer.progress.emit)
+        except BaseException as caught:  # noqa: BLE001 - handed on to the caller, who decides
+            error = caught
+        try:
+            self.answer.done.emit(result, error)
+        except RuntimeError:  # the window is gone
+            pass
+
+
 class MainWindow(QMainWindow):
+    discard_on_close = False  # set only by `close_without_asking`
+    _away_running = 0  # how many `_away` jobs are running
+
     def __init__(self, runner=None):
         super().__init__()
         self.runner = runner or SystemRunner()
@@ -267,6 +298,10 @@ class MainWindow(QMainWindow):
         self.status_pending = False
         self.entry_handlers: dict[type, Callable] = {}  # a card class -> what applying one does
         self.nothing_to_apply = False  # the last answer said an apply would change nothing
+        # What the status said for a theme (by `fingerprint`) since the desktop last changed: an edit that
+        # brings the theme back to one we know needs no new answer, so Apply does not flash on.
+        self.known_nothing: dict[str, bool] = {}
+        self.fingerprint = ""
 
         self._build_central()
         self._build_actions()
@@ -564,6 +599,9 @@ class MainWindow(QMainWindow):
         if control is not None:
             control.set_value(self.theme.get(*field.id))
         self.sync_editors()
+        if self.known_nothing:  # Apply follows the edit at once, not after the refresh below
+            self.nothing_to_apply = self.known_nothing.get(self._fingerprint(), False)
+            self.update_apply_button()
         self.refresh_timer.start()
 
     def sync_editors(self) -> None:
@@ -661,8 +699,10 @@ class MainWindow(QMainWindow):
         """Bring the page shown, the messages and the files in line with the theme."""
         self.plan = engine.build_plan(self.theme)
         # An edit may change something again, so Apply is on until the status says otherwise: a
-        # button that stays off for a moment after a real edit is the worse fault.
-        self.nothing_to_apply = False
+        # button that stays off for a moment after a real edit is the worse fault. When this very theme
+        # was answered before (an edit taken back, an undo of one), that answer is used at once.
+        self.fingerprint = self._fingerprint()
+        self.nothing_to_apply = self.known_nothing.get(self.fingerprint, False)
         self.status_generation += 1  # an answer for the theme before this edit is out of date
         for page in self.pages.values():
             page.stale = True
@@ -695,6 +735,21 @@ class MainWindow(QMainWindow):
         self._update_variant_switch()
         self.status_timer.start()
 
+    def _fingerprint(self) -> str:
+        """What the comparison with the desktop depends on: the theme and the pictures it uses. Cheap
+        enough to take on every edit."""
+        digest = hashlib.sha256(self.theme.to_toml().encode())
+        for frame, data in sorted(self.theme.pending_artwork.items()):
+            digest.update(frame.encode() + b"\0" + data)
+        for frame in ARTWORK_KEYS:
+            _name, path = artwork.resolve(self.theme, frame)
+            try:
+                info = path.stat() if path is not None else None
+            except OSError:
+                info = None
+            digest.update(repr((frame, info and (info.st_mtime_ns, info.st_size))).encode())
+        return digest.hexdigest()
+
     def update_status(self) -> None:
         """Start the comparison of every part with the desktop in a worker. Only the newest answer is
         used (`_status_ready`); typing and dragging never wait for it."""
@@ -708,6 +763,8 @@ class MainWindow(QMainWindow):
     def settle(self) -> None:
         """Wait until the status of the newest theme is known and shown (for tests, and for a caller that
         needs the answer now)."""
+        for page in self.pages.values():
+            page.wait_desktop()
         while self.status_timer.isActive() or self.status_pending:
             if self.status_timer.isActive():
                 self.update_status()
@@ -753,6 +810,10 @@ class MainWindow(QMainWindow):
             text = translate("ui", "{count} parts will change when you apply.").format(count=changing)
         self.desktop_bar.set_status(text, changing > 0 or bool(blocked))
         self.nothing_to_apply = bool(self.statuses) and changing == 0 and not blocked
+        if self.statuses:
+            if len(self.known_nothing) >= 64:
+                self.known_nothing.clear()
+            self.known_nothing[self.fingerprint] = self.nothing_to_apply
         self.update_apply_button()
         overview = self.pages.get("overview")
         if overview is not None:
@@ -911,7 +972,10 @@ class MainWindow(QMainWindow):
 
     def import_path(self, path: Path) -> bool:
         try:
-            theme = archive.import_theme(path)
+            # Reading an archive draws its pictures in a child process: the window does not wait for it
+            theme = self._away(
+                lambda _progress: archive.import_theme(path), translate("ui", "Reading the theme…")
+            )
             theme, saved = library.save_imported(theme)
         except archive.ArchiveError as error:
             self._show_problems(
@@ -969,7 +1033,11 @@ class MainWindow(QMainWindow):
     def export_global_path(self, folder: Path) -> bool:
         heading = translate("ui", "The Global Theme could not be exported.")
         try:
-            written = globaltheme.export_global_theme(self.theme, folder)
+            theme = self.theme
+            written = self._away(
+                lambda _progress: globaltheme.export_global_theme(theme, folder),
+                translate("ui", "Checking the artwork…"),
+            )
         except globaltheme.ExportError as error:
             self._show_problems(heading, [error.message])
             return False
@@ -1003,8 +1071,21 @@ class MainWindow(QMainWindow):
         self.stop_page_workers()
         super().hideEvent(event)
 
+    def close_without_asking(self) -> bool:
+        """Close the window and let go of unsaved changes without the "Unsaved changes" question, which
+        is modal and so blocks a window nobody can click (the offscreen helpers and the tests). A person
+        at the desktop never goes through here: the close button and Quit still ask."""
+        self.discard_on_close = True
+        try:
+            return self.close()
+        finally:
+            self.discard_on_close = False
+
     def closeEvent(self, event) -> None:
-        if not self._discard_ok():
+        if self._away_running:  # a worker is putting files back: the window stays until it is done
+            event.ignore()
+            return
+        if not self.discard_on_close and not self._discard_ok():
             event.ignore()
             return
         QSettings().setValue("window/geometry", self.saveGeometry())
@@ -1021,15 +1102,21 @@ class MainWindow(QMainWindow):
         box.setInformativeText("\n".join(f"• {problem}" for problem in problems))
         box.exec()
 
-    def active_scheme(self) -> str:
-        """The color scheme the desktop uses now."""
+    def read_scheme(self) -> str:
+        """The color scheme the desktop uses now, read without touching the window: for a worker."""
         if self.runner.which("kreadconfig6"):
-            self._active = current_scheme(self.runner)
+            return current_scheme(self.runner)
+        return self._active
+
+    def active_scheme(self) -> str:
+        """The color scheme the desktop uses now (a read on the calling thread: for an action the
+        person asked for; the pages read it in a worker with `read_scheme`)."""
+        self._active = self.read_scheme()
         return self._active
 
     def reload_library(self) -> None:
         """The desktop changed (an apply, an undo, a save): read it again where it is shown."""
-        self.active_scheme()
+        self.known_nothing.clear()  # the desktop is not what the answers were about
         self.status_generation += 1  # an answer read before the desktop changed is out of date
         for page in self.pages.values():
             page.desktop_stale = True
@@ -1119,6 +1206,7 @@ class MainWindow(QMainWindow):
             return False
         finally:
             QApplication.restoreOverrideCursor()
+            self.known_nothing.clear()  # the desktop changed: what the status said is out of date
             self.refresh()
             self.reload_library()
         self.banner.show_message(
@@ -1159,6 +1247,11 @@ class MainWindow(QMainWindow):
         """Put a theme on the desktop. Returns the snapshot of the apply, True when
         the desktop had the theme already, False when the desktop is not on it."""
         nothing_changed = translate("ui", "The theme cannot be applied. Nothing was changed.")
+        if any(plasmastyle.own_artwork(theme, frame).usable for frame in ARTWORK_KEYS):
+            # own pictures are drawn once by the draw child first, so that one it cannot draw is left out
+            self._away(
+                lambda progress: plasmastyle.vet_artwork(theme), translate("ui", "Checking the artwork…")
+            )
         plan = engine.build_plan(theme, self.runner)
         if plan.blocking:
             self._show_problems(nothing_changed, plan.blocking)
@@ -1225,19 +1318,17 @@ class MainWindow(QMainWindow):
         # A snapshot that is gone already was removed as too old, not undone.
         present = {item.id for item in snapshots.list_snapshots()}
         self.switches = {key: value for key, value in self.switches.items() if key in present}
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        # The undo waits for the desktop's daemons now and then: keep the window painting meanwhile.
-        desktop.keep_alive = lambda: QApplication.processEvents(
-            QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents
-        )
         try:
-            reached, failures = engine.restore_to(snapshot, self.runner)
+            # The undo waits for the desktop's daemons: it runs in a worker, the window keeps painting
+            reached, failures = self._away(
+                lambda progress: engine.restore_to(snapshot, self.runner, progress),
+                translate("ui", "Putting the desktop back…"),
+                translate("ui", "{done} of {total}"),
+            )
         except OSError as error:
             failures = [str(error)]
-        finally:
-            desktop.keep_alive = None
-            QApplication.restoreOverrideCursor()
         editor_went_back = self._undo_switches()
+        self.known_nothing.clear()
         self.refresh()
         self.reload_library()
         if failures:
@@ -1263,6 +1354,56 @@ class MainWindow(QMainWindow):
         if editor_went_back:
             message += " " + translate("ui", "The editor holds {name} again.").format(name=self.theme.name)
         self.banner.show_message(POSITIVE, message, 20)
+
+    def _away(self, work: Callable, label: str, steps: str | None = None):
+        """Run `work(progress)` in a worker thread and return its result (or raise what it raised), while
+        a progress window shows `label`, after a short moment when it is quick. `progress(done, total)`
+        may be called by the work; `steps` is its text ("{done} of {total}") shown under the label. The
+        window keeps painting but takes no clicks. The caller waits here, so the caller stays simple."""
+        answer = _WorkAnswer()
+        loop = QEventLoop(self)
+        finished: list = []
+        dialog = QProgressDialog(label, "", 0, 0, self)
+        dialog.setCancelButton(None)
+        dialog.setWindowTitle(APP_NAME)
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        dialog.setMinimumDuration(300)
+        dialog.setAutoClose(False)
+        dialog.setAutoReset(False)
+        dialog.setValue(0)  # with a busy range only this arms the timer that shows the window
+
+        def stepped(done: int, total: int) -> None:
+            if steps is not None and total > 1:
+                dialog.setLabelText(label + "\n" + steps.format(done=done, total=total))
+
+        def ended(result, error) -> None:
+            finished.append((result, error))
+            loop.quit()
+
+        answer.progress.connect(stepped, Qt.ConnectionType.QueuedConnection)
+        answer.done.connect(ended, Qt.ConnectionType.QueuedConnection)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        self._away_running += 1
+        try:
+            QThreadPool.globalInstance().start(_Work(work, answer))
+            if not finished:
+                loop.exec(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+            if not finished:
+                # The application was told to quit and ended this loop early: the work is not cut off
+                # half way, it is waited for.
+                QThreadPool.globalInstance().waitForDone()
+                QApplication.processEvents()
+        finally:
+            self._away_running -= 1
+            QApplication.restoreOverrideCursor()
+            dialog.reset()
+            dialog.deleteLater()
+        if not finished:
+            raise RuntimeError("the work ended without an answer")
+        result, error = finished[0]
+        if error is not None:
+            raise error
+        return result
 
     def _undo_switches(self) -> bool:
         """After an undo: when a switch made on the Themes page was undone, the

@@ -8,9 +8,11 @@ One app for editing an entire KDE Plasma theme in one place.
 
 Set colors, corner radii, borders, shadows, opacity and the panel's position in one theme. Plasma Theme Studio writes the files each part of the desktop needs and reloads the desktop live.
 
-> **Status: early development (v0.1).** The window has a page for every part of System Settings' Colors & Themes (Global Themes, Colors, Application Style, Plasma Style, Window Decorations, Icons, Pointers, Splash Screen, System Sounds, Fonts), the panel, GTK applications and Rofi, each with preview cards and a live preview. Colors, the window frame, the panel and the other parts can be edited, previewed, applied and undone; theme colors can be taken from the wallpaper or imported from pywal, matugen and `.colors` files. The login screen is only linked to System Settings. What works and what does not is in [docs/STATUS.md](docs/STATUS.md); the plan is in [docs/PRD.md](docs/PRD.md).
+> **Status: early development (v0.1, not yet released).** The window has a page for every part of System Settings' Colors & Themes (Global Themes, Colors, Application Style, Plasma Style, Window Decorations, Icons, Pointers, Splash Screen, System Sounds, Fonts), the panel, GTK applications and Rofi, each with preview cards and a live preview. Every part can be edited, previewed, applied and undone exactly, except the login screen, which is only linked to System Settings. Nothing has been tried on a real desktop session yet, only in a headless test session. What works and what does not is in [docs/STATUS.md](docs/STATUS.md); the plan is in [docs/PRD.md](docs/PRD.md). New to theming? Read the [user guide](docs/guide.md).
 
-![The editor with a dark theme open](docs/screenshots/main-window.png)
+![The Colors page with a dark sample theme](docs/screenshots/main-window.png)
+
+More pictures are in the [user guide](docs/guide.md).
 
 ## Try it
 
@@ -31,12 +33,14 @@ cd plasma-theme-studio
 ./plasma-theme-studio
 ```
 
-On Arch-based systems you can build a package instead:
+On Arch-based systems you can build a package instead (`release` builds a tagged release, once there is one; `git` builds the latest source):
 
 ```sh
-cd packaging/arch
+cd packaging/arch/git
 makepkg -si
 ```
+
+Recipes for Fedora, openSUSE, Debian and Ubuntu (Open Build Service) are in `packaging/obs/`; they have not been built on the service yet, and some package names are not verified (see `packaging/obs/README.md`).
 
 Use the distribution's PySide6, not the one from pip. Only the distribution's build loads the KDE widget styles.
 
@@ -44,9 +48,13 @@ Use the distribution's PySide6, not the one from pip. Only the distribution's bu
 
 - A page for every part of System Settings' Colors & Themes, and for the panel, GTK applications and Rofi, with preview cards and a live preview.
 - Colors from a scheme, a chosen accent, the wallpaper, any picture, or an import (pywal, matugen, `.colors`); a contrast check that fixes hard-to-read text.
+- Colors can follow pywal or matugen: *Follow the palette* keeps the desktop colors in step with the palette file, also while the window is closed, and goes back byte for byte when you switch it off. Applying another theme does not stop it.
 - Light and dark variants: *Add a Dark Variant* on the Colors page makes the second set from the first; `apply FILE --variant light|dark` picks one.
 - Window frames, panel position and style, fonts, title bar buttons, pointers, sounds and splash screen, each with *Leave as it is* | *Set by this theme*.
+- Own frames for the panel, popups and tooltips, drawn in Inkscape and kept with the theme; theme files and `.ptstheme` archives to share.
 - Overview of what an apply does to every part, *Show files…*, snapshots and *Undo last apply*.
+
+A step by step description with pictures is in the [user guide](docs/guide.md).
 
 ## Safety
 
@@ -76,6 +84,9 @@ plasma-theme-studio restore --list   list the snapshots
 plasma-theme-studio export FILE ARCHIVE         pack a theme as a .ptstheme archive
 plasma-theme-studio import ARCHIVE              save an archive's theme in the library
 plasma-theme-studio export-global-theme FILE FOLDER   write a Global Theme with install.sh
+plasma-theme-studio follow on FILE   keep the colors in step with a pywal or matugen palette
+plasma-theme-studio follow off|status   switch that off (back to before), or show it
+plasma-theme-studio follow --once    apply the palette once
 ```
 
 ## Why
@@ -92,6 +103,7 @@ my-theme.toml ──► generators (one per target) ──► files in your home
 
 - Draw mode inside the frame editor (today the editor opens the frame in Inkscape)
 - Klassy as a window decoration
+- Follow mode that also recolors the generated window frame, Kvantum and GTK
 
 ## Targets
 
@@ -116,19 +128,18 @@ The window frame, panel style and panel position have so far been tried with Pla
 - **Plasma 6.3 to 6.5:** everything except the optional Klassy window decoration.
 - **Plasma 5:** not supported.
 
-The first packages target Arch Linux (AUR). Packages for Fedora, openSUSE, Debian and Ubuntu are planned for 1.0. Details are in the [PRD](docs/PRD.md#11-platform-support).
+The first packages target Arch Linux (AUR). Recipes for Fedora, openSUSE, Debian and Ubuntu are in the repository but untried. Details are in the [PRD](docs/PRD.md#11-platform-support).
 
 ## Roadmap
 
 | Milestone | Scope |
 |---|---|
-| v0.1 | Theme file, colors, window frame, panel look and position, apply, undo, translations, first Arch package |
-| v0.2 | Shapes for app widgets, real-style preview, pywal and matugen import |
-| v0.3 | Frame editor with Open in Inkscape, popups and widgets (in 0.1), draw mode |
-| v1.0 | GTK, Rofi, export and import and the command line (in 0.1), packages for more distributions |
+| v0.1 | Everything in the features list above, packages for Arch, recipes for the other distributions. Waits for a try on a real session and the release tag |
+| Later | Draw mode inside the frame editor, Klassy as a window decoration, follow mode for the window frame, Kvantum and GTK, packages tested on the other distributions |
 
 ## Design
 
+- [User guide](docs/guide.md)
 - [Product requirements](docs/PRD.md)
 - [Project status](docs/STATUS.md)
 - [Changelog](CHANGELOG.md)

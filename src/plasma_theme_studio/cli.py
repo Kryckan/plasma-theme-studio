@@ -13,15 +13,15 @@ import os
 import sys
 from pathlib import Path
 
-from . import APP_NAME, __version__, archive, globaltheme, library
+from . import APP_NAME, __version__, archive, globaltheme, library, writelock
 from .apply import engine
 from .apply import snapshot as snapshots
 from .apply.runner import SystemRunner
-from .generators import ApplyError
+from .generators import ApplyError, plasmastyle
 from .messages import translate
 from .model.theme import Theme, ThemeError
 
-COMMANDS = ("apply", "status", "validate", "restore", "export", "import", "export-global-theme")
+COMMANDS = ("apply", "status", "validate", "restore", "export", "import", "export-global-theme", "follow")
 
 
 def _print_problems(problems) -> None:
@@ -78,6 +78,8 @@ def cmd_apply(args) -> int:
     if theme is None:
         return 1
     runner = SystemRunner()
+    # The own pictures are drawn first, so that "already applied" is judged on what the apply would install
+    plasmastyle.vet_artwork(theme)
     plan = engine.build_plan(theme, runner)
     if not plan.blocking and engine.is_current(plan, runner):
         # Nothing to do, so no snapshot is made that would undo nothing.
@@ -223,7 +225,16 @@ def cmd_export_global_theme(args) -> int:
     return 0
 
 
+def _say_when_waiting() -> None:
+    """Tell the person once when another Plasma Theme Studio process is writing and this one waits."""
+    writelock.on_wait = lambda: print(
+        translate("core", "Waiting for another Plasma Theme Studio process to finish writing…"),
+        file=sys.stderr,
+    )
+
+
 def cmd_restore(args) -> int:
+    _say_when_waiting()
     available = snapshots.list_snapshots()
     if args.list:
         if not available:
@@ -250,7 +261,8 @@ def cmd_restore(args) -> int:
         print(translate("core", "Could not restore: {detail}").format(detail=str(error)), file=sys.stderr)
         return 1
     if failures:
-        print(translate("core", "Some settings could not be switched back:"), file=sys.stderr)
+        if reached is not None:  # None: nothing was tried (lock busy, no such snapshot); the text says it
+            print(translate("core", "Some settings could not be switched back:"), file=sys.stderr)
         _print_problems(failures)
         if reached is not None and reached.id != chosen.id:
             print(
@@ -278,6 +290,69 @@ def cmd_restore(args) -> int:
             translate(
                 "core", "Run the command again to go back one more apply ({count} snapshots left)."
             ).format(count=remaining)
+        )
+    return 0
+
+
+def cmd_follow(args) -> int:
+    """Follow mode: the watcher itself, `--once`, `on FILE`, `off` and `status`."""
+    if args.action is not None or args.once:  # the background watcher says nothing into the journal
+        _say_when_waiting()
+    from . import follow, palette
+
+    runner = SystemRunner()
+    if args.action is None:
+        if args.file:
+            print(translate("core", "Give a theme file only with: follow on FILE"), file=sys.stderr)
+            return 2
+        if args.once:
+            code, message = follow.run_once(runner)
+            print(str(message), file=sys.stderr if code else sys.stdout)
+            return code
+        return follow.watch(runner)
+    if args.once:
+        print(translate("core", "--once goes with plain follow, with no on, off or status."), file=sys.stderr)
+        return 2
+    if args.action == "on":
+        if not args.file:
+            print(
+                translate("core", "Name the theme file whose name the colors get: follow on FILE"),
+                file=sys.stderr,
+            )
+            return 2
+        theme = _load_theme(args.file)
+        if theme is None:
+            return 1
+        source = palette.PaletteFile("pywal", Path(args.palette)) if args.palette else None
+        try:
+            done = follow.enable(theme, runner, source, args.variant)
+        except follow.FollowError as error:
+            print(translate("core", "Follow mode was not switched on:"), file=sys.stderr)
+            _print_problems([error.message])
+            return 1
+        print(str(done.message))
+        print(translate("core", "To go back, run: plasma-theme-studio follow off"))
+        return 0
+    if args.action == "off":
+        done = follow.disable(runner)
+        print(str(done.message))
+        if done.failures:
+            _print_problems(done.failures)
+            return 1
+        return 0
+    state = follow.status()
+    if not state.on:
+        print(translate("core", "Follow mode is off."))
+        return 0
+    print(translate("core", "Follow mode is on, following {path}.").format(path=state.state.source))
+    print(
+        translate("core", "The watcher is running.")
+        if state.running
+        else translate("core", "The watcher is not running. It starts at the next login.")
+    )
+    if state.state.applied_at:
+        print(
+            translate("core", "The colors were last changed at {time}.").format(time=state.state.applied_at)
         )
     return 0
 
@@ -331,6 +406,18 @@ def _command_parser() -> argparse.ArgumentParser:
     restore.add_argument("id", nargs="?", help="snapshot to go back to (default: undo the latest apply)")
     restore.add_argument("--list", action="store_true", help="list the snapshots")
     restore.set_defaults(run=cmd_restore)
+
+    follow = commands.add_parser(
+        "follow", help="keep the desktop colors in step with a pywal or matugen palette"
+    )
+    follow.add_argument("action", nargs="?", choices=("on", "off", "status"))
+    follow.add_argument("file", nargs="?", help="with on: the theme file whose name the colors get")
+    follow.add_argument("--once", action="store_true", help="apply the palette once and exit")
+    follow.add_argument(
+        "--palette", help="with on: the palette file to follow (default: pywal's or matugen's)"
+    )
+    follow.add_argument("--variant", choices=("light", "dark"), help="with on: make a light or a dark theme")
+    follow.set_defaults(run=cmd_follow)
     return parser
 
 
@@ -345,6 +432,9 @@ usage: plasma-theme-studio [FILE]             open the editor
        plasma-theme-studio import FILE        save an archive or theme file as a new theme
        plasma-theme-studio export-global-theme FILE FOLDER
                                               write a Global Theme with install.sh into FOLDER
+       plasma-theme-studio follow on FILE     keep the colors in step with a pywal or matugen palette
+       plasma-theme-studio follow off|status  switch that off (back to before), or show it
+       plasma-theme-studio follow [--once]    run the watcher, or apply the palette once
        plasma-theme-studio restore            undo the latest apply (repeat to go further back)
        plasma-theme-studio restore ID         go back to a chosen snapshot, undoing the applies after it
        plasma-theme-studio restore --list     list the snapshots

@@ -127,7 +127,7 @@ class Chip(QLabel):
             warning = QColor("#f67400")
             return mix(warning, text, 0.3), with_alpha(warning, 0.2)
         if self.state == LEAVE:
-            return mix(text, base, 0.5), None
+            return mix(text, base, 0.3), None
         return mix(text, base, 0.25), with_alpha(text, 0.08)
 
     def paintEvent(self, _) -> None:
@@ -140,7 +140,7 @@ class Chip(QLabel):
             p.setBrush(fill)
             p.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
         else:
-            p.setPen(QPen(with_alpha(text, 0.35), 1, Qt.PenStyle.DashLine))
+            p.setPen(QPen(with_alpha(text, 0.3), 1))
             p.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
         p.setPen(text)
         p.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.text())
@@ -197,9 +197,7 @@ class PartRow(QAbstractButton):
             values = translate("ui", "{desktop} → {theme}").format(desktop=part.desktop, theme=part.theme)
         self.name.setText(self.title)
         self.values.setText(values)
-        self.values.setForegroundRole(
-            QPalette.ColorRole.PlaceholderText if part.state == LEAVE else QPalette.ColorRole.WindowText
-        )
+        self.values.setForegroundRole(QPalette.ColorRole.WindowText)
         self.chip.set_state(part.state)
         tip = ""
         if part.state == BLOCKED:
@@ -372,10 +370,10 @@ class OverviewPage(Page):
 
     # ---- what the desktop uses now
 
-    def read_desktop(self) -> None:
-        """The color scheme of the desktop and the last applies: read when the page is first shown and
-        after an apply or an undo, not at every edit."""
-        name = self.window.active_scheme()
+    def read_desktop_state(self):
+        """In a worker: the color scheme of the desktop and the last applies. Read when the page is first
+        shown and after an apply or an undo, not at every edit."""
+        name = self.window.read_scheme()
         scheme = next(
             (
                 s
@@ -385,12 +383,20 @@ class OverviewPage(Page):
             None,
         )
         if scheme is not None:
-            self.desktop_theme, self.desktop_name = library.theme_from_scheme(scheme), scheme.name
+            theme = library.theme_from_scheme(scheme)
+            theme.set("meta", "name", scheme.name)  # the picture and the caption say one name
+            found = (theme, scheme.name)
         else:
             preset = {"breezelight": "breeze-light", "breezedark": "breeze-dark"}.get(name.casefold())
-            self.desktop_theme = Theme.from_preset(preset) if preset else None
-            self.desktop_name = name
-        self.recent = snapshots.list_snapshots()[:RECENT]
+            found = (Theme.from_preset(preset) if preset else None, name)
+        return (name, *found, snapshots.list_snapshots()[:RECENT])
+
+    def show_desktop_state(self, state) -> None:
+        if state is None:
+            self.desktop_theme, self.desktop_name, self.recent = None, "", []
+        else:
+            name, self.desktop_theme, self.desktop_name, self.recent = state
+            self.window._active = name
         self._show_desktop()
 
     def _show_desktop(self) -> None:

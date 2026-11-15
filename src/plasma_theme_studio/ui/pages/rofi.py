@@ -22,7 +22,12 @@ class RofiPage(TargetPage):
 
     @property
     def set_hint(self):
-        return translate("ui", "Writes a Rofi theme file.")
+        return translate("ui", "Changes how the Rofi launcher looks.")
+
+    def plain_note(self, section: str) -> str | None:
+        if self.theme.get(*self.style_field) != "generated":
+            return None
+        return translate("ui", "Rofi looks like this theme the next time you open it.")
 
     def subtitle(self) -> str:
         return translate("ui", "The Rofi launcher gets this theme's colors and shapes.")
@@ -35,12 +40,13 @@ class RofiPage(TargetPage):
             )
         )
         self.written = InlineNote(
-            translate(
+            translate("ui", "Apply changes how Rofi looks. “Undo last apply” brings the old look back."),
+            "information",
+            more=translate(
                 "ui",
-                "Choosing Apply writes one Rofi theme file and adds a line to your Rofi settings that "
+                "Apply writes one Rofi theme file and adds a line to your Rofi settings that "
                 "selects it. “Undo last apply” takes both back.",
             ),
-            "information",
         )
         self.content.addWidget(self.written)
 

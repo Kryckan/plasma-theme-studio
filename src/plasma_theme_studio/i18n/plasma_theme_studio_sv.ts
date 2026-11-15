@@ -271,8 +271,52 @@
         <translation>När ett globalt tema verkställs stängs även startskärmen av.</translation>
     </message>
     <message>
+        <source>Waiting for another Plasma Theme Studio process to finish writing…</source>
+        <translation>Väntar på att ett annat Plasma Theme Studio ska skriva klart…</translation>
+    </message>
+    <message>
         <source>There are no snapshots.</source>
         <translation>Det finns inga ögonblicksbilder.</translation>
+    </message>
+    <message>
+        <source>Give a theme file only with: follow on FILE</source>
+        <translation>Ange en temafil bara med: follow on FIL</translation>
+    </message>
+    <message>
+        <source>--once goes with plain follow, with no on, off or status.</source>
+        <translation>--once hör till enbart follow, utan on, off eller status.</translation>
+    </message>
+    <message>
+        <source>Name the theme file whose name the colors get: follow on FILE</source>
+        <translation>Ange temafilen vars namn färgerna får: follow on FIL</translation>
+    </message>
+    <message>
+        <source>Follow mode was not switched on:</source>
+        <translation>Följ paletten slogs inte på:</translation>
+    </message>
+    <message>
+        <source>To go back, run: plasma-theme-studio follow off</source>
+        <translation>Gå tillbaka genom att köra: plasma-theme-studio follow off</translation>
+    </message>
+    <message>
+        <source>Follow mode is off.</source>
+        <translation>Följ paletten är av.</translation>
+    </message>
+    <message>
+        <source>Follow mode is on, following {path}.</source>
+        <translation>Följ paletten är på och följer {path}.</translation>
+    </message>
+    <message>
+        <source>The watcher is running.</source>
+        <translation>Bakgrundsprogrammet körs.</translation>
+    </message>
+    <message>
+        <source>The watcher is not running. It starts at the next login.</source>
+        <translation>Bakgrundsprogrammet körs inte. Det startar vid nästa inloggning.</translation>
+    </message>
+    <message>
+        <source>The colors were last changed at {time}.</source>
+        <translation>Färgerna ändrades senast {time}.</translation>
     </message>
     <message>
         <source>There is no snapshot called {id}.</source>
@@ -339,10 +383,6 @@
         <translation>Meny</translation>
     </message>
     <message>
-        <source>Not looked at, the theme leaves it</source>
-        <translation>Granskas inte, temat lämnar det</translation>
-    </message>
-    <message>
         <source>{name} (made from this theme)</source>
         <translation>{name} (gjord från det här temat)</translation>
     </message>
@@ -381,6 +421,10 @@
     <message>
         <source>GTK Apps</source>
         <translation>GTK-program</translation>
+    </message>
+    <message>
+        <source>Left as it is on your desktop</source>
+        <translation>Lämnas som det är på ditt skrivbord</translation>
     </message>
     <message>
         <source>Breeze</source>
@@ -1000,7 +1044,11 @@
     </message>
     <message>
         <source>widget backgrounds</source>
-        <translation>modulbakgrunder</translation>
+        <translation>bakgrunder för miniprogram</translation>
+    </message>
+    <message>
+        <source>It could not be drawn in time.</source>
+        <translation>Den kunde inte ritas i tid.</translation>
     </message>
     <message>
         <source>Artwork for {frame} ({name}): {problem} The generated frame is used.</source>
@@ -1024,7 +1072,7 @@
     </message>
     <message>
         <source>Only the backgrounds of the panel, popups, tooltips and desktop widgets are restyled. Menus and everything else keep the look of Plasma&apos;s default style, and the opacity applies while the background is translucent or adaptive.</source>
-        <translation>Bara bakgrunderna för panelen, popupfönster, verktygstips och skrivbordsmoduler får ny stil. Menyer och allt annat behåller utseendet från Plasmas standardstil, och opaciteten gäller medan bakgrunden är genomskinlig eller adaptiv.</translation>
+        <translation>Bara bakgrunderna för panelen, popupfönster, verktygstips och skrivbordets miniprogram får ny stil. Menyer och allt annat behåller utseendet från Plasmas standardstil, och opaciteten gäller medan bakgrunden är genomskinlig eller adaptiv.</translation>
     </message>
     <message>
         <source>With this corner radius the panel cannot be thinner than {pixels} pixels.</source>
@@ -1064,7 +1112,7 @@
     </message>
     <message>
         <source>The Plasma style {name} is in use. Except for the backgrounds of the panel, popups, tooltips and desktop widgets, it is replaced by Breeze&apos;s look.</source>
-        <translation>Plasmastilen {name} används. Förutom bakgrunderna för panelen, popupfönster, verktygstips och skrivbordsmoduler ersätts den av Breezes utseende.</translation>
+        <translation>Plasmastilen {name} används. Förutom bakgrunderna för panelen, popupfönster, verktygstips och skrivbordets miniprogram ersätts den av Breezes utseende.</translation>
     </message>
     <message>
         <source>Window frame</source>
@@ -1421,6 +1469,82 @@
     <message>
         <source>The file does not hold a color palette.</source>
         <translation>Filen innehåller ingen färgpalett.</translation>
+    </message>
+    <message>
+        <source>The colors could not be put on the desktop: {detail}</source>
+        <translation>Färgerna kunde inte läggas på skrivbordet: {detail}</translation>
+    </message>
+    <message>
+        <source>This is not a Plasma session, so no colors were applied.</source>
+        <translation>Det här är ingen Plasma-session, så inga färger verkställdes.</translation>
+    </message>
+    <message>
+        <source>The palette file cannot be read.</source>
+        <translation>Palettfilen kan inte läsas.</translation>
+    </message>
+    <message>
+        <source>Follow mode was switched off.</source>
+        <translation>Följ paletten har stängts av.</translation>
+    </message>
+    <message>
+        <source>The path of this program has a character that an autostart entry cannot hold.</source>
+        <translation>Sökvägen till programmet har ett tecken som en autostartpost inte kan innehålla.</translation>
+    </message>
+    <message>
+        <source>There is no pywal or matugen palette to follow.</source>
+        <translation>Det finns ingen palett från pywal eller matugen att följa.</translation>
+    </message>
+    <message>
+        <source>The file is not a pywal or matugen color file.</source>
+        <translation>Filen är ingen färgfil från pywal eller matugen.</translation>
+    </message>
+    <message>
+        <source>This is not a Plasma session, so the colors cannot be followed.</source>
+        <translation>Det här är ingen Plasma-session, så färgerna kan inte följas.</translation>
+    </message>
+    <message>
+        <source>Could not write the files of follow mode: {detail}</source>
+        <translation>Det gick inte att skriva filerna för Följ paletten: {detail}</translation>
+    </message>
+    <message>
+        <source>Following the palette in {path}.</source>
+        <translation>Följer paletten i {path}.</translation>
+    </message>
+    <message>
+        <source>Following the palette. Nothing has been written to {path} yet.</source>
+        <translation>Följer paletten. Inget har skrivits till {path} än.</translation>
+    </message>
+    <message>
+        <source>Follow mode was not switched off.</source>
+        <translation>Följ paletten stängdes inte av.</translation>
+    </message>
+    <message>
+        <source>Follow mode is off, but not everything could be put back. The snapshot is kept, so Undo can try again.</source>
+        <translation>Följ paletten är av, men allt kunde inte sättas tillbaka. Ögonblicksbilden sparas, så Ångra kan försöka igen.</translation>
+    </message>
+    <message>
+        <source>Follow mode is off. The desktop is back to how it was before you switched it on.</source>
+        <translation>Följ paletten är av. Skrivbordet är tillbaka som det var innan du slog på det.</translation>
+    </message>
+    <message>
+        <source>Follow mode is off. The colors stay as the palette made them, because something else was applied after you switched it on. Undo goes back step by step.</source>
+        <translation>Följ paletten är av. Färgerna förblir som paletten gjorde dem, eftersom något annat verkställdes efter att du slog på det. Ångra går tillbaka steg för steg.</translation>
+    </message>
+    <message>
+        <source>Follow mode is off. Switch it on first: plasma-theme-studio follow on FILE</source>
+        <translation>Följ paletten är av. Slå på det först: plasma-theme-studio follow on FIL</translation>
+    </message>
+    <message>
+        <source>Applied the colors of {path}.</source>
+        <translation>Verkställde färgerna från {path}.</translation>
+    </message>
+    <message>
+        <source>The desktop already has these colors. Nothing was changed.</source>
+        <translation>Skrivbordet har redan de här färgerna. Inget ändrades.</translation>
+    </message>
+    <message>
+        <source>Nothing was changed.</source>
+        <translation>Inget ändrades.</translation>
     </message>
     <message>
         <source>The pywal file has no background and foreground colors.</source>
@@ -1805,6 +1929,10 @@
     <message>
         <source>The Global Theme</source>
         <translation>Det globala temat</translation>
+    </message>
+    <message>
+        <source>Another part of Plasma Theme Studio, the palette watcher or another undo, is still writing the desktop&apos;s files. Nothing was changed. Try again in a moment.</source>
+        <translation>En annan del av Plasma Theme Studio, bakgrundsprogrammet som följer paletten eller en annan ångring, skriver fortfarande skrivbordets filer. Inget ändrades. Försök igen om en stund.</translation>
     </message>
 </context>
 <context>
@@ -2191,7 +2319,7 @@
     </message>
     <message>
         <source>Widget backgrounds picture</source>
-        <translation>Bild för modulbakgrunder</translation>
+        <translation>Bild för miniprogrammens bakgrunder</translation>
     </message>
     <message>
         <source>None</source>
@@ -2564,7 +2692,7 @@
     </message>
     <message>
         <source>Widget backgrounds</source>
-        <translation>Modulbakgrunder</translation>
+        <translation>Miniprogrammens bakgrunder</translation>
     </message>
     <message>
         <source>The frame drawn at two sizes</source>
@@ -2588,7 +2716,7 @@
     </message>
     <message>
         <source>Plasma draws the panel, popups, tooltips and widget backgrounds from these pictures. They are made from the values above until you draw one yourself.</source>
-        <translation>Plasma ritar panelen, popupfönster, verktygstips och modulbakgrunder från de här bilderna. De görs från värdena ovan tills du ritar en själv.</translation>
+        <translation>Plasma ritar panelen, popupfönster, verktygstips och miniprogrammens bakgrunder från de här bilderna. De görs från värdena ovan tills du ritar en själv.</translation>
     </message>
     <message>
         <source>Corner radius</source>
@@ -2621,6 +2749,14 @@
     <message>
         <source>Show how the frame is cut into nine parts</source>
         <translation>Visa hur ramen delas i nio delar</translation>
+    </message>
+    <message>
+        <source>Own artwork, takes too long to draw</source>
+        <translation>Egen grafik, tar för lång tid att rita</translation>
+    </message>
+    <message>
+        <source>Own artwork, cannot be drawn</source>
+        <translation>Egen grafik, kan inte ritas</translation>
     </message>
     <message>
         <source>Own artwork</source>
@@ -2677,6 +2813,18 @@
     <message>
         <source>Change the values above, or open it in Inkscape.</source>
         <translation>Ändra värdena ovan, eller öppna den i Inkscape.</translation>
+    </message>
+    <message>
+        <source>This picture takes too long to draw. The generated frame is shown instead.</source>
+        <translation>Den här bilden tar för lång tid att rita. Den genererade ramen visas i stället.</translation>
+    </message>
+    <message>
+        <source>This picture cannot be drawn. The generated frame is shown instead.</source>
+        <translation>Den här bilden kan inte ritas. Den genererade ramen visas i stället.</translation>
+    </message>
+    <message>
+        <source>Drawing the picture…</source>
+        <translation>Ritar bilden…</translation>
     </message>
     <message>
         <source>Save the theme first</source>
@@ -3019,6 +3167,10 @@
         <translation>Sparade {file}</translation>
     </message>
     <message>
+        <source>Reading the theme…</source>
+        <translation>Läser temat…</translation>
+    </message>
+    <message>
         <source>Exported {name} as a Global Theme ({count} files) in {folder}. Run install.sh there to install it. It holds the color scheme, the window frame and the Plasma style; the application style, GTK and Rofi are not part of it. Applying a Global Theme also turns the splash screen off.</source>
         <translation>Exporterade {name} som ett globalt tema ({count} filer) i {folder}. Kör install.sh där för att installera det. Det innehåller färgschemat, fönsterramen och Plasmastilen; programstilen, GTK och Rofi ingår inte. När ett globalt tema verkställs stängs även startskärmen av.</translation>
     </message>
@@ -3041,6 +3193,10 @@
     <message>
         <source>The theme cannot be applied. Nothing was changed.</source>
         <translation>Temat kan inte verkställas. Ingenting ändrades.</translation>
+    </message>
+    <message>
+        <source>Checking the artwork…</source>
+        <translation>Kontrollerar bilderna…</translation>
     </message>
     <message>
         <source>Replace existing files?</source>
@@ -3069,6 +3225,14 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
         <source>Applied {name} to the desktop. Undo last apply takes you back.</source>
         <translation>Verkställde {name} på skrivbordet. Med Ångra senaste verkställande kommer du tillbaka.</translation>
+    </message>
+    <message>
+        <source>Putting the desktop back…</source>
+        <translation>Återställer skrivbordet…</translation>
+    </message>
+    <message>
+        <source>{done} of {total}</source>
+        <translation>{done} av {total}</translation>
     </message>
     <message>
         <source>The undo stopped at the apply of {time}. The applies before it were left as they are.</source>
@@ -3167,8 +3331,12 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Ikoner</translation>
     </message>
     <message>
-        <source>Writes a Kvantum style and switches to it.</source>
-        <translation>Skriver en Kvantum-stil och byter till den.</translation>
+        <source>Makes a style from this theme and switches to it.</source>
+        <translation>Gör en stil av det här temat och byter till den.</translation>
+    </message>
+    <message>
+        <source>Open applications change within a second. Their colors follow this theme.</source>
+        <translation>Öppna program ändras inom en sekund. Deras färger följer det här temat.</translation>
     </message>
     <message>
         <source>How buttons, fields and menus look in applications.</source>
@@ -3191,8 +3359,12 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Exempel</translation>
     </message>
     <message>
-        <source>Kvantum is not installed. It is the program that draws the style “This theme” in applications, so install the package “kvantum” with your software manager (on Debian and Ubuntu it is called “qt6-style-kvantum”). The other styles work without it.</source>
-        <translation>Kvantum är inte installerat. Det är programmet som ritar stilen ”Det här temat” i program, så installera paketet ”kvantum” med pakethanteraren (på Debian och Ubuntu heter det ”qt6-style-kvantum”). De andra stilarna fungerar utan det.</translation>
+        <source>“This theme” needs a small helper program that is not installed yet. The other styles work without it.</source>
+        <translation>”Det här temat” kräver ett litet hjälpprogram som inte är installerat än. De andra stilarna fungerar utan det.</translation>
+    </message>
+    <message>
+        <source>The helper is called Kvantum. Install the package “kvantum” with your software manager (on Debian and Ubuntu it is called “qt6-style-kvantum”).</source>
+        <translation>Hjälpprogrammet heter Kvantum. Installera paketet ”kvantum” med din pakethanterare (på Debian och Ubuntu heter det ”qt6-style-kvantum”).</translation>
     </message>
     <message>
         <source>{style} draws the applications. Its own picture is on the card above.</source>
@@ -3611,20 +3783,28 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Teckensnittet som skrivbordet använder</translation>
     </message>
     <message>
-        <source>Writes a style sheet for GTK 3 and 4 applications.</source>
-        <translation>Skriver en formatmall för GTK 3- och GTK 4-program.</translation>
-    </message>
-    <message>
-        <source>GTK applications get this theme&apos;s colors and shapes through a style sheet.</source>
-        <translation>GTK-program får det här temats färger och former genom en formatmall.</translation>
-    </message>
-    <message>
         <source>Shapes for GTK applications</source>
         <translation>Former för GTK-program</translation>
     </message>
     <message>
-        <source>Choosing Apply writes one style sheet for GTK 3 and one for GTK 4 into your own settings folders. Nothing else of GTK is changed, and “Undo last apply” puts both back.</source>
-        <translation>När du väljer Verkställ skrivs en stilmall för GTK 3 och en för GTK 4 till dina egna inställningsmappar. Inget annat i GTK ändras, och ”Ångra senaste verkställande” sätter tillbaka båda.</translation>
+        <source>Changes how GTK applications look.</source>
+        <translation>Ändrar hur GTK-program ser ut.</translation>
+    </message>
+    <message>
+        <source>GTK applications, such as GNOME&apos;s, get this theme&apos;s colors and shapes.</source>
+        <translation>GTK-program, till exempel GNOME:s, får det här temats färger och former.</translation>
+    </message>
+    <message>
+        <source>Applications you open from now on look like this theme. Ones that are already open may need to be closed and opened again.</source>
+        <translation>Program du öppnar från och med nu ser ut som det här temat. Program som redan är öppna kan behöva stängas och öppnas igen.</translation>
+    </message>
+    <message>
+        <source>Apply changes how GTK applications look. “Undo last apply” brings the old look back.</source>
+        <translation>Verkställ ändrar hur GTK-program ser ut. Med ”Ångra senaste verkställande” kommer det gamla utseendet tillbaka.</translation>
+    </message>
+    <message>
+        <source>Apply writes one style sheet for GTK 3 and one for GTK 4 into your own settings folders. Nothing else of GTK is changed, and “Undo last apply” puts both back.</source>
+        <translation>Verkställ skriver en stilmall för GTK 3 och en för GTK 4 i dina egna inställningsmappar. Inget annat i GTK ändras, och ”Ångra senaste verkställande” sätter tillbaka båda.</translation>
     </message>
     <message>
         <source>A GTK window drawn from this theme</source>
@@ -3823,8 +4003,12 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>{size} bildpunkter</translation>
     </message>
     <message>
-        <source>Writes a Rofi theme file.</source>
-        <translation>Skriver en Rofi-temafil.</translation>
+        <source>Changes how the Rofi launcher looks.</source>
+        <translation>Ändrar hur programstartaren Rofi ser ut.</translation>
+    </message>
+    <message>
+        <source>Rofi looks like this theme the next time you open it.</source>
+        <translation>Rofi ser ut som det här temat nästa gång du öppnar det.</translation>
     </message>
     <message>
         <source>The Rofi launcher gets this theme&apos;s colors and shapes.</source>
@@ -3835,8 +4019,12 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Former och teckensnitt för Rofi</translation>
     </message>
     <message>
-        <source>Choosing Apply writes one Rofi theme file and adds a line to your Rofi settings that selects it. “Undo last apply” takes both back.</source>
-        <translation>När du väljer Verkställ skrivs en Rofi-temafil och en rad läggs till i dina Rofi-inställningar som väljer den. ”Ångra senaste verkställande” tar tillbaka båda.</translation>
+        <source>Apply changes how Rofi looks. “Undo last apply” brings the old look back.</source>
+        <translation>Verkställ ändrar hur Rofi ser ut. Med ”Ångra senaste verkställande” kommer det gamla utseendet tillbaka.</translation>
+    </message>
+    <message>
+        <source>Apply writes one Rofi theme file and adds a line to your Rofi settings that selects it. “Undo last apply” takes both back.</source>
+        <translation>Verkställ skriver en Rofi-temafil och lägger till en rad i dina Rofi-inställningar som väljer den. ”Ångra senaste verkställande” tar bort båda.</translation>
     </message>
     <message>
         <source>The Rofi launcher drawn from this theme</source>
@@ -3857,6 +4045,18 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
         <source>The sounds of notifications and events.</source>
         <translation>Ljuden för aviseringar och händelser.</translation>
+    </message>
+    <message>
+        <source>The desktop plays the sounds of “{name}”.</source>
+        <translation>Skrivbordet spelar ljuden från ”{name}”.</translation>
+    </message>
+    <message>
+        <source>Sound themes are the sounds of notifications, warnings and other events.</source>
+        <translation>Ljudteman är ljuden för aviseringar, varningar och andra händelser.</translation>
+    </message>
+    <message>
+        <source>Play lets you listen to a sample. Nothing changes until you choose Apply.</source>
+        <translation>Med Spela upp kan du lyssna på ett prov. Inget ändras förrän du väljer Verkställ.</translation>
     </message>
     <message>
         <source>No sound player was found. Install PipeWire or PulseAudio to play the sounds.</source>
@@ -4047,6 +4247,22 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Inloggningsskärmen tillhör hela datorn, inte ditt konto, och för att ändra den krävs administratörsrättigheter. Därför ändrar den här appen den inte. Systeminställningar kan göra det och ber om ditt lösenord när det behövs.</translation>
     </message>
     <message>
+        <source>A sketch. The real login screen is set in System Settings.</source>
+        <translation>En skiss. Den riktiga inloggningsskärmen ställs in i Systeminställningar.</translation>
+    </message>
+    <message>
+        <source>The computer uses the default login screen.</source>
+        <translation>Datorn använder standardinloggningsskärmen.</translation>
+    </message>
+    <message>
+        <source>The login screen now uses “{name}”.</source>
+        <translation>Inloggningsskärmen använder nu ”{name}”.</translation>
+    </message>
+    <message>
+        <source>Picture of the login screen</source>
+        <translation>Bild av inloggningsskärmen</translation>
+    </message>
+    <message>
         <source>Leave this one as it is</source>
         <translation>Lämna den här som den är</translation>
     </message>
@@ -4155,10 +4371,6 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>{part} som används ({value}) finns inte bland det som är installerat, så den lämnas som den är.</translation>
     </message>
     <message>
-        <source>Your saved themes, the installed Global Themes and color schemes. Apply puts the selected one on the desktop.</source>
-        <translation>Dina sparade teman, de installerade globala teman och färgscheman. Verkställ lägger det markerade på skrivbordet.</translation>
-    </message>
-    <message>
         <source>New Theme from the Desktop</source>
         <translation>Nytt tema från skrivbordet</translation>
     </message>
@@ -4193,6 +4405,10 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
         <source>Plasma changes between its light and its dark Global Theme with the time of day. Which two it uses is chosen in System Settings. It is set when you choose Apply to Desktop.</source>
         <translation>Plasma växlar mellan sitt ljusa och sitt mörka globala tema efter tid på dygnet. Vilka två som används väljs i Systeminställningar. Det ställs in när du väljer Verkställ på skrivbordet.</translation>
+    </message>
+    <message>
+        <source>Plasma changes between a light and a dark theme by itself.</source>
+        <translation>Plasma växlar mellan ett ljust och ett mörkt tema av sig självt.</translation>
     </message>
     <message>
         <source>{name} by {author}</source>
@@ -4239,12 +4455,16 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Mitt skrivbord</translation>
     </message>
     <message>
+        <source>Pick a theme, then choose Apply to Desktop.</source>
+        <translation>Välj ett tema och välj sedan Verkställ på skrivbordet.</translation>
+    </message>
+    <message>
         <source>This theme has a light and a dark variant. Turn the switch on and Plasma changes between them by itself; until then Apply puts the variant you see on the desktop.</source>
         <translation>Det här temat har en ljus och en mörk variant. Slå på växlingen så byter Plasma mellan dem av sig självt; tills dess lägger Verkställ varianten du ser på skrivbordet.</translation>
     </message>
     <message>
         <source>Apply to Desktop first copies these settings into the editor and then applies them. The theme&apos;s own panel layout and widgets are left as they are.</source>
-        <translation>Verkställ på skrivbordet kopierar först de här inställningarna till redigeraren och verkställer dem sedan. Temats egen panelplacering och moduler lämnas som de är.</translation>
+        <translation>Verkställ på skrivbordet kopierar först de här inställningarna till redigeraren och verkställer dem sedan. Temats egen panelplacering och miniprogram lämnas som de är.</translation>
     </message>
     <message>
         <source>Looking at what this theme changes…</source>
@@ -4256,7 +4476,7 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     </message>
     <message>
         <source>Apply “{name}”? Its settings are copied into the editor first, and then applied to the desktop. Its panel layout and widgets stay as they are. Undo last apply takes you back.</source>
-        <translation>Verkställ ”{name}”? Dess inställningar kopieras först till redigeraren och verkställs sedan på skrivbordet. Dess panelplacering och moduler lämnas som de är. Ångra senaste verkställning tar dig tillbaka.</translation>
+        <translation>Verkställ ”{name}”? Dess inställningar kopieras först till redigeraren och verkställs sedan på skrivbordet. Dess panelplacering och miniprogram lämnas som de är. Ångra senaste verkställning tar dig tillbaka.</translation>
     </message>
     <message>
         <source>New theme from the desktop</source>
@@ -4339,8 +4559,40 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
         <translation>Lägg till en ljus variant</translation>
     </message>
     <message>
-        <source>This theme has one set of colors. A second one is made from it: the same hues, with the lightness turned around and the text colors corrected.</source>
-        <translation>Det här temat har en uppsättning färger. En andra görs från den: samma nyanser, med ljusheten omvänd och textfärgerna korrigerade.</translation>
+        <source>This theme has one set of colors. You can add a second set for the other mode: light colors become dark ones, or the other way round.</source>
+        <translation>Det här temat har en uppsättning färger. Du kan lägga till en andra för det andra läget: ljusa färger blir mörka, eller tvärtom.</translation>
+    </message>
+    <message>
+        <source>The second set is made from the first by keeping the hues, turning the lightness around and correcting the text colors so that they stay easy to read. You can change every color of it afterwards.</source>
+        <translation>Den andra uppsättningen görs av den första genom att behålla nyanserna, vända ljusheten och justera textfärgerna så att de förblir lättlästa. Efteråt kan du ändra varje färg i den.</translation>
+    </message>
+    <message>
+        <source>Follow the palette</source>
+        <translation>Följ paletten</translation>
+    </message>
+    <message>
+        <source>Keep the desktop colors in step with the pywal or matugen palette, also when this window is closed.</source>
+        <translation>Håll skrivbordets färger i takt med paletten från pywal eller matugen, även när det här fönstret är stängt.</translation>
+    </message>
+    <message>
+        <source>Following {path}. Colors only: shapes, fonts and panels stay. If you apply another theme, the next change of the palette puts these colors back. Untick to stop.</source>
+        <translation>Följer {path}. Bara färgerna: former, teckensnitt och paneler lämnas som de är. Om du verkställer ett annat tema sätter nästa ändring av paletten tillbaka de här färgerna. Avmarkera för att sluta.</translation>
+    </message>
+    <message>
+        <source>When the palette file changes, the colors of this theme change with it, also while this window is closed.</source>
+        <translation>När palettfilen ändras uppdateras färgerna i det här temat med den, även när det här fönstret är stängt.</translation>
+    </message>
+    <message>
+        <source>This needs a pywal or matugen palette file, or one of the two programs installed. Neither was found.</source>
+        <translation>Det här kräver en palettfil från pywal eller matugen, eller att något av programmen är installerat. Inget av dem hittades.</translation>
+    </message>
+    <message>
+        <source>Switching on follow mode…</source>
+        <translation>Slår på Följ paletten…</translation>
+    </message>
+    <message>
+        <source>Switching off follow mode…</source>
+        <translation>Stänger av Följ paletten…</translation>
     </message>
 </context>
 <context>
@@ -4388,6 +4640,10 @@ De sparas i en ögonblicksbild, så verkställandet kan ångras. Vill du ersätt
     <message>
         <source>Nothing matches your search.</source>
         <translation>Inget matchar din sökning.</translation>
+    </message>
+    <message>
+        <source>More about this</source>
+        <translation>Mer om detta</translation>
     </message>
     <message>
         <source>Leave as it is</source>

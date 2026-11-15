@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import hashlib
+import json
 import os
 import stat
 import subprocess
@@ -80,6 +81,7 @@ CASES = (
     "gtk",
     "rofi",
     "everything",
+    "follow",
 )
 
 
@@ -251,7 +253,9 @@ def case_theme(case: str, runner):
     }
     if case == "everything":
         done = [
-            steps[name]() for name in CASES if name not in ("everything", "pointer-size", "colors-installed")
+            steps[name]()
+            for name in CASES
+            if name not in ("everything", "pointer-size", "colors-installed", "follow")
         ]
         return theme if any(done) else None
     return theme if steps[case]() else None
@@ -398,6 +402,88 @@ def run_case(case, theme, env, home, ignore, args, extra=None) -> bool:
         subprocess.run(["rm", "-rf", str(folder), str(home.parent / "roundtrip-before")], check=False)
 
 
+def pywal_text(background: str, foreground: str, hues: list[str]) -> str:
+    """A pywal colors.json: the two special colors and sixteen entries, the hues in color1 to color6."""
+    colors = {f"color{i}": "#808080" for i in range(16)}
+    for i, hue in enumerate(hues):
+        colors[f"color{i + 1}"] = colors[f"color{i + 9}"] = hue
+    colors["color0"], colors["color15"] = background, foreground
+    special = {"background": background, "foreground": foreground, "cursor": foreground}
+    return json.dumps({"special": special, "colors": colors})
+
+
+def run_follow(env, home, ignore, args) -> bool:
+    """Follow mode: switch it on, change the palette file twice (the watcher that the switch started
+    applies each change by itself), switch it off, and compare the home with the listing from before."""
+    palettes = [
+        pywal_text("#1b2b24", "#d8e0dc", ["#8a5a4b", "#4f9a62", "#b89b4a", "#4b78a8", "#8a5f99", "#4a9a94"]),
+        pywal_text("#101820", "#e6edf3", ["#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2"]),
+        pywal_text("#2b2118", "#eadcc8", ["#c4573a", "#7f9a3c", "#d9a441", "#5b86a5", "#a0658a", "#5a9a8a"]),
+    ]
+    folder = Path(tempfile.mkdtemp(prefix="pts-rt-", dir="/tmp"))
+    wrong: list[str] = []
+    try:
+        theme_file = folder / "theme.toml"
+        theme_file.write_text(
+            'schema_version = 1\n\n[meta]\nname = "Roundtrip Follow"\n\n[colors]\nwindow = "#1b2b24"\n'
+        )
+        palette_file = home / ".cache/wal/colors.json"  # .cache is left out of the comparison
+        palette_file.parent.mkdir(parents=True, exist_ok=True)
+        before = listing(home)
+        palette_file.write_text(palettes[0])
+        scheme = home / ".local/share/color-schemes/RoundtripFollowPalette.colors"
+        seen = []
+        steps = [
+            ("on", ("follow", "on", str(theme_file), "--palette", str(palette_file))),
+            ("change 1", None),
+            ("change 2", None),
+        ]
+        results = []
+        for number, (what, command) in enumerate(steps):
+            if command is not None:
+                results.append(run_cli(env, *command))
+            else:
+                palette_file.write_text(palettes[number])
+            time.sleep(args.settle)
+            keys = kdeglobals_keys(home)
+            seen.append((what, keys.get("General/ColorScheme"), keys.get("Colors:Window/BackgroundNormal")))
+        if results[0].returncode != 0:
+            wrong.append(
+                "follow on exited with "
+                + str(results[0].returncode)
+                + ": "
+                + results[0].stderr.strip()[-200:]
+            )
+        for what, active, background in seen:
+            print(f"    after {what}: scheme {active}, window background {background}")
+        if len({background for _, _, background in seen}) != 3:
+            wrong.append("the window background did not change with each palette")
+        if any(active != "RoundtripFollowPalette" for _, active, _ in seen):
+            wrong.append("the scheme in use is not the palette scheme")
+        status = run_cli(env, "follow", "status")
+        print(
+            "    status:",
+            status.stdout.strip().splitlines()[0] if status.stdout.strip() else status.stderr.strip(),
+        )
+        off = run_cli(env, "follow", "off")
+        time.sleep(args.settle)
+        if off.returncode != 0:
+            wrong.append(f"follow off exited with {off.returncode}: {off.stderr.strip()[-200:]}")
+        left = differences(before, listing(home), ignore)
+        result = "the home identical" if not left else f"{len(left)} differences"
+        print(f"follow: palette changed twice, off left {result}")
+        if scheme.exists():
+            wrong.append("the scheme file is still there after switching off")
+        for problem in wrong:
+            print(f"    {problem}")
+        for kind, path in left:
+            print(f"    {kind:8} {path}")
+        return not left and not wrong
+    finally:
+        run_cli(env, "follow", "off")  # nothing may stay behind, also after a failure
+        subprocess.run(["rm", "-rf", str(folder)], check=False)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("rig", nargs="?", help="the rig folder (made by desktop_rig.py start)")
@@ -432,6 +518,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"left out: {SKIP_NOTE}; changing by itself: {sorted(ignore) or 'nothing'}")
     failed = 0
     for case in args.cases or CASES:
+        if case == "follow":
+            failed += not run_follow(env, home, ignore, args)
+            continue
         theme = case_theme(case, runner)
         if theme is None:
             print(f"{case}: skipped (nothing installed to try it with)")

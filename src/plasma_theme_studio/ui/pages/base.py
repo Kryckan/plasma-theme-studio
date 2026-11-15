@@ -115,7 +115,7 @@ class Page(QWidget):
             self.scroll = None
             outer.addWidget(body, 1)
         self.content = QVBoxLayout(body)
-        self.content.setContentsMargins(0, 0, 0, 16)
+        self.content.setContentsMargins(0, 0, 12 if self.scrolling else 0, 16)  # room before the scroll bar
         self.content.setSpacing(LARGE_SPACING)
         self.notes_layout = self.content  # where the notes go; a ValuePage moves it to its column
 
@@ -133,7 +133,43 @@ class Page(QWidget):
 
     def read_desktop(self) -> None:
         """Read what the desktop uses now (the "In use" marks). Called when the page is first shown
-        and after an apply or an undo."""
+        and after an apply or an undo. A page that asks the desktop (a program run, a folder of
+        themes) defines `read_desktop_state` and `show_desktop_state` instead: this runs the first in
+        a worker and gives the answer to the second, so the page is never built on the GUI thread's time."""
+        if type(self).read_desktop_state is not Page.read_desktop_state:
+            self.read_in_background(self.read_desktop_state, self.show_desktop_state)
+
+    def read_desktop_state(self):
+        """In a worker: read what the desktop has. May use `self.window.runner` and the disk, never a
+        widget or the page's own state. Returns anything; None when it raised."""
+
+    def show_desktop_state(self, state) -> None:
+        """On the GUI thread: show what `read_desktop_state` found (None when it could not read)."""
+
+    def read_in_background(self, read, show, name: str = "desktop") -> None:
+        """Run `read()` in this page's worker called `name`, then `show(answer)` on the GUI thread. Only
+        the newest request of a name is shown. The tests read at once, on the calling thread
+        (`LoadsInBackground.synchronous`)."""
+        from .pickers_common import Background, LoadsInBackground
+
+        if LoadsInBackground.synchronous:
+            try:
+                answer = read()
+            except Exception:  # noqa: BLE001 - what the desktop has is only a hint
+                answer = None
+            show(answer)
+            return
+        readers = self.__dict__.setdefault("readers", {})
+        if name not in readers:
+            readers[name] = Background(self)
+            readers[name].ready.connect(show)
+        readers[name].request(read)
+
+    def wait_desktop(self) -> None:
+        """Block until the reads started by `read_in_background` are done and shown (tests, `settle`)."""
+        for worker in self.__dict__.get("readers", {}).values():
+            worker.wait()
+            QCoreApplication.sendPostedEvents(worker, 0)
 
     def leave(self) -> None:
         """The page is no longer shown."""
@@ -234,6 +270,11 @@ class Page(QWidget):
         line.setForegroundRole(line.palette().ColorRole.Mid)
         return line
 
+    def plain_note(self, section: str) -> str | None:
+        """What the notes of `section` say in words for a person who has never seen a config file, or None
+        to show the notes themselves. The notes are then kept behind a "More about this" line."""
+        return None
+
     def refresh_notes(self) -> None:
         """Say what an apply does with the values of this page's sections."""
         plan = self.window.plan
@@ -251,7 +292,13 @@ class Page(QWidget):
 
             if section in SECTION_NOTES:
                 texts = [str(SECTION_NOTES[section]), *texts]
-            note.set_text("\n\n".join(texts))
+            plain = self.plain_note(section) if texts else None
+            if (
+                plain
+            ):  # a sentence a person understands; the notes of the target wait behind "More about this"
+                note.set_text(plain, "\n\n".join(texts))
+            else:
+                note.set_text("\n\n".join(texts))
             note.setVisible(bool(texts))
 
 
@@ -476,19 +523,23 @@ class PickerPage(Page):
     # ---- what the desktop has
 
     def current_id(self):
-        """What the desktop uses now, as the id of a card, or None."""
-        from ... import desktopparts
+        """What the desktop uses now, as the id of a card, or None (a read: not for the GUI thread
+        except in an action the person asked for)."""
+        return self._id_of(self.read_desktop_state())
 
-        try:
-            value = desktopparts.PARTS[self.part_key].current(self.window.runner)
-        except Exception:
-            return None
+    def _id_of(self, value):
         if isinstance(value, dict):
             value = value.get("theme")
         return self._match(value) if value else None
 
-    def read_desktop(self) -> None:
-        self.grid.set_in_use(self.current_id())
+    def read_desktop_state(self):
+        """In a worker: what the desktop uses for this part."""
+        from ... import desktopparts
+
+        return desktopparts.PARTS[self.part_key].current(self.window.runner)
+
+    def show_desktop_state(self, state) -> None:
+        self.grid.set_in_use(self._id_of(state))
 
     # ---- thumbnails
 
@@ -520,7 +571,7 @@ class PickerPage(Page):
             self.kind, item, QSize(self.thumb_size), self.devicePixelRatioF(), colors
         )
         if image is not None and not image.isNull():
-            self.grid.set_thumbnail(item_id, image)
+            self.grid.set_thumbnail(item_id, self.shown_thumbnail(image))
         elif image is not None:
             self.grid.set_no_preview(item_id)
 
@@ -530,7 +581,11 @@ class PickerPage(Page):
         if image.isNull():
             self.grid.set_no_preview(item_id)
         else:
-            self.grid.set_thumbnail(item_id, image)
+            self.grid.set_thumbnail(item_id, self.shown_thumbnail(image))
+
+    def shown_thumbnail(self, image: QImage) -> QImage:
+        """The picture of a card as it is shown; a page may put it on a tile (the pointers do)."""
+        return image
 
     def leave(self) -> None:
         if self.kind is not None:

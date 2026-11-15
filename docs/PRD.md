@@ -193,9 +193,9 @@ pywal generates a 16-color palette from a wallpaper and writes it to `~/.cache/w
 | PW-1 | Import: fill the theme's colors from the current pywal or matugen palette with one click. The user can adjust the result afterwards. | P0 (M2) |
 | PW-2 | The mapping from pywal's 16 colors to theme roles (accent, backgrounds, text) is shown and editable. Text contrast is corrected automatically to meet WCAG AA. | P0 (M2) |
 | PW-3 | Generate from inside the app: pick a wallpaper (or use the current one) and the app runs the installed palette tool. If both are installed, the user chooses. | P1 (M2) |
-| PW-4 | Follow mode: when the pywal palette changes, the active theme's colors are regenerated and re-applied automatically. Shapes, shadows and SVG artwork stay as they are. Off by default. | P1 (M4) |
-| PW-5 | Export: write the theme's colors in pywal's format, so terminals and other tools that read pywal's files follow a theme made by hand. | P2 |
-| PW-6 | Follow mode never creates snapshots for each automatic change. It keeps one snapshot from when it was switched on. | P1 (M4) |
+| PW-4 | Follow mode: when the pywal palette changes, the active theme's colors are regenerated and re-applied automatically. Shapes, shadows and SVG artwork stay as they are. Off by default. | P1 (M4). **Done:** *Follow the palette* on the Colors page and `follow` on the command line. Applying another theme does not stop it (said on the page and in the guide). Documented limit: only the colors and the accent follow; a generated window frame, Kvantum and GTK bake the colors in and are not refreshed. |
+| PW-5 | Export: write the theme's colors in pywal's format, so terminals and other tools that read pywal's files follow a theme made by hand. | P2. **Done:** *Import Colors… > Save Colors in pywal's Format…*. |
+| PW-6 | Follow mode never creates snapshots for each automatic change. It keeps one snapshot from when it was switched on. | P1 (M4). **Done:** switching on takes one snapshot; switching off goes back byte for byte while that snapshot is the newest, and otherwise keeps the colors and only stops following. |
 
 ### 7.7 Rofi
 
@@ -269,7 +269,7 @@ plasma-theme-studio/
 │   ├── ui/            # main window, inspector, preview, SVG editor
 │   └── i18n/          # .ts translation files
 ├── tests/
-├── packaging/arch/    # PKGBUILD
+├── packaging/         # install.sh (the one installer), arch/{release,git}, obs/ (spec, debian/, _service)
 └── docs/
 ```
 
@@ -290,15 +290,15 @@ The project starts on GitHub. It does not apply to become a KDE project now, bec
 
 | Topic | Decision |
 |---|---|
-| Format | Arch `PKGBUILD`, published on the AUR as `plasma-theme-studio` (releases) and `plasma-theme-studio-git` (latest code). |
+| Format | Arch `PKGBUILD`, published on the AUR as `plasma-theme-studio` (releases) and `plasma-theme-studio-git` (latest code). Both are in the repository (`packaging/arch/release`, `packaging/arch/git`) and have been built. |
 | Install location | `/usr/share/plasma-theme-studio/` with a launcher in `/usr/bin/`. Not in Python's `site-packages`, so Python upgrades do not break the app. |
 | Required dependencies | `python`, `pyside6`, `python-jinja`, `qt6-svg`, `kvantum` |
-| Optional dependencies | `rofi` for the Rofi target, `matugen` or pywal16 (AUR) for wallpaper colors, `klassy` (AUR) for window decorations, `qt6-webengine` for SVG draw mode, `inkscape` for external editing |
+| Optional dependencies | `rofi` for the Rofi target, `matugen` or pywal16 (AUR) for wallpaper colors, `inkscape` for external editing, `pipewire` or `libcanberra` to play sounds, `qt6-tools` for `qdbus6`. `klassy` and `qt6-webengine` are left out for now: the code uses neither (Klassy and the embedded draw mode are not built). |
 | Build dependencies | `qt6-tools` (compiles translations) |
 | Updates | Through the system package manager. No built-in updater. |
-| Backend changes | At startup the app checks the installed Kvantum and Klassy versions and warns when a version is untested. |
+| Backend changes | Planned, not built: at startup the app checks the installed Kvantum and Klassy versions and warns when a version is untested. Today the app only checks that the programs it needs are there (a page note or a warning banner says so). |
 | Run from source | Supported on every distro from milestone 1: clone the repository and run the launcher. Requires the distro's own PySide6 package. |
-| Other distros | Packages for Fedora, openSUSE, Debian and Ubuntu are built with the Open Build Service in milestone 4. One service builds for all of them. |
+| Other distros | Packages for Fedora, openSUSE, Debian and Ubuntu are built with the Open Build Service in milestone 4. One service builds for all of them. The recipes are in `packaging/obs/` (spec, `debian/`, `_service`); they have not been run on the service, and some package names are unverified (`packaging/obs/README.md`). |
 
 Flatpak and AppImage are excluded because the sandbox and bundled Qt hide the system's style plugins from the preview and complicate writing to the user's config.
 
@@ -409,7 +409,7 @@ Each milestone ends with a tagged release that is usable on its own.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Kvantum or Klassy change their config format | A generator produces broken output | Version check at startup, reference-file tests, generators isolated per target |
+| Kvantum or Klassy change their config format | A generator produces broken output | Reference-file tests (a version check at startup is planned, not built), generators isolated per target |
 | Klassy goes unmaintained or lags behind a new Plasma release | Window decoration target breaks | Klassy is optional. The generated Aurorae frame and the Breeze backend need nothing but KWin |
 | A generated theme makes the desktop hard to use (unreadable colors, broken panel graphics) | User cannot easily get back | Output validation (AP-10), snapshots (AP-2), and the console `restore` command (AP-9). The app never touches system files (AP-11) |
 | Core tier (Plasma 6.3) needs version-specific code | Extra maintenance | Drop the affected target from the core tier instead of adding compatibility code |

@@ -6,6 +6,10 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 
 ### Added
 
+- *Follow the palette* on the Colors page and `plasma-theme-studio follow on|off|status|--once`: the colors and the accent of the desktop follow a pywal or matugen palette file, also with the window closed. Switching it on takes one snapshot; switching it off goes back.
+- A user guide (`docs/guide.md`) with pictures of every page, made again by `scripts/make_screenshots.py`.
+- Packaging: one installer, packages for Arch (releases and latest code), recipes for Fedora, openSUSE, Debian and Ubuntu, and CI jobs that check them.
+- A login screen sketch for a login theme without a picture, and *More about this* on pages that had technical notes.
 - A frame editor on the Plasma Style page: own artwork for the panel, popups, tooltips and widget backgrounds, nine-part guides, *Open in Inkscape…* and *Back to the generated frame*. Own artwork is packed into `.ptstheme` archives.
 - An undo that also puts back what KDE's tools and daemons wrote on their own (GTK color sheets and settings, `xsettingsd.conf`, the color groups of `kdeglobals`), for the parts that took part in that apply.
 - Several panels on the Panel page (up to six, a chooser for each), and window frame extras: title bar height, button size, space between buttons and shadow offsets.
@@ -19,6 +23,19 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 
 ### Changed
 
+- Own artwork that the draw process cannot draw in time or at all is no longer installed by Apply: the generated frame is, with a warning. A picture that only timed out is tried again after a few minutes, and an imported one once more at once.
+- The progress window of Undo and of reading a theme now shows when the work is slow.
+- Follow mode: switching it on again under another theme name keeps one color scheme file, a launcher path that cannot be written to the autostart entry is refused, an autostart entry that is not ours is not replaced, a switch-off or undo during an apply no longer brings the state file back, and the lock file is not opened through a link. The Colors page says that applying another theme does not stop following.
+- SVG artwork is drawn in a child process with a time and memory limit, so a bad picture cannot freeze the window. A drawing that failed because the machine was busy or the child was killed from outside is tried again after a few minutes, like a timeout.
+- An undo, a switch-off of follow mode or a watcher write that cannot get the shared write lock within 30 seconds does nothing and says so, instead of going on; the command line prints a line while it waits. Closing the window during an undo waits for the undo.
+- A Global Theme export leaves out an own picture that cannot be drawn, as Apply does.
+- Application Style at a small window size shows the whole sample and no gap above it.
+- A package that Apply installed without a picture the draw process could not draw is still seen as the theme's package by the next start of the app and by the command line, so *Apply to Desktop* stays off and the Overview says *Already so*.
+- Undo and switching off *Follow the palette* now wait for the watcher's write to end (one shared lock), so the watcher can no longer write colors after an undo and leave the home different from the snapshot.
+- The user guide names the wallpaper buttons as they are (*Use as light theme*, *Use as dark theme*), says where the section is, and shows the dark pictures.
+- *Undo* of several applies runs in the background with a progress dialog.
+- The window frame in the previews is drawn like the real one: centred title, your button layout and size, your shadow.
+- Accent colors are listed by hue; *Left as it is* is shown muted.
 - Card captions have a little more air under the last line.
 - The same words are used for the same things on every page: *Colors from a Picture…*, *Configure …*, *Leave as it is*.
 
@@ -70,6 +87,8 @@ All notable changes to Plasma Theme Studio are listed here. The format follows [
 
 ### Fixed
 
+- Follow the palette: a palette change that met a busy write lock (an undo running) is applied at the next look, not left until the file changes again.
+- `apply` on the command line draws a theme's own pictures before it decides that the theme is already applied, and `restore` no longer says that settings could not be switched back when it was told to wait and tried nothing.
 - Repair step 4: an undo of fonts or another single part no longer puts an older color scheme, GTK colors or `kdeglobals` colors over a scheme chosen since (the snapshot records which parts ran); an undo of GTK gives back `gtk.css` as it was, also when it did not exist; a damaged snapshot manifest can no longer make an undo touch files outside what the app watches; pictures with many blurred elements or markers are refused before they are drawn; saving an imported theme next to another picture of the same name picks a free name; two theme file names that clean up alike get their own artwork folders; very long theme file names can be saved; the thumbnail cache keeps the newest few pictures of an item; the Panel page with two or three screens no longer scrolls sideways at 1100 px.
 - Repair step 3: an imported theme keeps its picture names and never overwrites a different picture; frames with nested `<use>` or chained patterns are refused before they are drawn; the undo of one part puts back only the side files of the parts that took part; a named pipe called `kdeglobals` no longer blocks a snapshot; waiting for the desktop after an undo keeps the window alive; the panel page makes its thread pool before the object that answers it; Rofi follows the general font of the theme; the Plasma Style banner no longer calls own artwork unapplied; the Plasma Style page opens at the top; the Colors page scrolls once; the label and slider on the Shapes page no longer overlap at 1100 px; thumbnails are cached per language, so the sample texts of the cards are translated.
 

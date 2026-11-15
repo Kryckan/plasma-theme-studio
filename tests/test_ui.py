@@ -379,7 +379,8 @@ def test_every_page_with_a_target_says_what_an_apply_does_with_it(window):
         assert "does not apply these values" not in window.notes[section].text()
     window.edit(FIELD_BY_ID[("rofi", "style")], "generated")
     settle(window)
-    assert "reads the theme when it starts" in window.notes["rofi"].text()
+    assert "next time you open it" in window.notes["rofi"].text()  # the plain sentence
+    assert "reads the theme when it starts" in window.notes["rofi"].more.detail.text()  # the detail
 
 
 def test_the_values_of_a_part_that_is_left_as_it_is_are_turned_off(window):

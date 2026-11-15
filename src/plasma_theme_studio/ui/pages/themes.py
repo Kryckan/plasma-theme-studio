@@ -28,7 +28,7 @@ from ...edits import theme_edits_from_global_theme
 from ...model.theme import FIELD_BY_ID, Theme, ThemeError
 from ..banner import INFORMATION, WARNING
 from ..library_view import GlobalEntry, LibraryView
-from ..widgets import SPACING, FlowLayout, themed_icon
+from ..widgets import SPACING, FlowLayout, MoreAbout, themed_icon
 from .base import Page
 from .themes_desktop import theme_edits_from_desktop
 from .themes_global import SummaryLoader
@@ -65,8 +65,7 @@ class ThemesPage(Page):
     def subtitle(self) -> str:
         return translate(
             "ui",
-            "Your saved themes, the installed Global Themes and color schemes. "
-            "Apply puts the selected one on the desktop.",
+            "Pick a theme, then choose Apply to Desktop.",
         )
 
     def build(self) -> None:
@@ -121,17 +120,16 @@ class ThemesPage(Page):
         box.setSpacing(2)
         self.night = _NightSwitch(self)
         self.window.editors[("desktop", "dark_at_night")] = self.night
-        note = QLabel(
+        self.night_more = MoreAbout(
             translate(
                 "ui",
                 "Plasma changes between its light and its dark Global Theme with the time of day. "
                 "Which two it uses is chosen in System Settings. It is set when you choose Apply to Desktop.",
-            )
+            ),
+            lead=translate("ui", "Plasma changes between a light and a dark theme by itself."),
+            head=self.night,
         )
-        note.setWordWrap(True)
-        note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
-        box.addWidget(self.night)
-        box.addWidget(note)
+        box.addWidget(self.night_more)
         # What a theme with a light and a dark variant adds: which parts follow Plasma's switch.
         self.night_variants = QLabel()
         self.night_variants.setWordWrap(True)
@@ -169,14 +167,13 @@ class ThemesPage(Page):
         self.night_variants.setText(text)
         self.night_variants.show()
 
-    def read_desktop(self) -> None:
+    def read_desktop_state(self):
+        """In a worker: whether the desktop changes between light and dark by itself."""
         runner = self.window.runner
-        try:
-            self.night_now = bool(
-                runner.which("kreadconfig6") and desktopparts.PARTS["night_mode"].current(runner)
-            )
-        except Exception:  # noqa: BLE001 - the switch only shows it
-            self.night_now = False
+        return bool(runner.which("kreadconfig6") and desktopparts.PARTS["night_mode"].current(runner))
+
+    def show_desktop_state(self, state) -> None:
+        self.night_now = bool(state)  # the switch only shows it
         self._show_night()
 
     # ---- the strip under the cards
@@ -271,7 +268,7 @@ class ThemesPage(Page):
     # ---- reading the desktop
 
     def global_theme(self) -> str:
-        """The Global Theme the desktop records, or an empty text."""
+        """The Global Theme the desktop records, or an empty text (a read: for a worker)."""
         runner = self.window.runner
         if not runner.which("kreadconfig6"):
             return ""
@@ -281,7 +278,15 @@ class ThemesPage(Page):
             return ""
 
     def reload(self) -> None:
-        self.library.reload(self.window.active_scheme(), self.global_theme())
+        """Read the themes and what the desktop uses again; the desktop is asked in a worker."""
+        self.read_in_background(
+            lambda: (self.window.read_scheme(), self.global_theme()), self._reload_with, name="library"
+        )
+
+    def _reload_with(self, state) -> None:
+        active, global_theme = state or ("", "")
+        self.window._active = active
+        self.library.reload(active, global_theme)
 
     def leave(self) -> None:
         self.library.leave()

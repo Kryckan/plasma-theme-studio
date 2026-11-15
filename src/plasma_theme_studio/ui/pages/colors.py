@@ -36,6 +36,7 @@ from ..variant_view import VariantRow
 from ..widgets import SPACING, THUMB_SIZE, CardGrid, ColorDots, Segmented
 from .base import LABEL_WIDTH, THIS_THEME, THIS_THEME_DELAY, ValuePage
 from .colors_contrast import ContrastBox, FixContrastDialog
+from .colors_follow import FollowRow
 from .colors_import import ImportColorsDialog
 from .colors_picture import PictureColorsDialog
 from .colors_wallpaper import WallpaperAnswer, WallpaperBlock, WallpaperColors, WallpaperJob
@@ -71,6 +72,12 @@ class _FollowsEditor:
         pass
 
 
+def accent_order(color: str) -> tuple[float, float, str]:
+    """Where an accent that is none of the standard dots goes among the others: by hue, then lightness."""
+    c = QColor(color)
+    return (c.hueF(), c.lightnessF(), color.lower())
+
+
 def is_dark(color: str) -> bool:
     return QColor(color).lightnessF() < 0.5
 
@@ -89,7 +96,7 @@ class ColorsPage(ValuePage):
     def build(self) -> None:
         self.kind = pickers.kind("color_scheme")
         self.items: dict[str, pickers.Item] = {}
-        self.extra_accents: list[str] = []  # accents the theme had that are no dot of ours (newest last)
+        self.extra_accents: list[str] = []  # accents the theme had that are no dot of ours (newest three)
         self.dot_of: dict[str, str] = {}  # the accent a dot became (made readable) -> the dot
         self.kept_accent: tuple[tuple[str, ...], str] | None = None  # (colors, the scheme's own accent)
         self.found: WallpaperColors | None = None
@@ -118,6 +125,8 @@ class ColorsPage(ValuePage):
         self.variants.remove_requested.connect(self.window.remove_variant)
         self.content.addWidget(self.variants)
         self.content.addLayout(self._accent_row())
+        self.follow_row = FollowRow(self)
+        self.content.addWidget(self.follow_row)
         self._build_schemes()
         self.wallpaper = WallpaperBlock()
         self.wallpaper.use_light.connect(lambda: self.use_wallpaper("light"))
@@ -200,13 +209,19 @@ class ColorsPage(ValuePage):
         self.grid.set_selected(self.selected_card())
         self.this_timer.start(THIS_THEME_DELAY)
         self._show_accent()
+        self.follow_row.show_state()
         self.contrast.set_colors(self.colors())
 
     def colors(self) -> dict[str, str]:
         return {role: self.theme.get("colors", role) for role in ROLES}
 
-    def read_desktop(self) -> None:
-        self.grid.set_in_use(self._match(self.window.active_scheme()))
+    def read_desktop_state(self):
+        return self.window.read_scheme()
+
+    def show_desktop_state(self, state) -> None:
+        if state is not None:
+            self.window._active = state
+        self.grid.set_in_use(self._match(state or ""))
         if self.picture is None:
             self.read_wallpaper()
 
@@ -249,7 +264,9 @@ class ColorsPage(ValuePage):
         return CHOSEN if original is not None and original != accent else SCHEME
 
     def _dots(self) -> list[str]:
-        return [*self.extra_accents, *STANDARD_ACCENTS]
+        """The standard dots in their own order, then the other accents the theme had in one fixed order
+        (by hue), so that the light and the dark variant show the same row and only the check mark moves."""
+        return [*STANDARD_ACCENTS, *sorted(self.extra_accents, key=accent_order)]
 
     def _show_accent(self) -> None:
         state = self.accent_state()
@@ -513,9 +530,12 @@ class ColorsPage(ValuePage):
         if not result.ok:
             self.window.banner.show_message(WARNING, str(result.error), 8)
             return False
-        return self.review(
+        accepted = self.review(
             result, name, translate("ui", "Import colors from {name}").format(name=name), result.given
         )
+        if accepted and not path.endswith(".colors"):
+            self.follow_row.remember(path, self.import_dialog)
+        return accepted
 
     def review(self, result: palettes.PaletteResult, source: str, text: str, variant: str | None) -> bool:
         """The dialog that maps the palette to the roles; "Use These Colors" puts them in the theme."""

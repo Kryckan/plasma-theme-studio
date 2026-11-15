@@ -84,6 +84,7 @@ class FontRow(QWidget):
         self.key = key
         self._value: str | None = None
         self._present: FontSpec | None = None
+        self.hide_leave = False  # the page's own switch says it while every role is left
         self.role = QLabel(title)
         self.role.setFixedWidth(ROLE_WIDTH)
         self.sample = _Elided()
@@ -138,6 +139,7 @@ class FontRow(QWidget):
         left = self._value is None
         shown = spec or (self._present if left else None)
         self.leave.setChecked(left)
+        self.leave.setVisible(not (left and self.hide_leave))
         self.sample.setFont(qfont_of(shown, True) if shown else QFont(self.font()))
         self.sample.setForegroundRole(QPalette.ColorRole.PlaceholderText if left else QPalette.ColorRole.Text)
         self.sample.updateGeometry()

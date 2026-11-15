@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWi
 
 from ..model.theme import Theme
 from ..model.variants import DARK, LIGHT, VARIANTS, opposite
-from .widgets import Segmented
+from .widgets import MoreAbout, Segmented
 
 translate = QCoreApplication.translate
 
@@ -57,6 +57,7 @@ class VariantRow(QWidget):
         self.note = QLabel()
         self.note.setWordWrap(True)
         self.note.setForegroundRole(self.note.palette().ColorRole.PlaceholderText)
+        self.more = MoreAbout()
         self._shown = LIGHT
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
@@ -69,6 +70,7 @@ class VariantRow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(row)
         layout.addWidget(self.note)
+        layout.addWidget(self.more)
 
     def show_theme(self, theme: Theme) -> None:
         both = theme.has_both
@@ -91,6 +93,7 @@ class VariantRow(QWidget):
                     "else are the same in both. Apply puts the variant you see on the desktop.",
                 )
             )
+            self.more.set_detail("")
         else:
             missing = opposite(theme.main_variant)
             self.add_button.setText(
@@ -101,7 +104,15 @@ class VariantRow(QWidget):
             self.note.setText(
                 translate(
                     "ui",
-                    "This theme has one set of colors. A second one is made from it: the same hues, "
-                    "with the lightness turned around and the text colors corrected.",
+                    "This theme has one set of colors. You can add a second set for the other mode: "
+                    "light colors become dark ones, or the other way round.",
+                )
+            )
+            self.more.set_detail(
+                translate(
+                    "ui",
+                    "The second set is made from the first by keeping the hues, turning the lightness "
+                    "around and correcting the text colors so that they stay easy to read. You can change "
+                    "every color of it afterwards.",
                 )
             )

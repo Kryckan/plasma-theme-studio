@@ -14,7 +14,7 @@ import re
 from dataclasses import replace
 
 from PySide6.QtCore import QByteArray, QCoreApplication, QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen
 from PySide6.QtSvg import QSvgRenderer
 
 from ..generators import kvantum, plasmastyle
@@ -23,10 +23,12 @@ from ..model.theme import Theme
 from ..palette import ROLES
 from ..pickers import colorschemes, decorations, plasmastyles
 from ..pickers.base import blank, placeholder
+from .frame_draw import draw_window, layout_buttons
 from .preview import PreviewWidget
 
 translate = QCoreApplication.translate
 
+CARD_SCALE = 0.5  # a window of the card is this part of its real size: the title keeps some room
 SAMPLE = QSize(260, 162)  # the widgets of the application style are made at this size and scaled
 
 
@@ -47,54 +49,20 @@ def _painter(image: QImage) -> QPainter:
 # ---- window decorations ------------------------------------------------------------------------
 
 
-def _window(p: QPainter, rect: QRectF, look: Look, active: bool, caption: str) -> None:
-    """One window with the frame the look describes: radius, border, shadow, title bar and buttons."""
-    reach = max(2, min(look.shadow, 18)) * rect.width() / 260
-    strength = min(1.0, look.strength)
+def _window(
+    p: QPainter, rect: QRectF, look: Look, buttons: tuple[str, str], active: bool, caption: str
+) -> None:
+    """One window with the frame the look describes, drawn by `frame_draw` at half its real size: radius,
+    border, title bar height, the buttons of the theme's layout, a centred title and the shadow."""
+    scale = CARD_SCALE
     p.save()
+    p.translate(rect.topLeft())
+    p.scale(scale, scale)
+    frame = QRectF(0, 0, rect.width() / scale, rect.height() / scale)
+    content = draw_window(p, frame, look, caption, buttons, active)
     p.setPen(Qt.PenStyle.NoPen)
-    steps = 7
-    for step in range(steps, 0, -1):  # a soft shadow, a little lower than the window
-        grow = reach * step / steps
-        alpha = strength * (120 if active else 60) * (1 - step / (steps + 1)) / steps * 2
-        p.setBrush(QColor(0, 0, 0, round(min(255, alpha))))
-        p.drawRoundedRect(
-            rect.adjusted(-grow, -grow + reach / 3, grow, grow + reach / 3),
-            look.radius + grow,
-            look.radius + grow,
-        )
-    border = max(look.border, 0)
-    outline = QColor(look.text.hex)
-    outline.setAlpha(60 if active else 35)
-    p.setBrush(QColor(look.window.hex))
-    p.setPen(QPen(outline, max(border, 1) * 0.8))
-    p.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), look.radius, look.radius)
-    bar_height = max(14.0, rect.height() * 0.2)
-    clip = QPainterPath()
-    clip.addRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), look.radius, look.radius)
-    p.setClipPath(clip)
-    p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QColor(look.header.hex if active else look.window.hex))
-    p.drawRect(QRectF(rect.x(), rect.y(), rect.width(), bar_height))
-    p.setClipping(False)
-    text = QColor(look.text.hex)
-    if not active:
-        text.setAlpha(150)
-    p.setPen(text)
-    font = QFont()
-    font.setPixelSize(max(7, round(bar_height * 0.5)))
-    p.setFont(font)
-    p.drawText(
-        QRectF(rect.x() + 8, rect.y(), rect.width() - 56, bar_height), Qt.AlignmentFlag.AlignCenter, caption
-    )
-    p.setPen(Qt.PenStyle.NoPen)
-    for number in range(3):  # minimize, maximize, close
-        color = QColor(look.negative.hex if number == 2 else look.muted.hex)
-        color.setAlpha(255 if active else 120)
-        p.setBrush(color)
-        p.drawEllipse(QPointF(rect.right() - 9 - number * 9, rect.y() + bar_height / 2), 2.8, 2.8)
     p.setBrush(QColor(look.accent.hex) if active else QColor(0, 0, 0, 0))
-    p.drawRect(QRectF(rect.x() + rect.width() * 0.08, rect.y() + bar_height + 9, rect.width() * 0.3, 3))
+    p.drawRect(QRectF(content.x() + content.width() * 0.08, content.y() + 14, content.width() * 0.3, 5))
     p.restore()
 
 
@@ -115,8 +83,9 @@ def decoration(theme: Theme, size: QSize, dpr: float, breeze: bool = False) -> Q
         frame.width(),
         frame.height(),
     )
-    _window(p, back, look, False, "")
-    _window(p, front, look, True, theme.name)
+    buttons = layout_buttons(theme)
+    _window(p, back, look, buttons, False, "")
+    _window(p, front, look, buttons, True, theme.name)
     p.end()
     return image
 

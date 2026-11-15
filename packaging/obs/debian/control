@@ -1,0 +1,42 @@
+Source: plasma-theme-studio
+Section: kde
+Priority: optional
+Maintainer: Plasma Theme Studio contributors <noreply@github.com>
+Build-Depends: debhelper-compat (= 13),
+               desktop-file-utils,
+               appstream,
+               dh-python,
+               python3,
+               qt6-l10n-tools,
+Standards-Version: 4.7.0
+Homepage: https://github.com/Kryckan/plasma-theme-studio
+Rules-Requires-Root: no
+
+Package: plasma-theme-studio
+Architecture: all
+Depends: ${misc:Depends},
+         ${python3:Depends},
+         hicolor-icon-theme,
+         libkf6config-bin,
+         plasma-workspace,
+         python3,
+         python3-jinja2,
+         python3-pyside6.qtcore,
+         python3-pyside6.qtgui,
+         python3-pyside6.qtquick,
+         python3-pyside6.qtsvg,
+         python3-pyside6.qtwidgets,
+         qt6-style-kvantum,
+Recommends: inkscape,
+            qdbus-qt6,
+            rofi,
+Suggests: pipewire-bin | pulseaudio-utils,
+Description: Edit every part of a KDE Plasma theme in one place
+ Plasma Theme Studio keeps a whole KDE Plasma desktop theme in one file,
+ shows it in a visual preview, and applies it to the running desktop: colors,
+ window frame, Plasma style, panels, application style, GTK, fonts, icons,
+ pointers and more, each part on its own page.
+ .
+ Every apply takes a snapshot first, so it can be undone exactly, from the
+ app or from a text console. The app only writes inside your home folder and
+ shows the files it is about to write.

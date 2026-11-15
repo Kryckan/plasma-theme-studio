@@ -11,6 +11,20 @@ requires-python = ">=3.11"
 # PySide6 is deliberately not listed: the app must use the distribution's
 # PySide6 so that it loads the real KDE widget styles.
 dependencies = ["Jinja2>=3.0"]
+keywords = ["kde", "plasma", "theme", "colors", "appearance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Desktop Environment :: K Desktop Environment (KDE)",
+]
+
+[project.urls]
+Homepage = "https://github.com/Kryckan/plasma-theme-studio"
+Issues = "https://github.com/Kryckan/plasma-theme-studio/issues"
+Source = "https://github.com/Kryckan/plasma-theme-studio"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

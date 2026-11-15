@@ -22,10 +22,19 @@ class GtkPage(TargetPage):
 
     @property
     def set_hint(self):
-        return translate("ui", "Writes a style sheet for GTK 3 and 4 applications.")
+        return translate("ui", "Changes how GTK applications look.")
 
     def subtitle(self) -> str:
-        return translate("ui", "GTK applications get this theme's colors and shapes through a style sheet.")
+        return translate("ui", "GTK applications, such as GNOME's, get this theme's colors and shapes.")
+
+    def plain_note(self, section: str) -> str | None:
+        if self.theme.get(*self.style_field) != "generated":
+            return None
+        return translate(
+            "ui",
+            "Applications you open from now on look like this theme. Ones that are already open may need "
+            "to be closed and opened again.",
+        )
 
     def build_values(self) -> None:
         self.content.addWidget(self.caption(translate("ui", "Shapes for GTK applications")))
@@ -34,11 +43,14 @@ class GtkPage(TargetPage):
         )
         self.written = InlineNote(
             translate(
-                "ui",
-                "Choosing Apply writes one style sheet for GTK 3 and one for GTK 4 into your own settings "
-                "folders. Nothing else of GTK is changed, and “Undo last apply” puts both back.",
+                "ui", "Apply changes how GTK applications look. “Undo last apply” brings the old look back."
             ),
             "information",
+            more=translate(
+                "ui",
+                "Apply writes one style sheet for GTK 3 and one for GTK 4 into your own settings "
+                "folders. Nothing else of GTK is changed, and “Undo last apply” puts both back.",
+            ),
         )
         self.content.addWidget(self.written)
 

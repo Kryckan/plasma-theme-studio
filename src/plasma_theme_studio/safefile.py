@@ -28,13 +28,21 @@ def read_regular(path: Path, limit: int = MAX_FILE) -> bytes | None:
     """The bytes of a regular file of at most `limit` bytes; None for anything else
     (a pipe that would block, a device such as /dev/zero, a huge file) or when it
     cannot be read."""
-    if not is_regular(path):
-        return None
     try:
-        with open(path, "rb") as handle:
-            data = handle.read(limit + 1)
+        # opened without waiting, and looked at after the opening: a file that is swapped for a pipe
+        # between a look and the opening cannot block the reader
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
     except (OSError, ValueError):
         return None
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return None
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            data = handle.read(limit + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(descriptor)
     return data if len(data) <= limit else None
 
 

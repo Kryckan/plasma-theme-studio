@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Builds the latest commit of the main branch. The release package is
+# plasma-theme-studio (packaging/arch/release). Use: makepkg -si
+
+pkgname=plasma-theme-studio-git
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc="Edit every part of a KDE Plasma theme in one place"
+arch=('any')
+url="https://github.com/Kryckan/plasma-theme-studio"
+license=('GPL-3.0-or-later')
+depends=(
+  'python'            # the program itself
+  'pyside6'           # the window (the distribution's build loads KDE's real widget styles)
+  'python-jinja'      # templates of the generated files
+  'qt6-svg'           # drawing the previews and the window frame
+  'qt6-declarative'   # window decoration thumbnails (QtQuick)
+  'kvantum'           # the Application Style target and its preview
+  'kconfig'           # kreadconfig6 and kwriteconfig6: every KDE setting is read and written with them
+  'plasma-workspace'  # plasma-apply-colorscheme, plasma-apply-desktoptheme, plasma-changeicons
+  'hicolor-icon-theme'
+)
+makedepends=('git' 'qt6-tools')  # lrelease compiles the translations
+optdepends=(
+  'qt6-tools: qdbus6, to reload KWin and reach Plasma (busctl from systemd is used when it is missing)'
+  'rofi: the Rofi target (checks the generated theme before it is applied)'
+  'inkscape: Open in Inkscape, for your own panel and popup artwork'
+  'python-pywal16: import colors made by pywal (AUR)'
+  'matugen: import colors made by matugen'
+  'pipewire: the Play button on the System Sounds page (pw-play)'
+  'libcanberra: the Play button on the System Sounds page (canberra-gtk-play)'
+)
+provides=('plasma-theme-studio')
+conflicts=('plasma-theme-studio')
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$pkgname"
+  local version
+  version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/plasma_theme_studio/__init__.py)
+  printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd "$pkgname"
+  packaging/install.sh "$pkgdir"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

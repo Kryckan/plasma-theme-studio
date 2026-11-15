@@ -1,0 +1,33 @@
+<!--
+SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Source services for the Open Build Service package plasma-theme-studio.
+For a release set the revision to the tag (v0.1.0). To follow the latest
+code in a second package, set it to main. See packaging/obs/README.md.
+-->
+<services>
+  <!-- Check out the tag; versionformat gives the tarball its version. -->
+  <service name="obs_scm" mode="manual">
+    <param name="scm">git</param>
+    <param name="url">https://github.com/Kryckan/plasma-theme-studio.git</param>
+    <param name="revision">v0.1.0</param>
+    <param name="versionformat">0.1.0</param>
+    <param name="filename">plasma-theme-studio</param>
+    <param name="exclude">.git</param>
+    <param name="exclude">.github</param>
+    <param name="exclude">.venv</param>
+  </service>
+  <!-- The RPM spec and the .dsc live in the repository; take them out of the checkout.
+       The Debian files travel as debian.tar.xz (see make-debian-tar.sh and README.md). -->
+  <service name="extract_file" mode="manual">
+    <param name="archive">*.obscpio</param>
+    <param name="files">*/packaging/obs/plasma-theme-studio.spec */packaging/obs/plasma-theme-studio.dsc</param>
+  </service>
+  <service name="tar" mode="buildtime"/>
+  <service name="recompress" mode="buildtime">
+    <param name="file">*.tar</param>
+    <param name="compression">xz</param>
+  </service>
+  <service name="set_version" mode="buildtime"/>
+</services>

@@ -30,13 +30,14 @@ from ...model.theme import FIELD_BY_ID, MAX_PANELS, PANEL_FIELDS, panel_section
 from ..editors import ChoiceEditor, NumberEditor
 from ..labels import FIELD_LABELS
 from ..widgets import LARGE_SPACING, SPACING, InlineNote, Segmented
-from .base import CONTROLS_WIDTH, LABEL_WIDTH, Page
+from .base import CONTROLS_WIDTH, Page
 from .panel_screen import ScreenChooser
 from .preview_box import RatioPreview
 
 translate = QCoreApplication.translate
 
 SECTION = "panel_layout"
+NAME_WIDTH = 124  # the labels are short here, so the choices get room for their words
 SECTIONS = tuple(panel_section(number) for number in range(1, MAX_PANELS + 1))
 FIELDS = tuple(field.key for field in PANEL_FIELDS)
 # What a panel is like on a fresh Plasma, for a theme that has no other idea.
@@ -292,7 +293,7 @@ class PanelPage(Page):
             field = FIELD_BY_ID[(section, key)]
             text = str(FIELD_LABELS[field.id])
             name = QLabel(text + translate("ui", ":"))
-            name.setMinimumWidth(LABEL_WIDTH)
+            name.setMinimumWidth(NAME_WIDTH)
             row = PanelRow(field)
             row.set_title(text)
             row.set_value(self.theme.get(section, key))

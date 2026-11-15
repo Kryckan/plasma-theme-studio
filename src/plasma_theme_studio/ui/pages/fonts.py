@@ -16,7 +16,7 @@ from .base import TUNING_WIDTH, Page
 
 translate = QCoreApplication.translate
 
-ROWS_WIDTH = TUNING_WIDTH + 120  # the rows and the note under them
+ROWS_WIDTH = TUNING_WIDTH + 40  # the rows and the note under them
 KEYS = ("general", "fixed", "small", "toolbar", "menu", "window_title")
 PROPORTIONAL = ("general", "small", "toolbar", "menu", "window_title")  # every role but the fixed width one
 
@@ -95,15 +95,17 @@ class FontsPage(Page):
 
     # ---- what the desktop has
 
-    def read_desktop(self) -> None:
-        """Show the fonts the desktop has now in the rows that are left as they are."""
+    def read_desktop_state(self):
+        """In a worker: the fonts the desktop has now."""
         from ... import desktopparts
+
+        return desktopparts.PARTS["fonts"].current(self.window.runner) or {}
+
+    def show_desktop_state(self, state) -> None:
+        """Show the fonts the desktop has now in the rows that are left as they are."""
         from ...generators.installed import FONT_ROLES
 
-        try:
-            current = desktopparts.PARTS["fonts"].current(self.window.runner) or {}
-        except Exception:  # noqa: BLE001 - without them the rows show no font of the desktop
-            current = {}
+        current = state or {}  # without them the rows show no font of the desktop
         for key in KEYS:
             spec = FontSpec.parse(current.get(FONT_ROLES[key], ""))
             self.present[key] = spec
@@ -119,9 +121,11 @@ class FontsPage(Page):
     # ---- what the person does
 
     def refresh(self) -> None:
+        every_left = not any(self.theme.get("fonts", key) for key in KEYS)
         for key, row in self.rows.items():
+            row.hide_leave = every_left  # the switch under the title already says it
             row.set_value(self.theme.get("fonts", key))
-        self.header.set_part_mode(any(self.theme.get("fonts", key) for key in KEYS))
+        self.header.set_part_mode(not every_left)
         super().refresh()
 
     def _edit(self, key: str, value: str | None) -> None:

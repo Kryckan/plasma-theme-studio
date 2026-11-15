@@ -8,10 +8,11 @@ through the window's runner with the theme's sample sound. It changes nothing in
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QTimer
+from PySide6.QtCore import QCoreApplication, Qt, QTimer
+from PySide6.QtWidgets import QLabel
 
 from ... import pickers
-from .base import PickerPage
+from .base import TUNING_WIDTH, PickerPage
 from .pickers_common import LoadsInBackground, SoundList, find_player, player_command, speaker_badge
 
 translate = QCoreApplication.translate
@@ -48,6 +49,11 @@ class SoundsPage(LoadsInBackground, PickerPage):
         self.grid.play_requested.connect(self.play)
         self.layout().insertWidget(1, self.grid.bar)
         self.content.addWidget(self.grid)
+        self.summary = QLabel()
+        self.summary.setWordWrap(True)
+        self.summary.setTextFormat(Qt.TextFormat.PlainText)
+        self.summary.setMaximumWidth(TUNING_WIDTH)
+        self.content.addWidget(self.summary)
         self.below = self.content
         self.this_timer = QTimer(self, singleShot=True, interval=0)  # no generated card here
         self.load_items()
@@ -61,6 +67,28 @@ class SoundsPage(LoadsInBackground, PickerPage):
             else translate("ui", "Nothing of this kind is installed.")
         )
         self.find_player()
+        self.show_summary()
+
+    def after_desktop(self) -> None:
+        super().after_desktop()
+        self.show_summary()
+
+    def show_summary(self) -> None:
+        """Say which sound theme the desktop plays now, and that Play only lets you listen."""
+        summary = getattr(self, "summary", None)
+        if summary is None:
+            return
+        current = self.items.get(self.current_id())
+        lead = (
+            translate("ui", "The desktop plays the sounds of “{name}”.").format(name=current.name)
+            if current
+            else translate("ui", "Sound themes are the sounds of notifications, warnings and other events.")
+        )
+        summary.setText(
+            lead
+            + " "
+            + translate("ui", "Play lets you listen to a sample. Nothing changes until you choose Apply.")
+        )
 
     def find_player(self) -> None:
         """Look for a player now; with none, the Play buttons are off and say why."""

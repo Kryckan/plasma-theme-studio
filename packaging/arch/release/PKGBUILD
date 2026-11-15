@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Plasma Theme Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Release package: builds the tagged version from the GitHub tag archive.
+# The checksum below is a placeholder. At release time, after the tag v$pkgver
+# exists on GitHub, run "updpkgsums" in this folder and then regenerate
+# .SRCINFO with "makepkg --printsrcinfo > .SRCINFO" (see packaging/RELEASING.md).
+# The package that follows the latest code is plasma-theme-studio-git.
+
+pkgname=plasma-theme-studio
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Edit every part of a KDE Plasma theme in one place"
+arch=('any')
+url="https://github.com/Kryckan/plasma-theme-studio"
+license=('GPL-3.0-or-later')
+depends=(
+  'python'            # the program itself
+  'pyside6'           # the window (the distribution's build loads KDE's real widget styles)
+  'python-jinja'      # templates of the generated files
+  'qt6-svg'           # drawing the previews and the window frame
+  'qt6-declarative'   # window decoration thumbnails (QtQuick)
+  'kvantum'           # the Application Style target and its preview
+  'kconfig'           # kreadconfig6 and kwriteconfig6: every KDE setting is read and written with them
+  'plasma-workspace'  # plasma-apply-colorscheme, plasma-apply-desktoptheme, plasma-changeicons
+  'hicolor-icon-theme'
+)
+makedepends=('qt6-tools')  # lrelease compiles the translations
+optdepends=(
+  'qt6-tools: qdbus6, to reload KWin and reach Plasma (busctl from systemd is used when it is missing)'
+  'rofi: the Rofi target (checks the generated theme before it is applied)'
+  'inkscape: Open in Inkscape, for your own panel and popup artwork'
+  'python-pywal16: import colors made by pywal (AUR)'
+  'matugen: import colors made by matugen'
+  'pipewire: the Play button on the System Sounds page (pw-play)'
+  'libcanberra: the Play button on the System Sounds page (canberra-gtk-play)'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # replaced by updpkgsums at release time
+
+package() {
+  cd "$pkgname-$pkgver"
+  packaging/install.sh "$pkgdir"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

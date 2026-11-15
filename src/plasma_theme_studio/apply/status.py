@@ -72,7 +72,7 @@ def _leave() -> str:
 
 
 def _not_checked() -> str:
-    return str(translate("core", "Not looked at, the theme leaves it"))
+    return str(translate("core", "Left as it is on your desktop"))
 
 
 class _Names:

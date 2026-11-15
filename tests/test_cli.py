@@ -182,3 +182,32 @@ def test_apply_covers_the_installed_parts(home, desktop_runner, monkeypatch, cap
     assert desktop_runner.get("kcminputrc", ["Mouse"], "cursorSize") == "32"
     assert cli.main(["restore"]) == 0
     assert desktop_runner.get("kdeglobals", ["Icons"], "Theme") != "Papirus"
+
+
+def test_restore_with_a_busy_lock_prints_only_the_busy_text(home, fake_system, capsys, monkeypatch):
+    from plasma_theme_studio import writelock
+
+    path = home / "theme.toml"
+    Theme().save(path)
+    assert cli.main(["apply", str(path)]) == 0
+    capsys.readouterr()
+    monkeypatch.setattr(writelock, "WAIT", 0.1)
+    held = writelock._acquire(writelock.lock_file())  # another process holds it
+    try:
+        assert cli.main(["restore"]) == 1
+    finally:
+        held.close()
+    err = capsys.readouterr().err
+    assert "Nothing was changed" in err and "could not be switched back" not in err
+    assert snapshots.list_snapshots()  # the snapshot is still there
+
+
+def test_the_background_watcher_does_not_print_the_waiting_line(home, fake_system, monkeypatch):
+    from plasma_theme_studio import follow, writelock
+
+    monkeypatch.setattr(follow, "watch", lambda runner: 0)
+    monkeypatch.setattr(writelock, "on_wait", None)
+    assert cli.main(["follow"]) == 0
+    assert writelock.on_wait is None
+    assert cli.main(["follow", "off"]) == 0
+    assert writelock.on_wait is not None

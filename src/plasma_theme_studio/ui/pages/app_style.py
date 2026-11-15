@@ -32,7 +32,12 @@ class AppStylePage(LoadsInBackground, PickerPage):
 
     @property
     def set_hint(self):
-        return translate("ui", "Writes a Kvantum style and switches to it.")
+        return translate("ui", "Makes a style from this theme and switches to it.")
+
+    def plain_note(self, section: str) -> str | None:
+        if self.theme.part_state("apps", "style") != "generated":
+            return None
+        return translate("ui", "Open applications change within a second. Their colors follow this theme.")
 
     def subtitle(self) -> str:
         return translate("ui", "How buttons, fields and menus look in applications.")
@@ -82,11 +87,15 @@ class AppStylePage(LoadsInBackground, PickerPage):
         self.kvantum_note = InlineNote(
             translate(
                 "ui",
-                "Kvantum is not installed. It is the program that draws the style “This theme” in "
-                "applications, so install the package “kvantum” with your software manager (on Debian "
-                "and Ubuntu it is called “qt6-style-kvantum”). The other styles work without it.",
+                "“This theme” needs a small helper program that is not installed yet. The other styles "
+                "work without it.",
             ),
             "warning",
+            more=translate(
+                "ui",
+                "The helper is called Kvantum. Install the package “kvantum” with your software manager "
+                "(on Debian and Ubuntu it is called “qt6-style-kvantum”).",
+            ),
         )
         self.kvantum_note.setVisible(self.kvantum_missing())
         self.add_below(self.kvantum_note)
@@ -106,6 +115,10 @@ class AppStylePage(LoadsInBackground, PickerPage):
         direction = QBoxLayout.Direction.LeftToRight if side_by_side else QBoxLayout.Direction.TopToBottom
         if self.beside.direction() != direction:
             self.beside.setDirection(direction)
+        # one under the other, each takes the height it needs: a stretch would leave a gap in the values
+        # and squeeze the sample until its list and group box are cut off
+        for index in range(2):
+            self.beside.setStretch(index, 1 if side_by_side else 0)
 
     def read_state(self) -> dict:
         """Besides what the desktop has: whether Kvantum is there (it looks through many folders)."""

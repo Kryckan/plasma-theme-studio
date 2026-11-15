@@ -5,8 +5,8 @@ preview of the chosen theme at that size."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QSize
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QCoreApplication, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QComboBox, QLabel, QPushButton
 
 from ...model.theme import FIELD_BY_ID
@@ -19,6 +19,31 @@ translate = QCoreApplication.translate
 
 SIZE_FIELD = ("desktop", "cursor_size")
 DEFAULT_SIZE = 24
+
+
+def under_tile(picture: QImage) -> QImage:
+    """The pointers on a tile they can be seen on: a light one for dark pointers, a dark one for light
+    pointers, none for pointers that carry their own outline."""
+    weight = lightness = 0.0
+    for y in range(0, picture.height(), 2):
+        for x in range(0, picture.width(), 2):
+            color = picture.pixelColor(x, y)
+            weight += color.alphaF()
+            lightness += color.alphaF() * color.lightnessF()
+    if weight == 0 or 0.3 <= lightness / weight <= 0.75:
+        return picture
+    tile = QImage(picture.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    tile.setDevicePixelRatio(picture.devicePixelRatio())
+    tile.fill(0)
+    painter = QPainter(tile)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor("#e4e6e8") if lightness / weight < 0.3 else QColor("#33373b"))
+    size = picture.deviceIndependentSize()
+    painter.drawRoundedRect(QRectF(0, 0, size.width(), size.height()), 6, 6)
+    painter.drawImage(0, 0, picture)
+    painter.end()
+    return tile
 
 
 class PointersPage(LoadsInBackground, PickerPage):
@@ -70,6 +95,9 @@ class PointersPage(LoadsInBackground, PickerPage):
         self.top_row.hide()
 
     # ---- what the desktop has
+
+    def shown_thumbnail(self, image: QImage) -> QImage:
+        return under_tile(image)
 
     def read_state(self) -> dict:
         from ... import desktopparts

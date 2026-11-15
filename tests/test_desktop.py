@@ -58,15 +58,19 @@ def system_state(desktop):
     """Everything an apply may touch: the files outside the app's own folder,
     the color scheme in use and the panel."""
     own = paths.snapshots_dir().parent
+    cache = paths.cache_home() / own.name  # the app's picture cache: pages fill it while the window runs
     files = {
         str(path.relative_to(desktop.home)): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(desktop.home.rglob("*"))
-        if path.is_file() and own not in path.parents
+        if path.is_file() and own not in path.parents and cache not in path.parents
     }
     folders = sorted(
         str(path.relative_to(desktop.home))
         for path in desktop.home.rglob("*")
-        if path.is_dir() and own not in path.parents and path != own
+        if path.is_dir()
+        and own not in path.parents
+        and cache not in path.parents
+        and path not in (own, cache)
     )
     return files, folders, desktop.runner.settings["ColorScheme"], desktop.shell.state()
 
@@ -875,3 +879,84 @@ def test_a_failed_scheme_switch_puts_back_the_scheme_and_the_frame(desktop):
 
     desktop.kwin.fail = False
     assert system_state(desktop) == state
+
+
+def test_the_undo_runs_off_the_window_thread_and_the_window_stays_alive(window, desktop, monkeypatch):
+    import threading
+
+    window.edit(FIELD_BY_ID[("window", "radius")], 16)
+    window.apply_theme()
+    seen = []
+    real = engine.restore_to
+
+    def watching(snapshot, runner, progress=None):
+        seen.append(threading.current_thread() is threading.main_thread())
+        return real(snapshot, runner, progress)
+
+    monkeypatch.setattr(engine, "restore_to", watching)
+    window.undo_last_apply()
+    assert seen == [False]
+    assert snapshots.list_snapshots() == []
+    assert "back to how it was" in window.banner.text()
+
+
+def test_a_failure_in_the_undo_worker_is_shown_not_lost(window, desktop, monkeypatch):
+    window.edit(FIELD_BY_ID[("window", "radius")], 16)
+    window.apply_theme()
+
+    def broken(snapshot, runner, progress=None):
+        raise OSError("the disk is gone")
+
+    monkeypatch.setattr(engine, "restore_to", broken)
+    window.undo_last_apply()
+    assert "the disk is gone" in " ".join(str(p) for p in window.problems)
+
+
+def test_a_headless_close_does_not_ask_but_a_normal_close_does(window, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    asked = []
+
+    def answer(*args, **kwargs):
+        asked.append(1)
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", answer)
+    window.edit(FIELD_BY_ID[("window", "radius")], 16)
+    assert not window.undo_stack.isClean()
+    assert not window.close() and asked == [
+        1
+    ]  # what a person sees: the question, and Cancel keeps the window
+    assert window.close_without_asking() and asked == [1]
+    assert not window.isVisible() and window.discard_on_close is False
+
+
+def test_apply_does_not_flash_on_when_an_edit_is_taken_back(window, desktop):
+    window.edit(FIELD_BY_ID[("window", "radius")], 16)
+    window.apply_theme()
+    window.settle()
+    assert window.nothing_to_apply and not window.apply_button.isEnabled()
+
+    window.edit(FIELD_BY_ID[("window", "radius")], 12)  # a real edit: on at once, no waiting for the status
+    assert window.apply_button.isEnabled()
+    window.settle()
+    assert window.apply_button.isEnabled()
+
+    window.edit(FIELD_BY_ID[("window", "radius")], 16)  # back to what the desktop has: off at once
+    assert not window.apply_button.isEnabled()
+    window.settle()
+    assert not window.apply_button.isEnabled()
+
+    window.undo_stack.undo()  # and the undo of that edit: the theme with 12, which the desktop does not have
+    assert window.apply_button.isEnabled()
+
+
+def test_a_change_of_the_desktop_forgets_what_the_status_said(window, desktop):
+    window.edit(FIELD_BY_ID[("window", "radius")], 16)
+    window.apply_theme()
+    window.settle()
+    assert window.known_nothing
+    window.undo_last_apply()
+    window.edit(FIELD_BY_ID[("window", "radius")], 12)
+    window.edit(FIELD_BY_ID[("window", "radius")], 16)
+    assert window.apply_button.isEnabled()  # the desktop is not on 16 any more

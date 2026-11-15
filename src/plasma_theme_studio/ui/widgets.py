@@ -51,6 +51,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QStyle,
     QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QToolButton,
     QToolTip,
     QVBoxLayout,
     QWidget,
@@ -427,8 +429,6 @@ class Card(QAbstractButton):
         rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
         p.drawRoundedRect(rect.adjusted(1, 1, -1, -1) if selected else rect, 6, 6)
         # the thumbnail, clipped to rounded corners
-        if self.dimmed and self.isEnabled():
-            p.setOpacity(resting * 0.55)
         thumb = self._thumb_rect()
         outline = QPainterPath()
         outline.addRoundedRect(thumb, 4, 4)
@@ -450,6 +450,14 @@ class Card(QAbstractButton):
         p.setPen(QPen(with_alpha(text, 0.18), 1))
         p.drawRoundedRect(thumb, 4, 4)
         p.setOpacity(resting)
+        if self.dimmed and self.isEnabled():  # left as it is: a small neutral ring, the picture stays clear
+            corner = QPointF(thumb.left() + 11, thumb.top() + 11)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(with_alpha(base, 0.85))
+            p.drawEllipse(corner, 7, 7)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(with_alpha(text, 0.55), 1.4))
+            p.drawEllipse(corner, 3.2, 3.2)
         if self._action_visible():
             self._paint_action(p, palette)
         # the texts
@@ -1157,8 +1165,73 @@ class _IconLabel(QWidget):
         p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.glyph)
 
 
+class MoreAbout(QWidget):
+    """A "More about this" line that opens its detail in place. Hidden while there is no detail."""
+
+    toggled = Signal(bool)
+
+    def __init__(self, detail="", lead="", head=None, parent=None):
+        """`lead` is one line of plain words that stands before the "More about this" button, `head` a
+        widget (a check box, say) that stands before the lead."""
+        super().__init__(parent)
+        self.lead = QLabel(lead)
+        self.lead.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        self.lead.setVisible(bool(lead))
+        self.button = QToolButton()
+        self.button.setAutoRaise(True)
+        self.button.setCheckable(True)
+        self.button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.button.setText(translate("widgets", "More about this"))
+        self.button.toggled.connect(self._toggled)
+        self.detail = QLabel()
+        self.detail.setWordWrap(True)
+        self.detail.setTextFormat(Qt.TextFormat.PlainText)
+        self.detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.detail.setForegroundRole(QPalette.ColorRole.WindowText)
+        self.detail.hide()
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(SPACING)
+        if head is not None:
+            row.addWidget(head)
+        row.addWidget(self.lead)
+        row.addWidget(self.button)
+        row.addStretch(1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addLayout(row)
+        layout.addWidget(self.detail)
+        self._arrow()
+        self.set_detail(detail)
+
+    def _arrow(self) -> None:
+        opened = self.button.isChecked()
+        self.button.setArrowType(Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow)
+
+    def _toggled(self, open_: bool) -> None:
+        self._arrow()
+        self.detail.setVisible(open_)
+        self.toggled.emit(open_)
+
+    def set_detail(self, text: str) -> None:
+        """The text behind the line; with none the whole widget is hidden (and closed)."""
+        self.detail.setText(text)
+        if not text:
+            self.button.setChecked(False)
+        self.setVisible(bool(text))
+
+    def is_open(self) -> bool:
+        return self.button.isChecked()
+
+    def open(self, on: bool = True) -> None:
+        self.button.setChecked(on)
+
+
 class InlineNote(QFrame):
-    """A tinted strip like KMessageWidget. kind: information, warning, positive or error."""
+    """A tinted strip like KMessageWidget. kind: information, warning, positive or error.
+    `set_text(text, more)` keeps `more` (the technical detail) behind a "More about this" line."""
 
     LOOK = {
         "information": (("dialog-information", ""), INFORMATION, "i"),
@@ -1168,7 +1241,7 @@ class InlineNote(QFrame):
     }
     action_triggered = Signal()
 
-    def __init__(self, text="", kind="information", action_text="", parent=None):
+    def __init__(self, text="", kind="information", action_text="", more="", parent=None):
         super().__init__(parent)
         self.kind = kind if kind in self.LOOK else "information"
         icon, rgb, glyph = self.LOOK[self.kind]
@@ -1177,14 +1250,20 @@ class InlineNote(QFrame):
         self.label.setWordWrap(True)
         self.label.setTextFormat(Qt.TextFormat.PlainText)
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.more = MoreAbout(more)
         self.action = QPushButton(action_text)
         self.action.setVisible(bool(action_text))
         self.action.clicked.connect(self.action_triggered)
+        words = QVBoxLayout()
+        words.setContentsMargins(0, 0, 0, 0)
+        words.setSpacing(2)
+        words.addWidget(self.label)
+        words.addWidget(self.more)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(10)
         layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self.label, 1)
+        layout.addLayout(words, 1)
         layout.addWidget(self.action, 0, Qt.AlignmentFlag.AlignVCenter)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.setAccessibleName(text)
@@ -1192,8 +1271,9 @@ class InlineNote(QFrame):
     def text(self) -> str:
         return self.label.text()
 
-    def set_text(self, text: str) -> None:
+    def set_text(self, text: str, more: str = "") -> None:
         self.label.setText(text)
+        self.more.set_detail(more)
         self.setAccessibleName(text)
 
     def paintEvent(self, _):
@@ -1293,7 +1373,7 @@ class NavList(QListWidget):
     """The grouped side bar. Group captions cannot be selected, so the arrow keys skip them.
 
     Each page has a key. A row can carry the state CHANGED (a dot: the part changes the desktop on
-    Apply) or OFF (dimmed: the part is left as it is).
+    Apply) or OFF (a small ring: the part is left as it is).
     """
 
     current_changed = Signal(str)  # key of the page
@@ -1395,7 +1475,46 @@ class NavList(QListWidget):
             self.current_changed.emit(current.data(self.KEY))
 
 
+def icon_is_dark(icon: QIcon, side: int = 22) -> bool:
+    """True when the icon has next to nothing light in it (so it would vanish on a dark background)."""
+    image = icon.pixmap(side, side).toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    weight = light = 0.0
+    for y in range(image.height()):
+        for x in range(image.width()):
+            color = image.pixelColor(x, y)
+            weight += color.alphaF()
+            if color.lightnessF() > 0.55:
+                light += color.alphaF()
+    return weight > 0 and light / weight < 0.12
+
+
 class _NavDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._dark_icons: dict[int, bool] = {}
+
+    def _light_tile(self, p, option, index, selected: bool) -> None:
+        """A dark icon on a dark side bar gets a light rounded tile behind it, so that it can be seen."""
+        if selected or option.palette.window().color().lightnessF() > 0.5:
+            return
+        icon = index.data(Qt.ItemDataRole.DecorationRole)
+        if not isinstance(icon, QIcon) or icon.isNull():
+            return
+        key = icon.cacheKey()
+        if key not in self._dark_icons:
+            self._dark_icons[key] = icon_is_dark(icon)
+        if not self._dark_icons[key]:
+            return
+        area = QStyleOptionViewItem(option)
+        self.initStyleOption(area, index)
+        where = option.widget.style().subElementRect(
+            QStyle.SubElement.SE_ItemViewItemDecoration, area, option.widget
+        )
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(255, 255, 255, 215))
+        p.drawRoundedRect(QRectF(where).adjusted(-2, -2, 2, 2), 5, 5)
+
     def sizeHint(self, option, index):
         page, group = option.widget.row_heights(option.widget.compact)
         return QSize(0, group if index.data(NavList.GROUP) else page)
@@ -1421,10 +1540,19 @@ class _NavDelegate(QStyledItemDelegate):
         state = index.data(NavList.STATE)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         p.save()
-        if state == OFF and not selected:
-            p.setOpacity(0.55)
+        self._light_tile(p, option, index, selected)
         super().paint(p, option, index)
         p.restore()
+        if state == OFF:  # the label keeps its full contrast; a small neutral ring says "left as it is"
+            p.save()
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            palette = option.palette
+            color = palette.highlightedText().color() if selected else palette.windowText().color()
+            p.setPen(QPen(with_alpha(color, 0.45), 1.2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            x = option.rect.left() + 14 if rtl else option.rect.right() - 14
+            p.drawEllipse(QPointF(x, option.rect.center().y()), 3.2, 3.2)
+            p.restore()
         if state == CHANGED:
             p.save()
             p.setRenderHint(QPainter.RenderHint.Antialiasing)

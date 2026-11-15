@@ -3,6 +3,7 @@
 [Desktop Entry]
 Type=Application
 Name=Plasma Theme Studio
+Name[sv]=Plasma Theme Studio
 GenericName=Theme Editor
 GenericName[sv]=Temaredigerare
 Comment=Edit every part of a KDE Plasma theme in one place
@@ -10,6 +11,7 @@ Comment[sv]=Redigera alla delar av ett KDE Plasma-tema på ett ställe
 Exec=plasma-theme-studio %f
 Icon=io.github.kryckan.PlasmaThemeStudio
 Terminal=false
+StartupNotify=true
 Categories=Qt;KDE;Settings;DesktopSettings;
-Keywords=theme;colors;color scheme;appearance;plasma;
-Keywords[sv]=tema;färger;färgschema;utseende;plasma;
+Keywords=theme;colors;color scheme;appearance;plasma;look and feel;global theme;window decoration;panel;icons;cursor;fonts;kvantum;gtk;
+Keywords[sv]=tema;färger;färgschema;utseende;plasma;globalt tema;fönsterdekorationer;panel;ikoner;pekare;teckensnitt;kvantum;gtk;

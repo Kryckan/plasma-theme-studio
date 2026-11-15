@@ -17,6 +17,7 @@ import shlex
 from pathlib import Path
 
 from . import generators, paths
+from .generators import plasmastyle
 from .generators.base import MARKER
 from .messages import translate
 from .model.theme import Theme, write_atomic
@@ -257,6 +258,7 @@ def export_global_theme(theme: Theme, folder: Path) -> list[Path]:
         raise ExportError(
             translate("core", "{path} already exists and is not empty.").format(path=str(folder))
         )
+    plasmastyle.vet_artwork(theme)  # an own picture the draw child cannot draw is not put in the package
     files = _plan(theme)
     package = Path(PACKAGE_DIR) / pid
     colors = next((text for rel, text in files.items() if rel.parts[:1] == ("color-schemes",)), "")

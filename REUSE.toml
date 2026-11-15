@@ -3,6 +3,11 @@
 version = 1
 
 [[annotations]]
-path = ["README.md", "CONTRIBUTING.md", "CHANGELOG.md", "docs/**", "data/icons/**", "src/plasma_theme_studio/i18n/*.ts", ".gitignore", "LICENSE"]
+path = ["README.md", "CONTRIBUTING.md", "CHANGELOG.md", "docs/**", "packaging/RELEASING.md", "packaging/obs/README.md", "data/icons/**", "src/plasma_theme_studio/i18n/*.ts", ".gitignore", "LICENSE"]
+SPDX-FileCopyrightText = "2026 Plasma Theme Studio contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = ["packaging/obs/debian/**", "packaging/obs/plasma-theme-studio.dsc", "packaging/arch/*/.SRCINFO", "src/plasma_theme_studio/generators/templates/*.j2"]
 SPDX-FileCopyrightText = "2026 Plasma Theme Studio contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"

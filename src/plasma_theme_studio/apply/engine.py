@@ -8,12 +8,13 @@ ask the desktop to reload. If a reload fails, the snapshot is put back.
 
 from __future__ import annotations
 
+import functools
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .. import generators
-from ..generators import ApplyError, Generator, PlannedFile, generator_by_id
+from .. import generators, writelock
+from ..generators import ApplyError, Generator, PlannedFile, generator_by_id, plasmastyle
 from ..messages import Msg, translate
 from ..model.theme import Theme, write_atomic
 from . import sidefiles
@@ -140,6 +141,7 @@ class ApplyResult:
 
 
 def apply(theme: Theme, runner, replace_foreign: bool = False) -> ApplyResult:
+    plasmastyle.vet_artwork(theme)  # own artwork the draw child cannot draw in time is not installed
     plan = build_plan(theme, runner)
     blocking = plan.blocking
     if plan.foreign_files and not replace_foreign:
@@ -276,7 +278,26 @@ def _frame_target(theme: Theme | None, runner) -> TargetPlan | None:
     return _plan_target(generator, theme, runner)
 
 
-def restore_to(snapshot: Snapshot, runner) -> tuple[Snapshot | None, list[Msg]]:
+def _locked(on_busy):
+    """Run the function while the write lock is held, so the follow mode watcher writes nothing meanwhile.
+    When the lock stays with somebody else, nothing is done and `on_busy(error)` is returned."""
+
+    def decorate(function):
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+            try:
+                with writelock.exclusive():
+                    return function(*args, **kwargs)
+            except writelock.Busy as error:
+                return on_busy(error)
+
+        return wrapper
+
+    return decorate
+
+
+@_locked(lambda busy: (None, [busy.message]))
+def restore_to(snapshot: Snapshot, runner, progress=None) -> tuple[Snapshot | None, list[Msg]]:
     """Go back to the state a snapshot recorded.
 
     A snapshot holds only what its own apply was about to change, so every
@@ -286,6 +307,13 @@ def restore_to(snapshot: Snapshot, runner) -> tuple[Snapshot | None, list[Msg]]:
     and before one on the way that cannot be read: what was applied then
     cannot be undone, and anything older would be put back on top of it.
 
+    The files and settings of every snapshot are put back first, newest first. Then the daemons of
+    the desktop are waited for once, however many snapshots there are, and what they wrote in reaction
+    goes back last, again newest first, and each snapshot is used up. When a side step fails the
+    older snapshots are not used up: their files and settings are back already, and a retry puts them
+    back again with the same result. `progress(done, total)` is called as the work goes on (it may
+    run in a worker thread, so it must be safe there).
+
     Returns the snapshot it stopped at and what failed there; without failures
     that is the snapshot asked for. The snapshot is None when it stopped for
     another reason than a snapshot that could not be put back.
@@ -294,22 +322,45 @@ def restore_to(snapshot: Snapshot, runner) -> tuple[Snapshot | None, list[Msg]]:
     if not newer or newer[-1].id != snapshot.id:
         return None, [translate("core", "There is no snapshot called {id}.").format(id=snapshot.id)]
     unreadable = snapshots.unreadable()
+    total = len(newer)
+    processed: list[tuple[Snapshot, list[Msg]]] = []
+    stopped: tuple[Snapshot | None, list[Msg]] | None = None
     for item, older in zip(newer, [*newer[1:], None], strict=True):
-        failures = restore(item, runner, consume=True)
+        failures = _restore_core(item, runner)
+        processed.append((item, failures))
+        if progress is not None:
+            progress(len(processed), total)
         if failures:
-            return item, failures
+            break
         between = [name for name in unreadable if older is not None and older.id < name < item.id]
         if between:
-            return None, [
-                translate(
-                    "core",
-                    "The snapshot {id} cannot be read, so what was applied then cannot be undone. "
-                    "The applies before it were left as they are.",
-                ).format(id=between[-1])
-            ]
-    return snapshot, []
+            stopped = (
+                None,
+                [
+                    translate(
+                        "core",
+                        "The snapshot {id} cannot be read, so what was applied then cannot be undone. "
+                        "The applies before it were left as they are.",
+                    ).format(id=between[-1])
+                ],
+            )
+            break
+    # The daemons are waited for once: the files of all the snapshots are watched together.
+    watched: list[Path] = []
+    for item, _failures in processed:
+        recorded = _side_wait(item, only=None)
+        watched.extend(path for path in recorded if path not in watched)
+    if watched:
+        sidefiles.wait_until_quiet(watched)
+    for item, failures in processed:
+        failures = failures + _restore_side(item, None, wait=False)
+        failures += _finish(item, True, failures)
+        if failures:
+            return item, failures
+    return stopped if stopped is not None else (snapshot, [])
 
 
+@_locked(lambda busy: [busy.message])
 def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> list[Msg]:
     """Put files and desktop settings back to what the snapshot recorded.
 
@@ -319,6 +370,15 @@ def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> lis
     so that what it recorded is not lost to a desktop that was busy.
     `only` names the targets whose settings are put back; the files always are.
     """
+    failures = _restore_core(snapshot, runner, only)
+    failures += _restore_side(snapshot, only)
+    if consume:
+        failures += _finish(snapshot, True, failures)
+    return failures
+
+
+def _restore_core(snapshot: Snapshot, runner, only=None) -> list[Msg]:
+    """The files and the desktop settings of a snapshot."""
     failures = []
     if only is None and snapshot.reached is not None:
         only = set(snapshot.reached)  # a part the apply left alone is not put back over later changes
@@ -339,27 +399,57 @@ def restore(snapshot: Snapshot, runner, consume: bool = False, only=None) -> lis
     # A setting that was a file (Rofi's config, Kvantum's selection) can leave a folder empty
     # that the apply made, once the setting is back.
     snapshots.remove_empty_dirs(Path(d) for d in snapshot.created_dirs)
-    # What the desktop's daemons wrote in reaction goes back last, when they are done.
+    return failures
+
+
+def _side_arguments(snapshot: Snapshot, only) -> tuple[dict, bool, set] | None:
+    """What `sidefiles.restore` needs for a snapshot (the files to skip, whether the colors go back), or None
+    when the snapshot has no side files to put back."""
+    if only is None and snapshot.reached is not None:
+        only = set(snapshot.reached)
     took_part = {t for t in snapshot.settings if only is None or t in only}
-    if snapshot.side is not None and took_part & sidefiles.SIDE_TARGETS:
-        try:
-            skip = sidefiles.managed(entry["path"] for entry in snapshot.files)
-            colors = bool(took_part & sidefiles.COLOR_TARGETS)  # else a scheme chosen since stays
-            if not colors:
-                skip |= sidefiles.color_sheets()
-            sidefiles.restore(snapshot.side, snapshot.directory / "side", colors=colors, skip=skip)
-        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
-            failures.append(
-                translate("core", "Could not put the files back: {detail}").format(detail=str(error))
-            )
+    if snapshot.side is None or not took_part & sidefiles.SIDE_TARGETS:
+        return None
+    skip = sidefiles.managed(entry["path"] for entry in snapshot.files)
+    colors = bool(took_part & sidefiles.COLOR_TARGETS)  # else a scheme chosen since stays
+    if not colors:
+        skip |= sidefiles.color_sheets()
+    return snapshot.side, colors, skip
+
+
+def _side_wait(snapshot: Snapshot, only) -> list[Path]:
+    """The files the side step of a snapshot would change and a daemon may still be writing."""
+    try:
+        found = _side_arguments(snapshot, only)
+        if found is None:
+            return []
+        return sidefiles.to_wait_for(found[0], snapshot.directory / "side", skip=found[2])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return []
+
+
+def _restore_side(snapshot: Snapshot, only, wait: bool = True) -> list[Msg]:
+    """What the desktop's daemons wrote in reaction goes back last, when they are done."""
+    try:
+        found = _side_arguments(snapshot, only)
+        if found is not None:
+            record, colors, skip = found
+            sidefiles.restore(record, snapshot.directory / "side", colors=colors, skip=skip, wait=wait)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        return [translate("core", "Could not put the files back: {detail}").format(detail=str(error))]
+    return []
+
+
+def _finish(snapshot: Snapshot, consume: bool, failures: list[Msg]) -> list[Msg]:
+    """Use the snapshot up, or keep it for one more try when something could not be put back."""
     try:
         if consume and failures and not snapshots.tried(snapshot):
             snapshots.mark_tried(snapshot)
         elif consume:
             snapshots.delete(snapshot)
     except OSError as error:  # the snapshot's own folder cannot be written to
-        failures.append(str(error))
-    return failures
+        return [str(error)]
+    return []
 
 
 def parts_status(theme: Theme, runner):

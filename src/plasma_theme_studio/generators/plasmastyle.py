@@ -10,11 +10,13 @@ a package of its own, named after what is in it.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .. import kconfig, paths
+from .. import kconfig, paths, svgsandbox
 from ..messages import Msg, translate
 from ..model.theme import ARTWORK_KEYS, Theme
 from . import artwork
@@ -96,6 +98,26 @@ def own_artwork(theme: Theme, frame: str) -> artwork.Artwork:
     return artwork.load(theme, frame, required_ids(frame))
 
 
+def drawn_artwork(theme: Theme, frame: str) -> str | None:
+    """The own artwork of `frame` that is put in the package: usable, and not known to be a picture the
+    draw child could not draw in time (see `vet_artwork`). None means the generated frame is used."""
+    text = own_artwork(theme, frame).text
+    if text is None:
+        return None
+    outcome = svgsandbox.cached(text.encode("utf-8"), svgsandbox.THUMBNAIL)
+    return None if outcome is not None and not outcome.ok else text
+
+
+def vet_artwork(theme: Theme) -> None:
+    """Have every usable own picture of the theme drawn once by the draw child (the answer is kept, so
+    `drawn_artwork` knows it). Blocks for as long as the child takes: call it before an apply, from a
+    worker or with the wait cursor on, never from a refresh."""
+    texts = [text for frame in ARTWORK_KEYS if (text := own_artwork(theme, frame).text) is not None]
+    if texts:
+        with ThreadPoolExecutor(max_workers=len(texts)) as pool:
+            list(pool.map(lambda text: svgsandbox.probe(text.encode("utf-8")), texts))
+
+
 def frame_svg(theme: Theme, frame: str, *, solid: bool = False) -> str:
     """The generated SVG of `frame` from the theme's values."""
     if frame == "panel":
@@ -110,7 +132,10 @@ def artwork_problems(theme: Theme) -> list[Msg]:
     found: list[Msg] = []
     for frame in ARTWORK_KEYS:
         art = own_artwork(theme, frame)
-        for problem in art.problems:
+        problems = list(art.problems)
+        if art.usable and drawn_artwork(theme, frame) is None:
+            problems.append(translate("core", "It could not be drawn in time."))
+        for problem in problems:
             found.append(
                 translate(
                     "core", "Artwork for {frame} ({name}): {problem} The generated frame is used."
@@ -121,23 +146,68 @@ def artwork_problems(theme: Theme) -> list[Msg]:
 
 def status_words(theme: Theme) -> str:
     """For the status of the Plasma Style part: which frames are drawn by hand, or "" when none is."""
-    own = [FRAME_TITLES[frame] for frame in ARTWORK_KEYS if own_artwork(theme, frame).usable]
+    own = [FRAME_TITLES[frame] for frame in ARTWORK_KEYS if drawn_artwork(theme, frame) is not None]
     if not own:
         return ""
     return str(translate("core", "own artwork for {frames}").format(frames=", ".join(str(t) for t in own)))
 
 
-def style_id(theme: Theme) -> str:
-    """The name of the package for the theme's panel and popup look."""
+def _frame_outcomes(theme: Theme) -> list[tuple[str, str, svgsandbox.Outcome | None]]:
+    """(frame, picture, what the draw child answered, None while unknown) of each usable own picture."""
+    found = []
+    for frame in ARTWORK_KEYS:
+        text = own_artwork(theme, frame).text
+        if text is not None:
+            found.append((frame, text, svgsandbox.cached(text.encode("utf-8"), svgsandbox.THUMBNAIL)))
+    return found
+
+
+def _id_of(theme: Theme, outcomes: list, vetoed: frozenset[str] = frozenset()) -> str:
+    """The package name; `vetoed` names frames that count as left out although the cache does not say so."""
     radius, border, opacity = _look(theme)
     p_radius, p_border, p_opacity = _popup_look(theme)
     key = f"{DESIGN}/{radius}/{border}/{_num(opacity)}/{p_radius}/{p_border}/{_num(p_opacity)}"
-    for frame in ARTWORK_KEYS:  # a frame drawn by hand is part of the look, so it gets a name of its own
-        text = own_artwork(theme, frame).text
-        if text is not None:
-            key += f"/{frame}:{hashlib.sha256(text.encode()).hexdigest()}"
+    for frame, text, outcome in outcomes:
+        # A frame drawn by hand is part of the look, so it gets a name of its own. One the child could not
+        # draw is left out of the package, and the name says so: a process that never drew it (the
+        # command line, the next start) then still sees the installed package as this theme's.
+        left_out = frame in vetoed or (outcome is not None and not outcome.ok)
+        key += f"/{frame}:{'vetoed:' if left_out else ''}{hashlib.sha256(text.encode()).hexdigest()}"
     digest = hashlib.sha256(key.encode()).hexdigest()[:8]
     return f"{ID_PREFIX}{theme.slug}-{digest}"
+
+
+def _candidates(theme: Theme) -> list[tuple[str, frozenset[str]]]:
+    """(package name, frames left out although not known to fail): the name for what the cache says, then,
+    for pictures nobody has drawn in this process yet, the names they get when the child cannot draw them
+    (a package an earlier apply made without them)."""
+    outcomes = _frame_outcomes(theme)
+    unknown = [frame for frame, _text, outcome in outcomes if outcome is None]
+    found = [(_id_of(theme, outcomes), frozenset())]
+    for count in range(1, len(unknown) + 1):
+        for some in itertools.combinations(unknown, count):
+            found.append((_id_of(theme, outcomes, frozenset(some)), frozenset(some)))
+    return found
+
+
+def _chosen(theme: Theme) -> tuple[str, frozenset[str]]:
+    """The package this theme is planned as. Where a picture is not known yet, an installed package made
+    without it (see `_candidates`) is the one planned, so a fresh process sees an applied theme as applied."""
+    found = _candidates(theme)
+    for name, vetoed in found:
+        if len(found) == 1 or _package_dir(name).is_dir():
+            return name, vetoed
+    return found[0]
+
+
+def style_id(theme: Theme) -> str:
+    """The name of the package for the theme's panel and popup look."""
+    return _chosen(theme)[0]
+
+
+def style_ids(theme: Theme) -> list[str]:
+    """Every name that counts as this theme's package (see `_candidates`)."""
+    return [name for name, _vetoed in _candidates(theme)]
 
 
 def _package_dir(name: str) -> Path:
@@ -477,7 +547,7 @@ class PlasmaStyleGenerator(Generator):
         return None
 
     def files(self, theme: Theme) -> list[PlannedFile]:
-        name = style_id(theme)
+        name, vetoed = _chosen(theme)
         root = _package_dir(name)
         radius, border, opacity = _look(theme)
         p_radius, p_border, p_opacity = _popup_look(theme)
@@ -486,7 +556,7 @@ class PlasmaStyleGenerator(Generator):
             PlannedFile(root / "plasmarc", f"{MARKER}\n\n[AdaptiveTransparency]\nenabled=true\n"),
         ]
         for frame, relatives in FRAME_FILES.items():
-            own = own_artwork(theme, frame).text
+            own = None if frame in vetoed else drawn_artwork(theme, frame)
             for relative in relatives:
                 for solid in (False, True):
                     if own is not None:
@@ -557,7 +627,7 @@ class PlasmaStyleGenerator(Generator):
         ]
 
     def is_active(self, theme: Theme, runner) -> bool:
-        return _current_style(runner) == style_id(theme)
+        return _current_style(runner) in style_ids(theme)
 
     def reload_command(self, theme: Theme) -> str:
         return f"plasma-apply-desktoptheme {style_id(theme)}"

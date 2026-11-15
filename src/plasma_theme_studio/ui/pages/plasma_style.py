@@ -33,6 +33,9 @@ class PlasmaStylePage(LoadsInBackground, PickerPage):
 
     def build(self) -> None:
         super().build()
+        # the search field goes up with the page, so it is not left alone above the frame editor
+        self.layout().removeWidget(self.grid.bar)
+        self.content.insertWidget(0, self.grid.bar, 0, Qt.AlignmentFlag.AlignLeft)
         # two short groups of values and a panel with an open popup and a tooltip to see them in
         self.style_box = QWidget()
         outer = QVBoxLayout(self.style_box)

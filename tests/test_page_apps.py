@@ -106,7 +106,8 @@ def test_a_note_says_what_to_install_when_kvantum_is_missing(window, monkeypatch
     page = window.page("app_style")
     window.refresh()
     assert not page.kvantum_note.isHidden()
-    assert "kvantum" in page.kvantum_note.text() and "qt6-style-kvantum" in page.kvantum_note.text()
+    more = page.kvantum_note.more.detail.text()  # the package names are behind "More about this"
+    assert "kvantum" in more and "qt6-style-kvantum" in more
     window.runner.missing.discard("kvantummanager")
     page.read_desktop()  # whether Kvantum is there is read with what the desktop has
     assert page.kvantum_note.isHidden()
@@ -122,6 +123,11 @@ def test_the_values_sit_beside_the_sample_only_when_there_is_room(window, app):
     app.processEvents()
     assert page.beside.direction().name == "TopToBottom"
     assert page.scroll.horizontalScrollBar().maximum() == 0
+    # one under the other, neither is stretched: the values leave no gap and the sample is not cut off
+    assert [page.beside.stretch(0), page.beside.stretch(1)] == [0, 0]
+    window.resize(1400, 900)
+    app.processEvents()
+    assert [page.beside.stretch(0), page.beside.stretch(1)] == [1, 1]
 
 
 # ---- GTK Apps and Rofi ----------------------------------------------------------------------

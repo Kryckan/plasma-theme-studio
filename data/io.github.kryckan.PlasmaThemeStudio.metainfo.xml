@@ -15,20 +15,61 @@ SPDX-License-Identifier: CC0-1.0
   </developer>
   <description>
     <p>
-      Plasma Theme Studio keeps a whole desktop theme in one file and writes the
-      files that KDE Plasma and its apps read. You edit a value once, see it in a
-      preview, and apply it to the running desktop.
+      Plasma Theme Studio keeps a whole KDE Plasma desktop theme in one file,
+      shows it in a visual preview, and applies it to the running desktop. Every
+      part of the desktop has its own page with preview cards, like System
+      Settings, so you see what you change before you change it.
     </p>
-    <p>
-      Every apply takes a snapshot first, so it can be undone from the app or from
-      a text console. The app only writes inside your home folder and shows the
-      exact files it is about to write.
+    <p xml:lang="sv">
+      Plasma Theme Studio samlar ett helt KDE Plasma-tema i en fil, visar det i en
+      förhandsvisning och verkställer det på det skrivbord som körs. Varje del av
+      skrivbordet har en egen sida med förhandsvisningskort, som i Systeminställningar.
     </p>
+    <p>You can edit:</p>
+    <ul>
+      <li>Colors, with accent colors, light and dark variants and a contrast check</li>
+      <li>Application style (Kvantum), GTK applications and Rofi</li>
+      <li>Plasma style, panels and popups, with a frame editor for your own artwork</li>
+      <li>Window decorations, shadows and title bar buttons</li>
+      <li>Fonts, icons, pointers, the splash screen and system sounds</li>
+    </ul>
     <p>
-      This first version edits and applies the color scheme. Window decoration,
-      widget style, Plasma style, GTK and Rofi are planned.
+      Every apply takes a snapshot first, so it can be undone exactly, from the
+      app or from a text console. The app only writes inside your home folder and
+      shows the exact files it is about to write. Themes can be exported as one
+      shareable archive or as a Global Theme.
+    </p>
+    <p xml:lang="sv">
+      Varje verkställning tar först en ögonblicksbild, så att den kan ångras exakt,
+      från appen eller från en textkonsol. Appen skriver bara i din hemkatalog och
+      visar vilka filer den ska skriva.
     </p>
   </description>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://raw.githubusercontent.com/Kryckan/plasma-theme-studio/main/docs/screenshots/main-window.png</image>
+      <caption>The editor with a dark theme open</caption>
+    </screenshot>
+  </screenshots>
+  <keywords>
+    <keyword>theme</keyword>
+    <keyword>colors</keyword>
+    <keyword>appearance</keyword>
+    <keyword>plasma</keyword>
+  </keywords>
+  <categories>
+    <category>Settings</category>
+    <category>DesktopSettings</category>
+    <category>Qt</category>
+    <category>KDE</category>
+  </categories>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">1100</display_length>
+  </requires>
   <launchable type="desktop-id">io.github.kryckan.PlasmaThemeStudio.desktop</launchable>
   <url type="homepage">https://github.com/Kryckan/plasma-theme-studio</url>
   <url type="bugtracker">https://github.com/Kryckan/plasma-theme-studio/issues</url>
@@ -38,9 +79,15 @@ SPDX-License-Identifier: CC0-1.0
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.0" date="2026-11-14" type="development">
+    <release version="0.1.0" date="2026-11-15" type="stable">
       <description>
-        <p>First development version: theme file, colors, apply, undo and snapshots.</p>
+        <p>First release: a whole desktop theme in one file, edited with a visual preview.</p>
+        <ul>
+          <li>One page for each part of the desktop, with preview cards</li>
+          <li>Colors, application style, GTK, Plasma style, panels, window decorations, fonts, icons, pointers, splash screen, system sounds and Rofi</li>
+          <li>Apply with a snapshot and an exact undo, in the app and on the command line</li>
+          <li>Swedish translation</li>
+        </ul>
       </description>
     </release>
   </releases>

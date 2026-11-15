@@ -167,16 +167,42 @@ def test_the_undo_of_the_panel_leaves_the_gtk_files_alone(home, runner):
     assert "B 10" in (gtk / "settings.ini").read_text()
 
 
+def within(seconds, function):
+    """Call `function` in a thread and fail when it has not returned in `seconds`: a read of a pipe that
+    nobody writes to would otherwise hang the whole run instead of failing the test."""
+    import threading
+
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(function()), daemon=True)
+    thread.start()
+    thread.join(seconds)
+    return thread, outcome
+
+
+def release(pipe):
+    """Let a thread that is stuck reading `pipe` go (a writer that closes ends the read)."""
+    try:
+        os.close(os.open(pipe, os.O_WRONLY | os.O_NONBLOCK))
+    except OSError:
+        pass
+
+
 def test_a_pipe_called_kdeglobals_does_not_block_the_snapshot(home):
     config = paths.config_home()
     config.mkdir(parents=True, exist_ok=True)
-    os.mkfifo(config / "kdeglobals")
-    record = sidefiles.capture(home / "store")
-    assert record["kdeglobals"] is None
-    sidefiles.restore(record, home / "store")  # does not block either
-    record["kdeglobals"] = {"existed": True, "text": "[General]\nColorScheme=A\n"}
-    sidefiles.restore(record, home / "store")  # nor with a saved copy and a pipe in the way
-    assert (config / "kdeglobals").is_fifo()
+    pipe = config / "kdeglobals"
+    os.mkfifo(pipe)
+    try:
+        thread, outcome = within(5, lambda: sidefiles.capture(home / "store"))
+        assert not thread.is_alive(), "capture waits for the pipe"
+        record = outcome[0]
+        assert record["kdeglobals"] is None
+        record["kdeglobals"] = {"existed": True, "text": "[General]\nColorScheme=A\n"}
+        thread, _ = within(5, lambda: sidefiles.restore(record, home / "store"))
+        assert not thread.is_alive(), "restore waits for the pipe"  # with a saved copy and a pipe in the way
+        assert pipe.is_fifo()
+    finally:
+        release(pipe)
 
 
 def test_waiting_for_the_daemons_keeps_the_window_alive(monkeypatch):
@@ -264,8 +290,18 @@ def test_a_second_panel_that_does_not_exist_is_said_in_the_theme_column(home, de
 
 def test_zip_import_keeps_working_with_its_artwork(tmp_path):
     imported, file = with_artwork(tmp_path, "z")
-    assert "panel" in imported.pending_artwork
     assert zipfile.is_zipfile(tmp_path / "x.ptstheme")
+    with zipfile.ZipFile(tmp_path / "x.ptstheme") as zipped:
+        assert {"theme.toml", "assets/panel.svg"} <= set(zipped.namelist())
+        packed = zipped.read("assets/panel.svg")
+    assert packed == (tmp_path / "src/a-artwork/panel.svg").read_bytes()
+    # what came out of the zip is the picture that went in, and the theme names it
+    assert imported.pending_artwork == {"panel": packed}
+    assert imported.get("artwork", "panel") == "assets/panel.svg"
+    assert imported.get("artwork", "popups") is None  # the other frames had none
+    with pytest.raises(archive.ArchiveError):
+        (tmp_path / "broken.ptstheme").write_bytes((tmp_path / "x.ptstheme").read_bytes()[:-30])
+        archive.import_theme(tmp_path / "broken.ptstheme")
 
 
 def test_a_cached_picture_is_not_shared_between_languages(app):
@@ -277,9 +313,13 @@ def test_a_cached_picture_is_not_shared_between_languages(app):
     item = Item(id="x", name="x")
     old = QLocale()
     try:
-        QLocale.setDefault(QLocale("en_US"))
-        english = cache.key(item, QSize(10, 10), 1.0, None)
-        QLocale.setDefault(QLocale("sv_SE"))
-        assert cache.key(item, QSize(10, 10), 1.0, None) != english
+        keys = {}
+        for name in ("en_US", "sv_SE", "de_DE", "en_US"):
+            QLocale.setDefault(QLocale(name))
+            keys.setdefault(name, []).append(cache.key(item, QSize(10, 10), 1.0, None))
+        assert keys["en_US"][0] == keys["en_US"][1]  # the same language finds its picture again
+        assert len({keys["en_US"][0], keys["sv_SE"][0], keys["de_DE"][0]}) == 3  # each language has its own
+        # only the language differs: the item and the size still tell pictures apart
+        assert cache.key(item, QSize(11, 10), 1.0, None) != keys["de_DE"][0]
     finally:
         QLocale.setDefault(old)

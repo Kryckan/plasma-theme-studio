@@ -9,11 +9,13 @@ derived colors that are written to the color scheme.
 from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication, QPointF, QRectF, QSize, QSizeF, Qt
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from ..generators.colorscheme import scheme_groups
+from ..generators.windowframe import Look
 from ..model.theme import MAX_PANELS, Theme, panel_section
+from .frame_draw import draw_window, layout_buttons
 
 translate = QCoreApplication.translate
 
@@ -144,13 +146,11 @@ class PreviewWidget(QWidget):
         theme = self.theme
         groups = {name: dict(entries) for name, entries in scheme_groups(theme)}
         window, view, button = groups["Colors:Window"], groups["Colors:View"], groups["Colors:Button"]
-        header, selection = groups["Colors:Header"], groups["Colors:Selection"]
+        selection = groups["Colors:Selection"]
         accent = _rgb(selection["BackgroundNormal"])
         text, muted = _rgb(window["ForegroundNormal"]), _rgb(window["ForegroundInactive"])
         radius = theme.resolved("apps", "radius")
         border = theme.resolved("apps", "border_width")
-        window_radius = theme.resolved("window", "radius")
-        window_border = theme.resolved("window", "border_width")
         outline = _rgb(window["ForegroundNormal"], 0.22)
 
         def pen(color=outline, width=border):
@@ -163,38 +163,13 @@ class PreviewWidget(QWidget):
         panel, vertical, attached = self._panel_geometry()
         frame = self._frame_rect(panel, vertical, attached)
 
-        # Window shadow
-        size, strength = theme.get("shadow", "size"), theme.get("shadow", "strength")
-        p.setPen(Qt.PenStyle.NoPen)
-        for step in range(size, 0, -2):
-            fade = (1 - step / size) ** 2
-            p.setBrush(QColor(0, 0, 0, round(255 * strength * fade * 0.16)))
-            grown = frame.adjusted(-step, -step + size * 0.25, step, step + size * 0.25)
-            p.drawRoundedRect(grown, window_radius + step, window_radius + step)
-
-        # Window body, clipped to its rounded outline
-        shape = QPainterPath()
-        shape.addRoundedRect(frame, window_radius, window_radius)
-        p.save()
-        p.setClipPath(shape, Qt.ClipOperation.IntersectClip)
-        p.fillRect(frame, _rgb(window["BackgroundNormal"]))
-        title = QRectF(frame.left(), frame.top(), frame.width(), 36)
-        p.fillRect(title, _rgb(header["BackgroundNormal"]))
-        sidebar = QRectF(frame.left(), title.bottom(), 170, frame.height() - 36)
-        content = QRectF(sidebar.right(), title.bottom(), frame.width() - 170, frame.height() - 36)
-        p.fillRect(content.adjusted(16, 16, -16, -150), _rgb(view["BackgroundNormal"]))
-        p.restore()
-
-        p.setPen(_rgb(header["ForegroundNormal"]))
-        bold = QFont(font)
-        bold.setBold(True)
-        p.setFont(bold)
-        p.drawText(title, Qt.AlignmentFlag.AlignCenter, theme.name)
+        # Window: shadow, frame, buttons and title are the generated frame's (`frame_draw`)
+        look = Look.of(theme)
+        body = draw_window(p, frame, look, theme.name, layout_buttons(theme))
         p.setFont(font)
-        for index, color in enumerate(("ForegroundNegative", "ForegroundNeutral", "ForegroundPositive")):
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(_rgb(window[color]))
-            p.drawEllipse(QPointF(title.right() - 20 - index * 22, title.center().y()), 6, 6)
+        sidebar = QRectF(body.left(), body.top(), 170, body.height())
+        content = QRectF(sidebar.right(), body.top(), body.width() - 170, body.height())
+        p.fillRect(content.adjusted(16, 16, -16, -150), _rgb(view["BackgroundNormal"]))
 
         # Sidebar list with one selected row
         rows = (
@@ -283,11 +258,6 @@ class PreviewWidget(QWidget):
             p.setPen(_rgb(button["ForegroundNormal"]))
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
             x -= 100
-
-        # Window outline
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(pen(width=window_border))
-        p.drawRoundedRect(frame, window_radius, window_radius)
 
         # Panels: the main one first, drawn with its popups
         layouts = self._layouts()

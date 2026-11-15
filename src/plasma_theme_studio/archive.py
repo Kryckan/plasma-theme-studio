@@ -18,8 +18,10 @@ import re
 import stat
 import zipfile
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from . import svgsandbox
 from .generators import artwork, plasmastyle
 from .messages import Msg, translate
 from .model.theme import ARTWORK_KEYS, Theme, ThemeError, write_atomic
@@ -160,20 +162,41 @@ def _read_member(archive: zipfile.ZipFile, name: str, limit: int) -> bytes:
     return data
 
 
+def _drawable(text: str) -> bool:
+    """Whether the child can draw `text`. A timeout or a child killed from outside may only mean a busy
+    machine: asked once more."""
+    outcome = svgsandbox.probe(text.encode("utf-8"))
+    if outcome.retry:
+        outcome = svgsandbox.probe(text.encode("utf-8"), fresh=True)
+    return outcome.ok
+
+
 def _with_artwork(theme: Theme, assets: dict[str, bytes]) -> Theme:
     """`theme` with the artwork that came along: only what passes the check is kept (as
     `Theme.pending_artwork`, written beside the theme file when it is saved); every other
     artwork name is dropped, because no file belongs to it."""
     theme.pending_artwork = {}
+    checked: dict[str, str] = {}
     for frame in ARTWORK_KEYS:
         raw = assets.get(f"assets/{frame}.svg")
-        text = None
         if raw is not None and theme.get("artwork", frame) == f"assets/{frame}.svg":
             text, _problems = artwork.check(raw, plasmastyle.required_ids(frame))
-        if text is None:
-            theme.set("artwork", frame, None)
+            if text is not None:
+                checked[frame] = text
+    # Qt must be able to draw it, in a child with a memory cap and a timeout: the four run at once
+    with ThreadPoolExecutor(max_workers=max(1, len(checked))) as pool:
+        drawn = dict(
+            zip(
+                checked,
+                pool.map(_drawable, checked.values()),
+                strict=True,
+            )
+        )
+    for frame in ARTWORK_KEYS:
+        if drawn.get(frame):
+            theme.pending_artwork[frame] = checked[frame].encode("utf-8")
         else:
-            theme.pending_artwork[frame] = text.encode("utf-8")
+            theme.set("artwork", frame, None)
     return theme
 
 

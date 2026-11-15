@@ -414,19 +414,39 @@ def _sane(record: dict, store: Path) -> tuple[list[dict], list[dict], list[str]]
     return entries, trees, created
 
 
-def restore(record: dict, store: Path, colors: bool = True, skip=()) -> None:
+def to_wait_for(record: dict, store: Path, skip=()) -> list[Path]:
+    """The files a daemon may still be writing that `restore` would change: what `wait_until_quiet`
+    should watch before it, or [] when it changes nothing (or the record is damaged: `restore` says so)."""
+    try:
+        entries, trees, _created = _sane(record, store)
+        entries = [e for e in entries if e["path"] not in skip]
+        differing = any(_differs(entry, store) for entry in entries) or any(
+            _tree_differs(t, store) for t in trees
+        )
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return []
+    if not differing:
+        return []
+    live = [Path(e["path"]) for e in entries if not e.get("untouched")] + [paths.config_home() / "kdeglobals"]
+    return live + [Path(t["path"]) for t in trees]
+
+
+def wait_until_quiet(recorded: list[Path]) -> None:
+    """Wait until none of the files changes between two looks (see `_wait_until_quiet`)."""
+    _wait_until_quiet(recorded)
+
+
+def restore(record: dict, store: Path, colors: bool = True, skip=(), wait: bool = True) -> None:
     """Put back what `capture` found. Every file is tried; the first error is raised at the end.
     With `colors` the color groups of kdeglobals are put back as well. The files in `skip` are the
-    ones the apply wrote itself: their target puts them back, so they are left alone here."""
+    ones the apply wrote itself: their target puts them back, so they are left alone here. Without
+    `wait` the daemons are not waited for: the caller did that once (`to_wait_for`, `wait_until_quiet`)
+    for several records."""
     failed: OSError | None = None
     entries, trees, created_dirs = _sane(record, store)
     entries = [e for e in entries if e["path"] not in skip]
-    live = [Path(e["path"]) for e in entries if not e.get("untouched")] + [paths.config_home() / "kdeglobals"]
-    differing = any(_differs(entry, store) for entry in entries) or any(
-        _tree_differs(t, store) for t in trees
-    )
-    if differing:
-        _wait_until_quiet(live + [Path(t["path"]) for t in trees])
+    if wait and (recorded := to_wait_for(record, store, skip)):
+        _wait_until_quiet(recorded)
     for step in [
         *(lambda e=e: _put_back(e, store) for e in entries),
         *(lambda t=t: _put_back_tree(t, store) for t in trees),
